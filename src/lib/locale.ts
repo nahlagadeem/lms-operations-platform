@@ -36,8 +36,8 @@ const englishText = {
     arabic: "العربية",
   },
   shell: {
-    badge: "Training Portfolio Hub",
-    title: "Training Management & Delivery Platform",
+    badge: "JAWRAA",
+    title: "Training Management System",
     subtitle:
       "Track packages, courses, schedules, operations, and execution status from one internal platform instead of scattered Excel files.",
   },

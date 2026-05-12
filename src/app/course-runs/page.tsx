@@ -259,7 +259,7 @@ export default async function CourseRunsPage({
         </form>
 
         {prioritizedRuns.length === 0 ? (
-          <div className="mt-6 rounded-[24px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-5 py-8">
+          <div className="jawraa-subcard mt-6 border-dashed px-5 py-8">
             <h4 className="text-lg font-semibold text-[var(--ink-strong)]">
               {localeText.courseRuns.noRunsTitle}
             </h4>
@@ -285,13 +285,13 @@ export default async function CourseRunsPage({
                 {prioritizedRuns.map((run) => (
                   <tr
                     key={run.id}
-                    className="cursor-pointer transition hover:bg-[var(--surface-muted)]"
+                    className="cursor-pointer transition hover:bg-white"
                     onClick={undefined}
                   >
                     <td className="latin-cell">
                       <Link
                         href={`/course-runs/${run.id}`}
-                        className="block w-full font-semibold text-[#0f6175] no-underline"
+                        className="block w-full font-semibold text-[var(--brand-ink)] no-underline"
                       >
                         {run.runCode}
                       </Link>
@@ -345,7 +345,7 @@ export default async function CourseRunsPage({
 
       {openPanel ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/70 bg-white p-5 shadow-[0_30px_70px_rgba(10,25,35,0.35)] sm:p-6">
+          <div className="jawraa-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="eyebrow">{localeText.courseRuns.createTitle}</p>
@@ -458,7 +458,7 @@ function RunMetric({
   value: string;
 }) {
   return (
-    <article className="rounded-[24px] border border-white/70 bg-white p-5 shadow-[0_18px_40px_rgba(11,29,51,0.08)]">
+    <article className="jawraa-card p-5">
       <p className="text-sm font-medium text-[var(--ink-soft)]">{title}</p>
       <p className="mt-3 text-3xl font-semibold text-[var(--ink-strong)]">{value}</p>
     </article>

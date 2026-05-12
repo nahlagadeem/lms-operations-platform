@@ -177,7 +177,7 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
         </form>
 
         {locations.length === 0 ? (
-          <div className="mt-6 rounded-[24px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-5 py-8 text-sm text-[var(--ink-soft)]">
+          <div className="jawraa-subcard mt-6 border-dashed px-5 py-8 text-sm text-[var(--ink-soft)]">
             {text.noResults}
           </div>
         ) : (
@@ -212,7 +212,7 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
 
       {openPanel ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/70 bg-white p-5 shadow-[0_30px_70px_rgba(10,25,35,0.35)] sm:p-6">
+          <div className="jawraa-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="eyebrow">{text.eyebrow}</p>

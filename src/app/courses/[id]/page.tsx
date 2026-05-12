@@ -273,7 +273,7 @@ export default async function CourseDetailPage({
           <div>
             <Link
               href="/courses"
-              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[#0f6175] hover:underline"
+              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
               <span aria-hidden="true">←</span>
               <span>{details.back}</span>
@@ -319,7 +319,7 @@ export default async function CourseDetailPage({
         <div className="space-y-6 min-w-0">
           <div className="panel-surface">
             <p className="eyebrow">{details.overview}</p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <InfoCard label={details.package} value={course.package.nameEn || course.package.nameAr} />
               <InfoCard label={details.category} value={course.category.nameEn || course.category.nameAr} />
               <InfoCard label={details.code} value={course.courseCode} mono />
@@ -330,7 +330,7 @@ export default async function CourseDetailPage({
               <InfoCard label={details.activeStatus} value={course.activeStatus} />
             </div>
 
-            <div className="mt-5 rounded-[20px] bg-[var(--surface-muted)] p-4">
+            <div className="jawraa-subcard mt-5 p-4">
               <p className="text-xs font-medium text-[var(--ink-soft)]">
                 {details.descriptionLabel}
               </p>
@@ -344,7 +344,7 @@ export default async function CourseDetailPage({
             <p className="eyebrow">{details.relatedRuns}</p>
             <div className="mt-5 space-y-3">
               {course.runs.length === 0 ? (
-                <div className="rounded-[18px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-4 py-4 text-sm text-[var(--ink-soft)]">
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noRuns}
                 </div>
               ) : (
@@ -352,11 +352,11 @@ export default async function CourseDetailPage({
                   <Link
                     key={run.id}
                     href={`/course-runs/${run.id}`}
-                    className="block rounded-[18px] border border-[var(--line-soft)] bg-white px-4 py-4 transition hover:bg-[var(--surface-muted)]"
+                    className="jawraa-subcard block px-4 py-4 transition hover:shadow-[0_12px_28px_rgba(17,17,17,0.06)]"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="latin-cell text-sm font-semibold text-[#0f6175]">
+                        <p className="latin-cell text-sm font-semibold text-[var(--brand-ink)]">
                           {run.runCode}
                         </p>
                         <p className="mt-1 text-xs text-[var(--ink-soft)]">
@@ -387,7 +387,7 @@ export default async function CourseDetailPage({
         <div className="space-y-6 min-w-0">
           <div className="panel-surface">
             <p className="eyebrow">{details.planning}</p>
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <ProgressCard
                 label={details.attendance}
                 value={details.yes}
@@ -410,7 +410,7 @@ export default async function CourseDetailPage({
               />
             </div>
 
-            <div className="mt-5 rounded-[22px] border border-[#d7e6e0] bg-[linear-gradient(135deg,#eef7f3_0%,#fbfefc_100%)] p-5">
+            <div className="jawraa-subcard mt-5 p-5">
               <p className="text-xs font-medium text-[var(--ink-soft)]">{details.targetUse}</p>
               <p className="mt-2 text-sm leading-7 text-[var(--ink-strong)]">
                 {details.startOperationalNote}
@@ -420,7 +420,7 @@ export default async function CourseDetailPage({
 
           <div className="panel-surface">
             <p className="eyebrow">{details.pricing}</p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <InfoCard
                 label={details.latestPrice}
                 value={formatCurrency(
@@ -563,7 +563,7 @@ function MetricCard({
   value: string;
 }) {
   return (
-    <article className="rounded-[24px] border border-white/70 bg-white p-5 shadow-[0_18px_40px_rgba(11,29,51,0.08)]">
+    <article className="jawraa-card p-5">
       <p className="text-sm font-medium text-[var(--ink-soft)]">{title}</p>
       <p className="mt-3 text-3xl font-semibold text-[var(--ink-strong)]">{value}</p>
     </article>
@@ -580,7 +580,7 @@ function InfoCard({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-[20px] bg-[var(--surface-muted)] p-4">
+    <div className="jawraa-subcard p-4">
       <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
       <p
         className={`mt-2 text-sm font-semibold leading-7 text-[var(--ink-strong)] ${mono ? "latin-cell" : ""}`}
@@ -594,23 +594,13 @@ function InfoCard({
 function ProgressCard({
   label,
   value,
-  tone,
 }: {
   label: string;
   value: string;
   tone: "teal" | "sand" | "ink";
 }) {
-  const toneClass =
-    tone === "teal"
-      ? "bg-[linear-gradient(135deg,#e6f4f1_0%,#f8fffd_100%)] border-[#b9ddd6]"
-      : tone === "sand"
-        ? "bg-[linear-gradient(135deg,#f8f1df_0%,#fffaf1_100%)] border-[#e6d3a8]"
-        : "bg-[linear-gradient(135deg,#e9eef5_0%,#fbfdff_100%)] border-[#c8d5e8]";
-
   return (
-    <div
-      className={`rounded-[22px] border p-4 shadow-[0_10px_24px_rgba(12,32,52,0.06)] ${toneClass}`}
-    >
+    <div className="jawraa-subcard p-4">
       <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-[var(--ink-strong)]">{value}</p>
     </div>

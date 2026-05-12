@@ -250,7 +250,7 @@ export default async function PackageDetailPage({
           <div>
             <Link
               href="/packages"
-              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[#0f6175] hover:underline"
+              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
               <span aria-hidden="true">←</span>
               <span>{details.back}</span>
@@ -284,7 +284,7 @@ export default async function PackageDetailPage({
 
       <section className="panel-surface">
         <p className="eyebrow">{details.title}</p>
-        <div className="mt-4 rounded-[20px] bg-[var(--surface-muted)] p-4">
+        <div className="jawraa-card mt-4 p-4">
           <p className="text-sm leading-7 text-[var(--ink-strong)]">
             {pkg.description || details.noDescription}
           </p>
@@ -342,7 +342,7 @@ export default async function PackageDetailPage({
                 : localeText.courses.noResults}
             </p>
           </div>
-          <div className="rounded-full bg-[var(--surface-muted)] px-4 py-2 text-sm font-medium text-[var(--ink-soft)]">
+          <div className="rounded-full border border-[var(--brand-yellow)] bg-white px-4 py-2 text-sm font-medium text-[var(--ink-soft)]">
             {details.page} {formatNumber(safePage, numberLocale)} {details.of} {formatNumber(totalPages, numberLocale)}
           </div>
         </div>
@@ -366,7 +366,7 @@ export default async function PackageDetailPage({
                 return (
                   <tr
                     key={course.id}
-                    className="cursor-pointer transition hover:bg-[var(--surface-muted)]"
+                    className="cursor-pointer transition hover:bg-white"
                   >
                     <td className="latin-cell">
                       <Link href={`/courses/${course.id}`} className="block w-full no-underline">
@@ -483,7 +483,7 @@ function MetricCard({
   value: string;
 }) {
   return (
-    <article className="rounded-[24px] border border-white/70 bg-white p-5 shadow-[0_18px_40px_rgba(11,29,51,0.08)]">
+    <article className="jawraa-card p-5">
       <p className="text-sm font-medium text-[var(--ink-soft)]">{title}</p>
       <p className="mt-3 text-3xl font-semibold text-[var(--ink-strong)]">{value}</p>
     </article>

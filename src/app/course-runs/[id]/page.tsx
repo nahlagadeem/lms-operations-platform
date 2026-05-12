@@ -405,7 +405,7 @@ export default async function CourseRunDetailPage({
           <div>
             <Link
               href="/course-runs"
-              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[#0f6175] hover:underline"
+              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
               <span aria-hidden="true">←</span>
               <span>{details.back}</span>
@@ -417,25 +417,25 @@ export default async function CourseRunDetailPage({
             <p className="section-copy">{details.description}</p>
           </div>
 
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <Link href={panelHref(run.id, "edit")} className="primary-button w-full sm:w-auto">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            <Link href={panelHref(run.id, "edit")} className="primary-button min-w-fit whitespace-nowrap px-4 text-center text-sm">
               {details.edit}
             </Link>
             <Link
               href={panelHref(run.id, "trainer")}
-              className="secondary-button w-full sm:w-auto"
+              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
             >
               {details.addTrainer}
             </Link>
             <Link
               href={panelHref(run.id, "nomination")}
-              className="secondary-button w-full sm:w-auto"
+              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
             >
               {details.addNomination}
             </Link>
             <Link
               href={panelHref(run.id, "attendance")}
-              className="secondary-button w-full sm:w-auto"
+              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
             >
               {details.addAttendance}
             </Link>
@@ -447,7 +447,7 @@ export default async function CourseRunDetailPage({
         <div className="space-y-6 min-w-0">
           <div className="panel-surface">
             <p className="eyebrow">{details.summary}</p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <InfoCard
                 label={localeText.courseRuns.packageName}
                 value={run.course.package.nameEn || run.course.package.nameAr}
@@ -474,7 +474,7 @@ export default async function CourseRunDetailPage({
               />
             </div>
 
-            <div className="mt-5 rounded-[20px] bg-[var(--surface-muted)] p-4">
+            <div className="jawraa-subcard mt-5 p-4">
               <p className="text-xs font-medium text-[var(--ink-soft)]">
                 {localeText.courseRuns.notes}
               </p>
@@ -494,14 +494,14 @@ export default async function CourseRunDetailPage({
 
             <div className="mt-5 space-y-3">
               {run.nominations.length === 0 ? (
-                <div className="rounded-[18px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-4 py-4 text-sm text-[var(--ink-soft)]">
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noNominations}
                 </div>
               ) : (
                 run.nominations.map((nomination) => (
                   <div
                     key={nomination.id}
-                    className="flex flex-col gap-3 rounded-[18px] border border-[var(--line-soft)] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-[var(--ink-strong)]">
@@ -548,14 +548,14 @@ export default async function CourseRunDetailPage({
 
             <div className="mt-5 space-y-3">
               {run.attendanceRecords.length === 0 ? (
-                <div className="rounded-[18px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-4 py-4 text-sm text-[var(--ink-soft)]">
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noAttendance}
                 </div>
               ) : (
                 run.attendanceRecords.map((record) => (
                   <div
                     key={record.id}
-                    className="flex flex-col gap-3 rounded-[18px] border border-[var(--line-soft)] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-[var(--ink-strong)]">
@@ -607,7 +607,7 @@ export default async function CourseRunDetailPage({
               />
             </div>
 
-            <div className="mt-5 rounded-[20px] bg-[var(--surface-muted)] p-4">
+            <div className="jawraa-subcard mt-5 p-4">
               <p className="text-sm leading-7 text-[var(--ink-strong)]">
                 {details.completionRule}
               </p>
@@ -615,14 +615,14 @@ export default async function CourseRunDetailPage({
 
             <div className="mt-5 space-y-3">
               {completionRows.length === 0 ? (
-                <div className="rounded-[18px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-4 py-4 text-sm text-[var(--ink-soft)]">
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noCompletionData}
                 </div>
               ) : (
                 completionRows.map((row) => (
                   <div
                     key={row.participantId}
-                    className="rounded-[18px] border border-[var(--line-soft)] bg-white px-4 py-4"
+                    className="jawraa-subcard px-4 py-4"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -678,14 +678,14 @@ export default async function CourseRunDetailPage({
 
             <div className="mt-5 space-y-3">
               {run.trainers.length === 0 ? (
-                <div className="rounded-[18px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-4 py-4 text-sm text-[var(--ink-soft)]">
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noTrainers}
                 </div>
               ) : (
                 run.trainers.map((assignment) => (
                   <div
                     key={assignment.trainerId}
-                    className="flex flex-col gap-3 rounded-[18px] border border-[var(--line-soft)] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <p className="text-sm font-semibold text-[var(--ink-strong)]">
@@ -697,7 +697,7 @@ export default async function CourseRunDetailPage({
                           details.trainerRolePlaceholder}
                       </p>
                       {assignment.isPrimary ? (
-                        <p className="mt-2 inline-flex rounded-full bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[#0f6175]">
+                        <p className="mt-2 inline-flex rounded-full border border-[var(--brand-yellow)] bg-white px-3 py-1 text-xs font-semibold text-[var(--brand-ink)]">
                           {details.primaryTrainer}
                         </p>
                       ) : null}
@@ -944,7 +944,7 @@ export default async function CourseRunDetailPage({
                   />
                 </label>
 
-                <label className="flex items-center gap-3 rounded-[18px] border border-[var(--line-soft)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-medium text-[var(--ink-strong)]">
+                <label className="jawraa-subcard flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--ink-strong)]">
                   <input type="checkbox" name="isPrimary" value="true" />
                   <span>{details.primaryTrainer}</span>
                 </label>
@@ -1175,7 +1175,7 @@ function InfoCard({
   value: string;
 }) {
   return (
-    <div className="rounded-[20px] bg-[var(--surface-muted)] p-4">
+    <div className="jawraa-subcard p-4">
       <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
       <p className="mt-2 text-sm font-semibold leading-7 text-[var(--ink-strong)]">
         {value}
@@ -1187,23 +1187,13 @@ function InfoCard({
 function ProgressCard({
   label,
   value,
-  tone,
 }: {
   label: string;
   value: string;
   tone: "teal" | "sand" | "ink";
 }) {
-  const toneClass =
-    tone === "teal"
-      ? "bg-[linear-gradient(135deg,#e6f4f1_0%,#f8fffd_100%)] border-[#b9ddd6]"
-      : tone === "sand"
-        ? "bg-[linear-gradient(135deg,#f8f1df_0%,#fffaf1_100%)] border-[#e6d3a8]"
-        : "bg-[linear-gradient(135deg,#e9eef5_0%,#fbfdff_100%)] border-[#c8d5e8]";
-
   return (
-    <div
-      className={`rounded-[22px] border p-4 shadow-[0_10px_24px_rgba(12,32,52,0.06)] ${toneClass}`}
-    >
+    <div className="jawraa-subcard p-4">
       <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-[var(--ink-strong)]">{value}</p>
     </div>

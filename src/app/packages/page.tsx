@@ -42,7 +42,7 @@ export default async function PackagesPage() {
           <Link
             key={item.id}
             href={`/packages/${item.id}`}
-            className="panel-surface block transition hover:-translate-y-0.5 hover:shadow-[0_24px_48px_rgba(12,32,52,0.1)]"
+            className="panel-surface block transition hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(17,17,17,0.08)]"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -85,7 +85,7 @@ function InfoBox({
   value: string;
 }) {
   return (
-    <div className="rounded-[20px] bg-[var(--surface-muted)] p-4">
+    <div className="jawraa-subcard p-4">
       <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
       <p className="mt-2 text-lg font-semibold text-[var(--ink-strong)]">{value}</p>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useOptimistic, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type Locale = "en" | "ar";
@@ -27,11 +27,14 @@ export function LanguageSwitcher({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [optimisticLocale, setOptimisticLocale] = useState<Locale>(currentLocale);
-
-  useEffect(() => {
-    setOptimisticLocale(currentLocale);
-  }, [currentLocale]);
+  const [optimisticLocale, setOptimisticLocale] =
+    useOptimistic<Locale>(currentLocale);
+  const indicatorPosition =
+    optimisticLocale === "ar"
+      ? currentLocale === "ar"
+        ? "-translate-x-full"
+        : "translate-x-full"
+      : "translate-x-0";
 
   const query = searchParams.toString();
   const redirectPath = query ? `${pathname}?${query}` : pathname;
@@ -41,21 +44,19 @@ export function LanguageSwitcher({
       return;
     }
 
-    setOptimisticLocale(nextLocale);
     setLocaleCookie(nextLocale);
 
     startTransition(() => {
+      setOptimisticLocale(nextLocale);
       router.replace(redirectPath);
       router.refresh();
     });
   }
 
   return (
-    <div className="relative inline-grid grid-cols-2 self-start rounded-full border border-white/15 bg-white/10 p-1 text-sm font-medium lg:self-end">
+    <div className="relative inline-grid grid-cols-2 self-start overflow-hidden rounded-full border border-black/10 bg-white p-1 text-sm font-semibold shadow-[0_10px_24px_rgba(17,17,17,0.08)] lg:self-auto">
       <span
-        className={`pointer-events-none absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-full bg-[#e7f0dc] shadow-[0_8px_20px_rgba(10,39,62,0.18)] transition-transform duration-300 ease-out ${
-          optimisticLocale === "ar" ? "translate-x-full" : "translate-x-0"
-        }`}
+        className={`pointer-events-none absolute inset-y-1 start-1 w-[calc(50%-0.25rem)] rounded-full bg-[var(--brand-yellow)] shadow-[0_8px_20px_rgba(244,195,24,0.25)] transition-transform duration-300 ease-out ${indicatorPosition}`}
         aria-hidden="true"
       />
 
@@ -64,7 +65,7 @@ export function LanguageSwitcher({
         onClick={() => handleChange("en")}
         disabled={isPending}
         className={`relative z-10 rounded-full px-4 py-2 transition ${
-          optimisticLocale === "en" ? "text-[#10394d]" : "text-white hover:bg-white/10"
+          optimisticLocale === "en" ? "text-[var(--brand-ink)]" : "text-[var(--ink-soft)] hover:bg-[var(--brand-yellow-soft)]"
         }`}
       >
         {englishLabel}
@@ -75,7 +76,7 @@ export function LanguageSwitcher({
         onClick={() => handleChange("ar")}
         disabled={isPending}
         className={`relative z-10 rounded-full px-4 py-2 transition ${
-          optimisticLocale === "ar" ? "text-[#10394d]" : "text-white hover:bg-white/10"
+          optimisticLocale === "ar" ? "text-[var(--brand-ink)]" : "text-[var(--ink-soft)] hover:bg-[var(--brand-yellow-soft)]"
         }`}
       >
         {arabicLabel}

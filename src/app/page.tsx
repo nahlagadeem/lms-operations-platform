@@ -43,34 +43,25 @@ export default async function HomePage() {
     (sum, item) => sum + (item.expectedTraineeCount ?? 0),
     0,
   );
-  const totalDiscountedValue = packageRows.reduce(
-    (sum, item) => sum + Number(item.discountedTotalAmount ?? 0),
-    0,
-  );
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title={localeText.home.packageCount}
           value={formatNumber(packageCount, numberLocale)}
-          accent="from-[#0d5065] to-[#4fb286]"
         />
         <MetricCard
           title={localeText.home.importedCourses}
           value={formatNumber(courseCount, numberLocale)}
-          accent="from-[#a14a20] to-[#eea849]"
         />
         <MetricCard
           title={localeText.home.targetTrainees}
           value={formatNumber(totalExpectedTrainees, numberLocale)}
-          accent="from-[#4c2f73] to-[#8e7dff]"
         />
         <MetricCard
           title={localeText.home.activeRuns}
           value={runCount === 0 ? "0" : formatNumber(runCount, numberLocale)}
           subtitle={localeText.home.activeRunsHint}
-          accent="from-[#3f4c6b] to-[#7c94c9]"
         />
       </section>
 
@@ -141,21 +132,6 @@ export default async function HomePage() {
       </section>
 
       <section className="panel-surface">
-        <div className="rounded-[24px] bg-[var(--surface-muted)] p-5">
-          <p className="text-sm text-[var(--ink-soft)]">
-            {localeText.home.totalDiscountedValue}
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-[var(--ink-strong)]">
-            {formatCurrency(
-              totalDiscountedValue,
-              numberLocale,
-              localeText.home.unavailable,
-            )}
-          </p>
-        </div>
-      </section>
-
-      <section className="panel-surface">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
             <p className="eyebrow">{localeText.home.quickAccess}</p>
@@ -184,19 +160,18 @@ function MetricCard({
   title,
   value,
   subtitle,
-  accent,
 }: {
   title: string;
   value: string;
   subtitle?: string;
-  accent: string;
 }) {
   return (
-    <article className="overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_18px_40px_rgba(11,29,51,0.08)]">
-      <div className={`h-2 bg-gradient-to-r ${accent}`} />
-      <div className="p-5">
+    <article className="overflow-hidden rounded-[24px] border border-[var(--brand-yellow)] bg-white p-5 shadow-[0_18px_44px_rgba(17,17,17,0.05)]">
+      <div>
         <p className="text-sm font-medium text-[var(--ink-soft)]">{title}</p>
-        <p className="mt-3 text-3xl font-semibold text-[var(--ink-strong)]">{value}</p>
+        <p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink-strong)]">
+          {value}
+        </p>
         {subtitle ? (
           <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">{subtitle}</p>
         ) : null}

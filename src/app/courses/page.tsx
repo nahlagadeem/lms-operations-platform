@@ -258,13 +258,13 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                 : localeText.courses.noResults}
             </p>
           </div>
-          <div className="rounded-full bg-[var(--surface-muted)] px-4 py-2 text-sm font-medium text-[var(--ink-soft)]">
+          <div className="rounded-full border border-[var(--brand-yellow)] bg-white px-4 py-2 text-sm font-medium text-[var(--ink-soft)]">
             {localeText.courses.page} {formatNumber(safePage, numberLocale)} {localeText.courses.of} {formatNumber(totalPages, numberLocale)}
           </div>
         </div>
 
         {courses.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-[var(--line-soft)] bg-[var(--surface-muted)] px-5 py-8 text-center">
+          <div className="jawraa-subcard border-dashed px-5 py-8 text-center">
             <p className="text-lg font-semibold text-[var(--ink-strong)]">
               {localeText.courses.noResults}
             </p>
@@ -305,12 +305,12 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                   return (
                     <tr
                       key={course.id}
-                      className="cursor-pointer transition hover:bg-[var(--surface-muted)]"
+                      className="cursor-pointer transition hover:bg-white"
                     >
                       <td className="latin-cell">
                         <Link
                           href={`/courses/${course.id}`}
-                          className="block w-full font-semibold text-[#0f6175] no-underline"
+                          className="block w-full font-semibold text-[var(--brand-ink)] no-underline"
                         >
                           {course.courseCode}
                         </Link>
