@@ -9,6 +9,7 @@ type LocationsPageProps = {
     q?: string;
     type?: string;
     panel?: string;
+    error?: string;
   }>;
 };
 
@@ -63,6 +64,7 @@ function pageText(locale: "en" | "ar") {
     addButton: "Add Location",
     createTitle: "Add Location",
     close: "Close",
+    missingRequired: "Missing required location fields.",
     search: "Search",
     searchPlaceholder: "Location name, city, or branch",
     type: "Location type",
@@ -101,6 +103,9 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
   const searchTerm = normalizeSingleValue(params.q);
   const typeFilter = normalizeSingleValue(params.type) as LocationType | "";
   const openPanel = params.panel === "create" ? "create" : "";
+  const showRequiredError = params.error === "missing-required";
+  const missingRequiredMessage =
+    "missingRequired" in text ? text.missingRequired : "Missing required location fields.";
 
   const whereClause: Prisma.LocationWhereInput = {
     locationType: typeFilter || undefined,
@@ -224,6 +229,12 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
             </div>
 
             <form action={createLocation} className="space-y-4">
+              {showRequiredError ? (
+                <p className="rounded-[8px] border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                  {missingRequiredMessage}
+                </p>
+              ) : null}
+
               <label className="field-shell">
                 <span className="field-label">{text.locationType}</span>
                 <select name="locationType" className="field-input" defaultValue={LocationType.INTERNAL_VENUE}>

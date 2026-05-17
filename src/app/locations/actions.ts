@@ -29,7 +29,7 @@ export async function createLocation(formData: FormData) {
   const capacity = parseOptionalInt(normalizeText(formData.get("capacity")));
 
   if (!locationType || !nameAr) {
-    throw new Error("Missing required location fields.");
+    redirect("/locations?panel=create&error=missing-required");
   }
 
   await locationService.createLocation({
