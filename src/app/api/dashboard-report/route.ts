@@ -5,6 +5,7 @@ import {
   Prisma,
   ReportStatus,
 } from "@prisma/client";
+import { isAuthenticated } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const pendingApprovalDays = 3;
@@ -34,6 +35,10 @@ function formatDate(value: Date | null) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!(await isAuthenticated())) {
+    return NextResponse.redirect(new URL("/login", request.url), 303);
+  }
+
   const search = request.nextUrl.searchParams;
   const q = normalize(search.get("q"));
   const status = normalize(search.get("status")) as CourseRunStatus | "";

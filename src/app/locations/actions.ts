@@ -3,6 +3,7 @@
 import { LocationType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireAuth } from "@/lib/auth";
 import * as locationService from "@/server/services/location-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -16,6 +17,8 @@ function parseOptionalInt(value: string) {
 }
 
 export async function createLocation(formData: FormData) {
+  await requireAuth();
+
   const locationType = normalizeText(formData.get("locationType")) as LocationType;
   const nameAr = normalizeText(formData.get("nameAr"));
   const nameEn = normalizeText(formData.get("nameEn"));

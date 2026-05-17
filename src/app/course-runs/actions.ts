@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireAuth } from "@/lib/auth";
 import * as courseRunService from "@/server/services/course-run-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -34,6 +35,8 @@ function parseOptionalDate(value: string) {
 }
 
 export async function createCourseRun(formData: FormData) {
+  await requireAuth();
+
   const courseId = normalizeText(formData.get("courseId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
   const status = normalizeText(formData.get("status")) as CourseRunStatus;
@@ -62,6 +65,8 @@ export async function createCourseRun(formData: FormData) {
 }
 
 export async function updateCourseRun(formData: FormData) {
+  await requireAuth();
+
   const courseRunId = normalizeText(formData.get("courseRunId"));
   const providerId = normalizeText(formData.get("providerId"));
   const locationId = normalizeText(formData.get("locationId"));
@@ -94,6 +99,8 @@ export async function updateCourseRun(formData: FormData) {
 }
 
 export async function assignTrainerToCourseRun(formData: FormData) {
+  await requireAuth();
+
   const courseRunId = normalizeText(formData.get("courseRunId"));
   const trainerId = normalizeText(formData.get("trainerId"));
   const role = normalizeText(formData.get("role"));
@@ -116,6 +123,8 @@ export async function assignTrainerToCourseRun(formData: FormData) {
 }
 
 export async function removeTrainerFromCourseRun(formData: FormData) {
+  await requireAuth();
+
   const courseRunId = normalizeText(formData.get("courseRunId"));
   const trainerId = normalizeText(formData.get("trainerId"));
 
@@ -131,6 +140,8 @@ export async function removeTrainerFromCourseRun(formData: FormData) {
 }
 
 export async function nominateExistingParticipant(formData: FormData) {
+  await requireAuth();
+
   const courseRunId = normalizeText(formData.get("courseRunId"));
   const participantId = normalizeText(formData.get("participantId"));
   const nominationStatus = normalizeText(
@@ -155,6 +166,8 @@ export async function nominateExistingParticipant(formData: FormData) {
 }
 
 export async function createParticipantAndNominate(formData: FormData) {
+  await requireAuth();
+
   const courseRunId = normalizeText(formData.get("courseRunId"));
   const participantType = normalizeText(
     formData.get("participantType"),
@@ -195,6 +208,8 @@ export async function createParticipantAndNominate(formData: FormData) {
 }
 
 export async function updateNominationStatus(formData: FormData) {
+  await requireAuth();
+
   const nominationId = normalizeText(formData.get("nominationId"));
   const courseRunId = normalizeText(formData.get("courseRunId"));
   const nominationStatus = normalizeText(
@@ -217,6 +232,8 @@ export async function updateNominationStatus(formData: FormData) {
 }
 
 export async function recordAttendance(formData: FormData) {
+  await requireAuth();
+
   const courseRunId = normalizeText(formData.get("courseRunId"));
   const participantId = normalizeText(formData.get("participantId"));
   const attendanceDateValue = normalizeText(formData.get("attendanceDate"));

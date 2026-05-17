@@ -3,6 +3,7 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentEntityType } from "@prisma/client";
+import { isAuthenticated } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const projectDocumentTypes = new Set<DocumentEntityType>([
@@ -19,6 +20,10 @@ function safeReturnPath(value: string) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!(await isAuthenticated())) {
+    return NextResponse.redirect(new URL("/login", request.url), 303);
+  }
+
   let formData: FormData;
 
   try {
