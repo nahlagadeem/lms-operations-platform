@@ -3,7 +3,7 @@
 import { ProviderType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import * as providerService from "@/server/services/provider-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -25,19 +25,17 @@ export async function createProvider(formData: FormData) {
     throw new Error("Please choose a training provider type and enter a name.");
   }
 
-  await db.provider.create({
-    data: {
-      providerType,
-      nameAr,
-      nameEn: nameEn || null,
-      country: country || null,
-      city: city || null,
-      contactPerson: contactPerson || null,
-      email: email || null,
-      phone: phone || null,
-      website: website || null,
-      notes: notes || null,
-    },
+  await providerService.createProvider({
+    providerType,
+    nameAr,
+    nameEn,
+    country,
+    city,
+    contactPerson,
+    email,
+    phone,
+    website,
+    notes,
   });
 
   revalidatePath("/providers");
