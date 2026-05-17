@@ -57,7 +57,7 @@ function detailText(locale: "en" | "ar") {
     description: "Review the courses included in this package with a quick planning summary for each one.",
     courseList: "Courses in this package",
     courseCount: "Course count",
-    target: "Target trainees",
+    target: "Target participants",
     discountedValue: "Discounted value",
     code: "Code",
     category: "Category",

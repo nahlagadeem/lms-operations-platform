@@ -74,8 +74,8 @@ function pageText(locale: "en" | "ar") {
   }
 
   return {
-    addButton: "Add ongoing course",
-    toggleButton: "Open add course form",
+    addButton: "Add Course",
+    toggleButton: "Add Course",
     close: "Close",
   };
 }

@@ -9,7 +9,7 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import * as courseRunService from "@/server/services/course-run-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -33,54 +33,6 @@ function parseOptionalDate(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-async function syncConfirmedSeats(courseRunId: string) {
-  const confirmedSeats = await db.nomination.count({
-    where: {
-      courseRunId,
-      nominationStatus: NominationStatus.CONFIRMED,
-    },
-  });
-
-  await db.courseRun.update({
-    where: {
-      id: courseRunId,
-    },
-    data: {
-      confirmedSeats,
-    },
-  });
-}
-
-async function generateRunCode(courseCode: string, startDate: Date | null) {
-  const dateToken = startDate
-    ? startDate.toISOString().slice(0, 10).replaceAll("-", "")
-    : new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  const baseCode = `${courseCode}-${dateToken}`;
-
-  const existing = await db.courseRun.findMany({
-    where: {
-      runCode: {
-        startsWith: baseCode,
-      },
-    },
-    select: {
-      runCode: true,
-    },
-  });
-
-  if (existing.length === 0) {
-    return baseCode;
-  }
-
-  let suffix = 2;
-  const existingCodes = new Set(existing.map((item) => item.runCode));
-  while (existingCodes.has(`${baseCode}-${suffix}`)) {
-    suffix += 1;
-  }
-
-  return `${baseCode}-${suffix}`;
-}
-
 export async function createCourseRun(formData: FormData) {
   const courseId = normalizeText(formData.get("courseId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
@@ -91,37 +43,17 @@ export async function createCourseRun(formData: FormData) {
   const notes = normalizeText(formData.get("notes"));
 
   if (!courseId || !deliveryMode || !status) {
-    throw new Error("Missing required course run fields.");
+    throw new Error("Please choose a course and try again.");
   }
 
-  const course = await db.course.findUnique({
-    where: {
-      id: courseId,
-    },
-    select: {
-      courseCode: true,
-      requiresCertificate: true,
-    },
-  });
-
-  if (!course) {
-    throw new Error("Selected course was not found.");
-  }
-
-  const runCode = await generateRunCode(course.courseCode, startDate);
-
-  const createdRun = await db.courseRun.create({
-    data: {
-      courseId,
-      runCode,
-      deliveryMode,
-      status,
-      startDate,
-      endDate,
-      plannedSeats,
-      notes: notes || null,
-      certificateRequired: course.requiresCertificate,
-    },
+  const createdRun = await courseRunService.createCourseRun({
+    courseId,
+    deliveryMode,
+    status,
+    startDate,
+    endDate,
+    plannedSeats,
+    notes,
   });
 
   revalidatePath(`/courses/${courseId}`);
@@ -141,23 +73,19 @@ export async function updateCourseRun(formData: FormData) {
   const notes = normalizeText(formData.get("notes"));
 
   if (!courseRunId || !deliveryMode || !status) {
-    throw new Error("Missing required course run update fields.");
+    throw new Error("Please complete the required course details.");
   }
 
-  await db.courseRun.update({
-    where: {
-      id: courseRunId,
-    },
-    data: {
-      providerId: providerId || null,
-      locationId: locationId || null,
-      deliveryMode,
-      status,
-      startDate,
-      endDate,
-      plannedSeats,
-      notes: notes || null,
-    },
+  await courseRunService.updateCourseRun({
+    courseRunId,
+    providerId,
+    locationId,
+    deliveryMode,
+    status,
+    startDate,
+    endDate,
+    plannedSeats,
+    notes,
   });
 
   revalidatePath("/course-runs");
@@ -175,34 +103,11 @@ export async function assignTrainerToCourseRun(formData: FormData) {
     throw new Error("Missing trainer assignment fields.");
   }
 
-  if (isPrimary) {
-    await db.courseRunTrainer.updateMany({
-      where: {
-        courseRunId,
-      },
-      data: {
-        isPrimary: false,
-      },
-    });
-  }
-
-  await db.courseRunTrainer.upsert({
-    where: {
-      courseRunId_trainerId: {
-        courseRunId,
-        trainerId,
-      },
-    },
-    update: {
-      role: role || null,
-      isPrimary,
-    },
-    create: {
-      courseRunId,
-      trainerId,
-      role: role || null,
-      isPrimary,
-    },
+  await courseRunService.assignTrainerToCourseRun({
+    courseRunId,
+    trainerId,
+    role,
+    isPrimary,
   });
 
   revalidatePath("/course-runs");
@@ -218,14 +123,7 @@ export async function removeTrainerFromCourseRun(formData: FormData) {
     throw new Error("Missing trainer removal fields.");
   }
 
-  await db.courseRunTrainer.delete({
-    where: {
-      courseRunId_trainerId: {
-        courseRunId,
-        trainerId,
-      },
-    },
-  });
+  await courseRunService.removeTrainerFromCourseRun(courseRunId, trainerId);
 
   revalidatePath("/course-runs");
   revalidatePath(`/course-runs/${courseRunId}`);
@@ -244,34 +142,13 @@ export async function nominateExistingParticipant(formData: FormData) {
     throw new Error("Missing nomination fields.");
   }
 
-  await db.nomination.upsert({
-    where: {
-      courseRunId_participantId: {
-        courseRunId,
-        participantId,
-      },
-    },
-    update: {
-      nominationStatus,
-      confirmationStatus:
-        nominationStatus === NominationStatus.CONFIRMED ? nominationStatus : null,
-      confirmedAt:
-        nominationStatus === NominationStatus.CONFIRMED ? new Date() : null,
-      notes: notes || null,
-    },
-    create: {
-      courseRunId,
-      participantId,
-      nominationStatus,
-      confirmationStatus:
-        nominationStatus === NominationStatus.CONFIRMED ? nominationStatus : null,
-      confirmedAt:
-        nominationStatus === NominationStatus.CONFIRMED ? new Date() : null,
-      notes: notes || null,
-    },
+  await courseRunService.nominateExistingParticipant({
+    courseRunId,
+    participantId,
+    nominationStatus,
+    notes,
   });
 
-  await syncConfirmedSeats(courseRunId);
   revalidatePath("/course-runs");
   revalidatePath(`/course-runs/${courseRunId}`);
   redirect(`/course-runs/${courseRunId}`);
@@ -298,60 +175,20 @@ export async function createParticipantAndNominate(formData: FormData) {
     throw new Error("Missing participant nomination fields.");
   }
 
-  let participant = null;
-
-  if (nationalIdOrIqama) {
-    participant = await db.participant.findFirst({
-      where: {
-        participantType,
-        nationalIdOrIqama,
-      },
-    });
-  }
-
-  if (!participant) {
-    participant = await db.participant.create({
-      data: {
-        participantType,
-        nationalIdOrIqama: nationalIdOrIqama || null,
-        fullNameAr,
-        fullNameEn: fullNameEn || null,
-        email: email || null,
-        phone: phone || null,
-        organizationName: organizationName || null,
-        jobTitle: jobTitle || null,
-      },
-    });
-  }
-
-  await db.nomination.upsert({
-    where: {
-      courseRunId_participantId: {
-        courseRunId,
-        participantId: participant.id,
-      },
-    },
-    update: {
-      nominationStatus,
-      confirmationStatus:
-        nominationStatus === NominationStatus.CONFIRMED ? nominationStatus : null,
-      confirmedAt:
-        nominationStatus === NominationStatus.CONFIRMED ? new Date() : null,
-      notes: notes || null,
-    },
-    create: {
-      courseRunId,
-      participantId: participant.id,
-      nominationStatus,
-      confirmationStatus:
-        nominationStatus === NominationStatus.CONFIRMED ? nominationStatus : null,
-      confirmedAt:
-        nominationStatus === NominationStatus.CONFIRMED ? new Date() : null,
-      notes: notes || null,
-    },
+  await courseRunService.createParticipantAndNominate({
+    courseRunId,
+    participantType,
+    fullNameAr,
+    fullNameEn,
+    email,
+    phone,
+    organizationName,
+    jobTitle,
+    nationalIdOrIqama,
+    nominationStatus,
+    notes,
   });
 
-  await syncConfirmedSeats(courseRunId);
   revalidatePath("/course-runs");
   revalidatePath(`/course-runs/${courseRunId}`);
   redirect(`/course-runs/${courseRunId}`);
@@ -368,22 +205,12 @@ export async function updateNominationStatus(formData: FormData) {
     throw new Error("Missing nomination status update fields.");
   }
 
-  await db.nomination.update({
-    where: {
-      id: nominationId,
-    },
-    data: {
-      nominationStatus,
-      confirmationStatus:
-        nominationStatus === NominationStatus.CONFIRMED ? nominationStatus : null,
-      confirmedAt:
-        nominationStatus === NominationStatus.CONFIRMED ? new Date() : null,
-      declineReason:
-        nominationStatus === NominationStatus.DECLINED ? "Declined by operations" : null,
-    },
+  await courseRunService.updateNominationStatus({
+    nominationId,
+    courseRunId,
+    nominationStatus,
   });
 
-  await syncConfirmedSeats(courseRunId);
   revalidatePath("/course-runs");
   revalidatePath(`/course-runs/${courseRunId}`);
   redirect(`/course-runs/${courseRunId}`);
@@ -408,26 +235,12 @@ export async function recordAttendance(formData: FormData) {
     throw new Error("Attendance date is invalid.");
   }
 
-  await db.attendanceRecord.upsert({
-    where: {
-      courseRunId_participantId_attendanceDate: {
-        courseRunId,
-        participantId,
-        attendanceDate,
-      },
-    },
-    update: {
-      attendanceStatus,
-      notes: notes || null,
-      recordedAt: new Date(),
-    },
-    create: {
-      courseRunId,
-      participantId,
-      attendanceDate,
-      attendanceStatus,
-      notes: notes || null,
-    },
+  await courseRunService.recordAttendance({
+    courseRunId,
+    participantId,
+    attendanceDate,
+    attendanceStatus,
+    notes,
   });
 
   revalidatePath("/course-runs");

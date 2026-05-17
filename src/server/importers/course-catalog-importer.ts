@@ -20,35 +20,35 @@ type PackageDefinition = {
 
 const PACKAGE_DEFINITIONS: Record<string, PackageDefinition> = {
   "1": {
-    packageCode: "PKG-001",
+    packageCode: "01",
     packageNameAr: "الحزمة الأولى",
     categoryCode: "leadership-programs",
     categoryNameAr: "برامج قيادية",
     deliveryType: DeliveryType.TRAINING,
   },
   "2": {
-    packageCode: "PKG-002",
+    packageCode: "02",
     packageNameAr: "الحزمة الثانية",
     categoryCode: "professional-certifications",
     categoryNameAr: "برامج الشهادات الاحترافية",
     deliveryType: DeliveryType.CERTIFICATION,
   },
   "3": {
-    packageCode: "PKG-003",
+    packageCode: "03",
     packageNameAr: "الحزمة الثالثة",
     categoryCode: "business-self-development",
     categoryNameAr: "برامج تطوير الذات ومهارات الأعمال",
     deliveryType: DeliveryType.TRAINING,
   },
   "4": {
-    packageCode: "PKG-004",
+    packageCode: "04",
     packageNameAr: "الحزمة الرابعة",
     categoryCode: "english-programs",
     categoryNameAr: "دورات اللغة الأنجليزية",
     deliveryType: DeliveryType.LANGUAGE,
   },
   "5": {
-    packageCode: "PKG-005",
+    packageCode: "05",
     packageNameAr: "الحزمة الخامسة",
     categoryCode: "conferences-workshops",
     categoryNameAr: "المؤتمرات والمعارض وورش العمل",
@@ -76,8 +76,8 @@ function toDecimal(value: number | null | undefined): Prisma.Decimal | null {
   return new Prisma.Decimal(value);
 }
 
-function buildCourseCode(packageCode: string, rowIndex: number): string {
-  return `${packageCode}-${String(rowIndex).padStart(4, "0")}`;
+function buildCourseCode(packageNumber: string, rowIndex: number): string {
+  return `${packageNumber.padStart(2, "0")}-${String(rowIndex).padStart(3, "0")}`;
 }
 
 function readSummaryRows(workbook: XLSX.WorkBook): SummaryRow[] {
@@ -112,6 +112,22 @@ export async function loadWorkbookFromExcel(workbookPath: string) {
   }[] = [];
 
   let totalCoursesImported = 0;
+  const activeScope = await db.projectScope.upsert({
+    where: { code: "01" },
+    update: {
+      name: "Scope 1",
+      description: "Current active scope with selected courses from the imported catalog.",
+    },
+    create: {
+      code: "01",
+      name: "Scope 1",
+      description: "Current active scope with selected courses from the imported catalog.",
+      invoicedAmount: new Prisma.Decimal(0),
+      collectedAmount: new Prisma.Decimal(0),
+      plannedCompletion: new Prisma.Decimal(35),
+      actualCompletion: new Prisma.Decimal(22),
+    },
+  });
 
   for (const summaryRow of summaryRows) {
     const definition = PACKAGE_DEFINITIONS[summaryRow.packageCode];
@@ -131,12 +147,14 @@ export async function loadWorkbookFromExcel(workbookPath: string) {
     const pkg = await db.package.upsert({
       where: { code: definition.packageCode },
       update: {
+        scopeId: definition.packageCode === "01" ? activeScope.id : null,
         nameAr: definition.packageNameAr,
         expectedTraineeCount: summaryRow.expectedTraineeCount,
         originalTotalAmount: toDecimal(summaryRow.originalTotalAmount),
         discountedTotalAmount: toDecimal(summaryRow.discountedTotalAmount),
       },
       create: {
+        scopeId: definition.packageCode === "01" ? activeScope.id : null,
         code: definition.packageCode,
         nameAr: definition.packageNameAr,
         expectedTraineeCount: summaryRow.expectedTraineeCount,
@@ -181,7 +199,7 @@ export async function loadWorkbookFromExcel(workbookPath: string) {
       const durationMatch = specification?.match(/(\d+)/);
       const defaultDurationDays = durationMatch ? Number(durationMatch[1]) : null;
 
-      const courseCode = buildCourseCode(definition.packageCode, Number(serialNumber));
+      const courseCode = buildCourseCode(summaryRow.packageCode, Number(serialNumber));
 
       const course = await db.course.upsert({
         where: { courseCode },
@@ -260,6 +278,47 @@ export async function loadWorkbookFromExcel(workbookPath: string) {
       packageCode: definition.packageCode,
       packageNameAr: definition.packageNameAr,
       courseCount: packageCourseCount,
+    });
+  }
+
+  const selectedCourses = await db.course.findMany({
+    where: {
+      OR: [
+        { package: { code: "01" } },
+        { package: { code: { in: ["02", "03", "04", "05"] } } },
+      ],
+    },
+    select: {
+      id: true,
+      courseCode: true,
+      package: {
+        select: {
+          code: true,
+        },
+      },
+    },
+    orderBy: { courseCode: "asc" },
+  });
+  const packageOneCourses = selectedCourses
+    .filter((course) => course.package.code === "01")
+    .slice(0, 5);
+  const otherPackageCourses = selectedCourses
+    .filter((course) => course.package.code !== "01")
+    .sort((left, right) => left.courseCode.localeCompare(right.courseCode))
+    .filter((_, index) => index % 17 === 0)
+    .slice(0, 5);
+
+  await db.projectScopeCourse.deleteMany({
+    where: { scopeId: activeScope.id },
+  });
+
+  for (const [index, course] of [...packageOneCourses, ...otherPackageCourses].entries()) {
+    await db.projectScopeCourse.create({
+      data: {
+        scopeId: activeScope.id,
+        courseId: course.id,
+        sortOrder: index + 1,
+      },
     });
   }
 

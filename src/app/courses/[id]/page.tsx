@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
+import { ActiveStatus, CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
 import { createCourseRun } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
@@ -77,16 +77,16 @@ function detailText(locale: "en" | "ar") {
   return {
     title: "Course details",
     description:
-      "This is the master course profile before operations start. Review the course information, then create a run and set the operational status from here.",
+      "Review the course information, then add an active course and set the course status from here.",
     back: "Back to courses",
-    createRun: "Create course run",
-    createRunButton: "Open create run",
+    createRun: "Add Active Course",
+    createRunButton: "Add Active Course",
     close: "Close",
     overview: "Course overview",
     planning: "Planning and operations",
     pricing: "Pricing snapshot",
-    relatedRuns: "Related course runs",
-    noRuns: "No course runs are linked to this course yet.",
+    relatedRuns: "Related active courses",
+    noRuns: "No active courses are linked to this course yet. Click Add Active Course to get started.",
     descriptionLabel: "Course description",
     noDescription: "No description is available for this course yet.",
     package: "Package",
@@ -96,14 +96,14 @@ function detailText(locale: "en" | "ar") {
     duration: "Duration",
     language: "Language",
     unit: "Unit of measure",
-    activeStatus: "Record status",
+    activeStatus: "Course availability",
     attendance: "Attendance required",
-    certificate: "Certificate required",
-    providerRegistration: "Provider registration required",
+    certificate: "Issue certificate",
+    providerRegistration: "Training provider registration",
     external: "External delivery",
     targetUse: "Operational use",
     startOperationalNote:
-      "From this page, the course can be turned into a live run, then completed with trainer, location, and schedule details.",
+      "From this page, add an active course, then complete the trainer, location, and schedule details.",
     latestPrice: "Current final price",
     originalPrice: "Original price",
     discountAmount: "Discount amount",
@@ -112,11 +112,11 @@ function detailText(locale: "en" | "ar") {
     unspecified: "Unspecified",
     yes: "Yes",
     no: "No",
-    countRuns: "Total runs",
-    countOngoing: "Ongoing",
+    countRuns: "Total active courses",
+    countOngoing: "In progress",
     countCompleted: "Completed",
     createDescription:
-      "Start an operational run for this course directly from here. You can mark it as ongoing immediately or choose another run status first.",
+      "Add an active course directly from here. You can mark it as in progress immediately or choose another course status first.",
     status: "Status",
     deliveryMode: "Delivery mode",
     startDate: "Start date",
@@ -124,11 +124,11 @@ function detailText(locale: "en" | "ar") {
     plannedSeats: "Planned seats",
     notes: "Notes",
     notesPlaceholder: "Internal operational notes",
-    startNow: "Create run",
-    runCode: "Run code",
+    startNow: "Add Course",
+    runCode: "Course Session",
     dates: "Dates",
     noDates: "Dates not set",
-    openRun: "Open run",
+    openRun: "View Details",
   };
 }
 
@@ -198,6 +198,12 @@ function formatDuration(
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
+}
+
+function courseAvailabilityText(status: ActiveStatus, details: { unavailable: string }) {
+  if (status === ActiveStatus.ACTIVE) return "Available";
+  if (status === ActiveStatus.ARCHIVED) return "Archived";
+  return details.unavailable;
 }
 
 function panelHref(id: string) {
@@ -327,7 +333,7 @@ export default async function CourseDetailPage({
               <InfoCard label={details.duration} value={durationLabel} />
               <InfoCard label={details.language} value={course.language || details.unspecified} />
               <InfoCard label={details.unit} value={course.unitOfMeasure || details.unspecified} />
-              <InfoCard label={details.activeStatus} value={course.activeStatus} />
+              <InfoCard label={details.activeStatus} value={courseAvailabilityText(course.activeStatus, details)} />
             </div>
 
             <div className="jawraa-subcard mt-5 p-4">

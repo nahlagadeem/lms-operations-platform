@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DocumentEntityType, DocumentType } from "@prisma/client";
 import {
   assignTrainerToCourseRun,
   createParticipantAndNominate,
@@ -99,6 +100,16 @@ function detailText(locale: "en" | "ar") {
       eligibleCount: "المؤهلون",
       threshold: "حد الاكتمال",
       documents: "المستندات",
+      documentVault: "المستندات",
+      documentVaultDescription: "ارفع واحفظ المستندات المتعلقة بهذا البرنامج التدريبي الجاري مثل الحضور والتقارير والشهادات والصور.",
+      documentType: "نوع المستند",
+      documentFile: "الملف",
+      documentNotes: "وصف أو ملاحظات",
+      uploadDocument: "رفع المستند",
+      noDocuments: "لا توجد مستندات مرفوعة لهذا التشغيل حتى الآن",
+      download: "تحميل",
+      fileSize: "حجم الملف",
+      version: "الإصدار",
       attendanceRequired: "يتطلب حضور",
       certificateRequired: "يتطلب شهادة",
       confirmedSeats: "المقاعد المؤكدة",
@@ -111,24 +122,24 @@ function detailText(locale: "en" | "ar") {
   }
 
   return {
-    title: "Course run details",
+    title: "Active Course Details",
     description:
       "Review the current delivery information first, then use the top actions to edit the delivery, add a trainer, or manage nominations.",
-    edit: "Edit delivery",
-    editButton: "Open edit form",
-    addTrainer: "Add trainer",
-    addTrainerButton: "Open add trainer",
-    addNomination: "Add nomination",
-    addNominationButton: "Open add nomination",
-    addAttendance: "Record attendance",
-    addAttendanceButton: "Open attendance form",
+    edit: "Edit Course",
+    editButton: "Edit Course",
+    addTrainer: "Add Trainer",
+    addTrainerButton: "Add Trainer",
+    addNomination: "Add Registration",
+    addNominationButton: "Add Registration",
+    addAttendance: "Add Attendance",
+    addAttendanceButton: "Add Attendance",
     summary: "Summary",
     progress: "Progress indicators",
-    provider: "Provider",
+    provider: "Training Provider",
     location: "Location",
-    chooseProvider: "Choose a provider",
+    chooseProvider: "Choose a training provider",
     chooseLocation: "Choose a location",
-    save: "Save changes",
+    save: "Save Changes",
     back: "Back",
     notAssigned: "Not assigned yet",
     noNotes: "No notes provided",
@@ -140,10 +151,10 @@ function detailText(locale: "en" | "ar") {
     primaryTrainer: "Primary trainer",
     noTrainers: "No trainers are assigned yet",
     remove: "Remove",
-    nominations: "Nominations",
-    currentNominations: "Current nominations",
+    nominations: "Registrations",
+    currentNominations: "Current Registrations",
     chooseParticipant: "Choose a participant",
-    nominationStatus: "Nomination status",
+    nominationStatus: "Registration status",
     participantType: "Participant type",
     participantNameAr: "Arabic name",
     participantNameEn: "English name",
@@ -152,19 +163,19 @@ function detailText(locale: "en" | "ar") {
     participantOrg: "Organization",
     participantJobTitle: "Job title",
     participantNationalId: "National ID / Iqama",
-    existingParticipant: "Nominate from existing participants",
-    quickCreateParticipant: "Create a new participant and nominate",
-    noNominations: "No nominations have been added yet",
-    saveNomination: "Save nomination",
-    createAndNominate: "Create and nominate",
+    existingParticipant: "Register an existing participant",
+    quickCreateParticipant: "Add a new participant and register",
+    noNominations: "No participants are registered yet. Click Add Registration to get started.",
+    saveNomination: "Save Registration",
+    createAndNominate: "Add and Register",
     attendance: "Attendance",
     attendanceLog: "Attendance log",
-    noAttendance: "No attendance records have been added yet",
+    noAttendance: "No attendance entries have been added yet. Click Add Attendance to get started.",
     attendanceDate: "Attendance date",
     attendanceStatus: "Attendance status",
     chooseAttendee: "Choose a nominated attendee",
     saveAttendance: "Save attendance",
-    recordedAttendance: "Recorded attendance",
+    recordedAttendance: "Attendance entries",
     completion: "Completion and eligibility",
     completionSummary: "Completion summary",
     noCompletionData: "There is not enough attendance data to calculate completion yet",
@@ -172,19 +183,29 @@ function detailText(locale: "en" | "ar") {
     attendedDays: "Attended days",
     totalSessions: "Total sessions",
     completionEligible: "Completion eligible",
-    certificateEligible: "Certificate eligible",
-    completionRule: "A student is considered eligible when they attend at least 75% of the recorded sessions.",
-    eligibleCount: "Eligible students",
+    certificateEligible: "Ready to issue certificate",
+    completionRule: "A participant is ready to complete the course after attending at least 75% of the course sessions.",
+    eligibleCount: "Eligible participants",
     threshold: "Completion threshold",
     documents: "Documents",
+    documentVault: "Documents",
+    documentVaultDescription: "Upload files related to this active course, such as attendance sheets, reports, certificates, and photos.",
+    documentType: "Document type",
+    documentFile: "File",
+    documentNotes: "Description or notes",
+    uploadDocument: "Upload File",
+    noDocuments: "No files have been uploaded for this active course yet.",
+    download: "Download",
+    fileSize: "File size",
+    version: "Version",
     attendanceRequired: "Attendance required",
-    certificateRequired: "Certificate required",
+    certificateRequired: "Issue certificate",
     confirmedSeats: "Confirmed seats",
     yes: "Yes",
     no: "No",
     close: "Close",
     plannedSeats: "Planned seats",
-    courseStatus: "Delivery status",
+    courseStatus: "Course Status",
   };
 }
 
@@ -222,7 +243,7 @@ function participantTypeText(locale: "en" | "ar") {
   }
 
   return {
-    STUDENT: "Student",
+    STUDENT: "Participant",
     TEACHER: "Teacher",
     OWNER: "Owner",
     COORDINATOR: "Coordinator",
@@ -250,6 +271,46 @@ function attendanceStatusText(locale: "en" | "ar") {
   } as const;
 }
 
+function documentTypeText(locale: "en" | "ar") {
+  if (locale === "ar") {
+    return {
+      COURSE_CARD: "بطاقة الدورة",
+      PRESENTATION: "عرض تقديمي",
+      LEARNER_GUIDE: "دليل المتدرب",
+      ATTENDANCE_SHEET: "كشف الحضور",
+      CERTIFICATE_TEMPLATE: "نموذج الشهادة",
+      QUALITY_REPORT: "تقرير الجودة",
+      FINAL_REPORT: "التقرير النهائي",
+      PHOTOS_ARCHIVE: "أرشيف الصور",
+      OTHER: "أخرى",
+    } as Record<DocumentType, string>;
+  }
+
+  return {
+    COURSE_CARD: "Course card",
+    PRESENTATION: "Presentation",
+    LEARNER_GUIDE: "Learner guide",
+    ATTENDANCE_SHEET: "Attendance sheet",
+    CERTIFICATE_TEMPLATE: "Certificate template",
+    QUALITY_REPORT: "Course report",
+    FINAL_REPORT: "Final report",
+    PHOTOS_ARCHIVE: "Photos archive",
+    OTHER: "Other",
+  } as Record<DocumentType, string>;
+}
+
+function formatFileSize(bytes: number | null, locale: string) {
+  if (!bytes) {
+    return "-";
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(bytes / 1024)} KB`;
+  }
+
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
+}
+
 function panelHref(id: string, panel: "edit" | "trainer" | "nomination" | "attendance") {
   return `/course-runs/${id}?panel=${panel}`;
 }
@@ -273,7 +334,7 @@ export default async function CourseRunDetailPage({
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const completionThreshold = 0.75;
 
-  const [run, providers, locations, trainers, participants] = await Promise.all([
+  const [run, documents, providers, locations, trainers, participants] = await Promise.all([
     db.courseRun.findUnique({
       where: { id },
       include: {
@@ -307,11 +368,17 @@ export default async function CourseRunDetailPage({
         _count: {
           select: {
             nominations: true,
-            documents: true,
             attendanceRecords: true,
           },
         },
       },
+    }),
+    db.document.findMany({
+      where: {
+        entityType: DocumentEntityType.COURSE_RUN,
+        entityId: id,
+      },
+      orderBy: [{ uploadedAt: "desc" }],
     }),
     db.provider.findMany({
       select: { id: true, nameAr: true, nameEn: true },
@@ -743,7 +810,7 @@ export default async function CourseRunDetailPage({
               />
               <ProgressCard
                 label={details.documents}
-                value={formatNumber(run._count.documents, numberLocale)}
+                value={formatNumber(documents.length, numberLocale)}
                 tone="sand"
               />
               <ProgressCard
@@ -770,6 +837,102 @@ export default async function CourseRunDetailPage({
                 value={localeText.courseRunStatuses[run.status]}
                 tone="teal"
               />
+            </div>
+          </div>
+
+          <div className="panel-surface">
+            <div>
+              <p className="eyebrow">{details.documentVault}</p>
+              <h3 className="section-title">{details.documents}</h3>
+              <p className="section-copy">{details.documentVaultDescription}</p>
+            </div>
+
+            <form
+              action="/api/course-run-documents"
+              method="post"
+              encType="multipart/form-data"
+              className="mt-5 space-y-4"
+            >
+              <input type="hidden" name="courseRunId" value={run.id} />
+              <input type="hidden" name="returnPath" value={`/course-runs/${run.id}`} />
+
+              <div className="grid gap-4 xl:grid-cols-3">
+                <label className="field-shell">
+                  <span className="field-label">{details.documentType}</span>
+                  <select
+                    name="documentType"
+                    className="field-input"
+                    defaultValue={DocumentType.ATTENDANCE_SHEET}
+                  >
+                    {Object.entries(documentTypeText(locale)).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell xl:col-span-2">
+                  <span className="field-label">{details.documentFile}</span>
+                  <input
+                    type="file"
+                    name="file"
+                    className="field-input"
+                    accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
+                  />
+                </label>
+              </div>
+
+              <label className="field-shell">
+                <span className="field-label">{details.documentNotes}</span>
+                <textarea
+                  name="notes"
+                  rows={3}
+                  className="field-input min-h-[6rem] resize-y"
+                />
+              </label>
+
+              <button type="submit" className="primary-button w-full sm:w-auto">
+                {details.uploadDocument}
+              </button>
+            </form>
+
+            <div className="mt-6 space-y-3">
+              {documents.length === 0 ? (
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                  {details.noDocuments}
+                </div>
+              ) : (
+                documents.map((document) => (
+                  <div
+                    key={document.id}
+                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 xl:flex-row xl:items-center xl:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--ink-strong)]">
+                        {document.originalFileName || document.fileName}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                        {documentTypeText(locale)[document.documentType]} | {details.version}{" "}
+                        {document.version} | {details.fileSize}:{" "}
+                        {formatFileSize(document.fileSizeBytes, numberLocale)}
+                      </p>
+                      {document.notes ? (
+                        <p className="mt-2 text-xs leading-6 text-[var(--ink-soft)]">
+                          {document.notes}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <Link
+                      href={document.fileUrl}
+                      className="secondary-button w-full sm:w-auto"
+                    >
+                      {details.download}
+                    </Link>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

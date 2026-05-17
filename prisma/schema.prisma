@@ -135,8 +135,26 @@ enum DocumentType {
   OTHER
 }
 
+enum DocumentEntityType {
+  FRAMEWORK_AGREEMENT
+  SCOPE
+  PACKAGE
+  COURSE
+  COURSE_RUN
+  PROVIDER
+  TRAINER
+  PARTICIPANT
+  LOCATION
+  APPROVAL
+  INVOICE
+  RISK
+  ISSUE
+  REPORT
+}
+
 model Package {
   id                   String       @id @default(cuid())
+  scopeId              String?
   code                 String       @unique
   nameAr               String
   nameEn               String?
@@ -147,7 +165,27 @@ model Package {
   isActive             Boolean      @default(true)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
+  scope                ProjectScope? @relation(fields: [scopeId], references: [id], onDelete: SetNull)
   courses              Course[]
+
+  @@index([scopeId])
+}
+
+model ProjectScope {
+  id                    String    @id @default(cuid())
+  code                  String    @unique
+  name                  String
+  description           String?
+  plannedCompletion     Decimal?  @db.Decimal(5, 2)
+  actualCompletion      Decimal?  @db.Decimal(5, 2)
+  budgetAmount          Decimal?  @db.Decimal(18, 2)
+  invoicedAmount        Decimal?  @db.Decimal(18, 2)
+  collectedAmount       Decimal?  @db.Decimal(18, 2)
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  packages              Package[]
+  selectedCourses       ProjectScopeCourse[]
 }
 
 model CourseCategory {
@@ -182,6 +220,21 @@ model Course {
   category                  CourseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   pricingRecords            CoursePricing[]
   runs                      CourseRun[]
+  scopeSelections           ProjectScopeCourse[]
+}
+
+model ProjectScopeCourse {
+  id        String       @id @default(cuid())
+  scopeId   String
+  courseId  String
+  sortOrder Int
+  createdAt DateTime     @default(now())
+  scope     ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  course    Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([scopeId, courseId])
+  @@index([scopeId, sortOrder])
+  @@index([courseId])
 }
 
 model CoursePricing {
@@ -327,12 +380,42 @@ model CourseRunDocument {
   courseRunId      String
   documentType     DocumentType
   fileName         String
+  originalFileName String?
   fileUrl          String
+  storagePath      String?
+  mimeType         String?
+  fileSizeBytes    Int?
+  version          Int          @default(1)
   uploadedByUserId String?
   uploadedAt       DateTime     @default(now())
   notes            String?
   courseRun        CourseRun    @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
   uploadedByUser   AppUser?     @relation("UploadedDocuments", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([courseRunId, documentType])
+}
+
+model Document {
+  id               String             @id @default(cuid())
+  entityType       DocumentEntityType
+  entityId         String
+  documentType     DocumentType
+  title            String?
+  fileName         String
+  originalFileName String?
+  fileUrl          String
+  storagePath      String?
+  mimeType         String?
+  fileSizeBytes    Int?
+  version          Int                @default(1)
+  contextLabel     String?
+  uploadedByUserId String?
+  uploadedAt       DateTime           @default(now())
+  notes            String?
+  uploadedByUser   AppUser?           @relation("UploadedGlobalDocuments", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([entityType, entityId, documentType])
 }
 
 model Participant {
@@ -456,6 +539,7 @@ model AppUser {
   updatedAt             DateTime             @updatedAt
   ownedCourseRuns       CourseRun[]          @relation("OwnedCourseRuns")
   uploadedDocuments     CourseRunDocument[]  @relation("UploadedDocuments")
+  uploadedGlobalDocuments Document[]         @relation("UploadedGlobalDocuments")
   nominatedParticipants Nomination[]         @relation("NominatedParticipants")
   recordedAttendance    AttendanceRecord[]   @relation("RecordedAttendance")
   submittedQualityReports QualityReport[]    @relation("SubmittedQualityReports")

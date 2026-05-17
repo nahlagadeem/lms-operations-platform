@@ -30,6 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .dev-server*.log
 dev-server*.log
+
+# local evidence uploads
+uploads/
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)

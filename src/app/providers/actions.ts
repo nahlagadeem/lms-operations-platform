@@ -22,7 +22,7 @@ export async function createProvider(formData: FormData) {
   const notes = normalizeText(formData.get("notes"));
 
   if (!providerType || !nameAr) {
-    throw new Error("Missing required provider fields.");
+    throw new Error("Please choose a training provider type and enter a name.");
   }
 
   await db.provider.create({
