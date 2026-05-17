@@ -3,7 +3,7 @@
 import { LocationType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import * as locationService from "@/server/services/location-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -32,20 +32,18 @@ export async function createLocation(formData: FormData) {
     throw new Error("Missing required location fields.");
   }
 
-  await db.location.create({
-    data: {
-      locationType,
-      nameAr,
-      nameEn: nameEn || null,
-      country: country || null,
-      city: city || null,
-      branch: branch || null,
-      venueName: venueName || null,
-      roomName: roomName || null,
-      address: address || null,
-      timezone: timezone || null,
-      capacity,
-    },
+  await locationService.createLocation({
+    locationType,
+    nameAr,
+    nameEn,
+    country,
+    city,
+    branch,
+    venueName,
+    roomName,
+    address,
+    timezone,
+    capacity,
   });
 
   revalidatePath("/locations");
