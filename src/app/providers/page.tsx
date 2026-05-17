@@ -9,6 +9,7 @@ type ProvidersPageProps = {
     q?: string;
     type?: string;
     panel?: string;
+    error?: string;
   }>;
 };
 
@@ -66,6 +67,7 @@ function pageText(locale: "en" | "ar") {
     openForm: "Open add form",
     close: "Close",
     createTitle: "Add Training Provider",
+    missingRequired: "Please choose a training provider type and enter a name.",
     search: "Search",
     searchPlaceholder: "Training provider name or city",
     type: "Training provider type",
@@ -105,6 +107,11 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
   const searchTerm = normalizeSingleValue(params.q);
   const typeFilter = normalizeSingleValue(params.type) as ProviderType | "";
   const openPanel = params.panel === "create" ? "create" : "";
+  const showRequiredError = params.error === "missing-required";
+  const missingRequiredMessage =
+    "missingRequired" in text
+      ? text.missingRequired
+      : "Please choose a training provider type and enter a name.";
 
   const whereClause: Prisma.ProviderWhereInput = {
     providerType: typeFilter || undefined,
@@ -225,6 +232,12 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
             </div>
 
             <form action={createProvider} className="space-y-4">
+              {showRequiredError ? (
+                <p className="rounded-[8px] border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                  {missingRequiredMessage}
+                </p>
+              ) : null}
+
               <label className="field-shell">
                 <span className="field-label">{text.providerType}</span>
                 <select name="providerType" className="field-input" defaultValue={ProviderType.TRAINING_CENTER}>
