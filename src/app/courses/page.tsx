@@ -199,6 +199,25 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
           </Link>
         </div>
 
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          <Link href="/providers" className="jawraa-subcard block p-4 transition hover:border-[var(--brand-yellow-strong)] hover:bg-[var(--brand-yellow-soft)]">
+            <p className="font-semibold text-[var(--ink-strong)]">
+              {localeText.courses.trainingProviders}
+            </p>
+            <p className="mt-1 text-sm text-[var(--ink-soft)]">
+              {localeText.courses.relatedManagementDescription}
+            </p>
+          </Link>
+          <Link href="/locations" className="jawraa-subcard block p-4 transition hover:border-[var(--brand-yellow-strong)] hover:bg-[var(--brand-yellow-soft)]">
+            <p className="font-semibold text-[var(--ink-strong)]">
+              {localeText.courses.locations}
+            </p>
+            <p className="mt-1 text-sm text-[var(--ink-soft)]">
+              {localeText.courses.relatedManagementDescription}
+            </p>
+          </Link>
+        </div>
+
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_0.8fr_0.8fr_auto]">
           <label className="field-shell">
             <span className="field-label">{localeText.courses.search}</span>
