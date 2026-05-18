@@ -2,13 +2,23 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getLocale } from "@/lib/locale";
+import { getLocale, t } from "@/lib/locale";
+import {
+  assignProjectScopeCourses,
+  removeProjectScopeCourse,
+} from "@/app/project-structure/actions";
 
 type ScopeDetailPageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    coursePage?: string;
+    assignQ?: string;
+  }>;
 };
+
+const COURSES_PER_PAGE = 10;
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -48,12 +58,48 @@ function documentTypeText() {
   } as Record<DocumentType, string>;
 }
 
-export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) {
-  const { id } = await params;
-  const locale = await getLocale();
-  const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
 
-  const [scope, documents] = await Promise.all([
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
+}
+
+function normalizeSearch(value?: string) {
+  return value?.trim() || "";
+}
+
+function buildScopeUrl(scopeId: string, page: number, assignQ?: string) {
+  const search = new URLSearchParams();
+  if (page > 1) search.set("coursePage", String(page));
+  if (assignQ) search.set("assignQ", assignQ);
+  const query = search.toString();
+  return query ? `/project-structure/scopes/${scopeId}?${query}` : `/project-structure/scopes/${scopeId}`;
+}
+
+export default async function ScopeDetailPage({ params, searchParams }: ScopeDetailPageProps) {
+  const { id } = await params;
+  const queryParams = (await searchParams) ?? {};
+  const locale = await getLocale();
+  const localeText = t(locale);
+  const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const requestedCoursePage = normalizePage(queryParams.coursePage);
+  const assignSearch = normalizeSearch(queryParams.assignQ);
+
+  const [scope, documents, allCourses] = await Promise.all([
     db.projectScope.findUnique({
       where: { id },
       include: {
@@ -85,6 +131,30 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
       },
       orderBy: { uploadedAt: "desc" },
     }),
+    db.course.findMany({
+      where: assignSearch
+        ? {
+            OR: [
+              { courseCode: { contains: assignSearch, mode: "insensitive" } },
+              { nameAr: { contains: assignSearch, mode: "insensitive" } },
+              { nameEn: { contains: assignSearch, mode: "insensitive" } },
+              { package: { code: { contains: assignSearch, mode: "insensitive" } } },
+            ],
+          }
+        : undefined,
+      select: {
+        id: true,
+        courseCode: true,
+        nameAr: true,
+        nameEn: true,
+        package: {
+          select: {
+            code: true,
+          },
+        },
+      },
+      orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
+    }),
   ]);
 
   if (!scope) {
@@ -97,6 +167,18 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
   const remaining = Math.max(0, budget - invoiced);
   const actualCompletion = Number(scope.actualCompletion ?? 0);
   const plannedCompletion = Number(scope.plannedCompletion ?? 0);
+  const scopeName = locale === "ar" ? scope.nameAr || scope.name : scope.nameEn || scope.name;
+  const totalCoursePages = Math.max(1, Math.ceil(scope.selectedCourses.length / COURSES_PER_PAGE));
+  const safeCoursePage = Math.min(requestedCoursePage, totalCoursePages);
+  const visibleCourses = scope.selectedCourses.slice(
+    (safeCoursePage - 1) * COURSES_PER_PAGE,
+    safeCoursePage * COURSES_PER_PAGE,
+  );
+  const selectedCourseIds = new Set(scope.selectedCourses.map((selection) => selection.courseId));
+  const visibleAssignableCourseIds = new Set(allCourses.map((course) => course.id));
+  const hiddenSelectedCourseIds = Array.from(selectedCourseIds).filter(
+    (courseId) => !visibleAssignableCourseIds.has(courseId),
+  );
 
   return (
     <div className="space-y-6">
@@ -108,89 +190,216 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
               className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
               <span aria-hidden="true">←</span>
-              <span>Back to Project Scope</span>
+              <span>{localeText.projectScopes.backToScopes}</span>
             </Link>
-            <p className="eyebrow">Project Scope</p>
-            <h2 className="section-title">{scope.name}</h2>
+            <p className="eyebrow">{localeText.projectScopes.title}</p>
+            <h2 className="section-title">{scopeName}</h2>
             <p className="section-copy">
-              Packages, courses, budget progress, and files related to this project scope.
+              {localeText.projectScopes.detailDescription}
             </p>
           </div>
-          <span className="status-pill">{scope.isActive ? "Available" : "Paused"}</span>
+          <span className="status-pill">{scope.isActive ? localeText.projectScopes.active : localeText.projectScopes.inactive}</span>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Packages" value={formatNumber(scope.packages.length, numberLocale)} />
-        <MetricCard title="Courses" value={formatNumber(courseCount, numberLocale)} />
-        <MetricCard title="Budget" value={formatCurrency(scope.budgetAmount, numberLocale)} />
-        <MetricCard title="Remaining" value={formatCurrency(new Prisma.Decimal(remaining), numberLocale)} />
+        <MetricCard title={localeText.projectScopes.packages} value={formatNumber(scope.packages.length, numberLocale)} />
+        <MetricCard title={localeText.projectScopes.courses} value={formatNumber(courseCount, numberLocale)} />
+        <MetricCard title={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
+        <MetricCard title={localeText.projectScopes.remaining} value={formatCurrency(new Prisma.Decimal(remaining), numberLocale)} />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
           <div className="panel-surface">
-            <p className="eyebrow">Selected courses</p>
-            <h3 className="section-title">Courses in {scope.name}</h3>
+            <p className="eyebrow">{localeText.projectScopes.selectedCourses}</p>
+            <h3 className="section-title">
+              {localeText.projectScopes.coursesInScope.replace("{scope}", scopeName)}
+            </h3>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              {scope.selectedCourses.map(({ course }) => (
-                <Link
+              {visibleCourses.map(({ course }) => (
+                <div
                   key={course.id}
-                  href={`/courses/${course.id}`}
-                  className="jawraa-subcard block p-4 transition hover:border-[var(--brand-yellow)]"
+                  className="jawraa-subcard p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="latin-chip">{course.courseCode}</p>
-                      <h4 className="mt-3 text-lg font-semibold text-[var(--ink-strong)]">
+                      <Link href={`/courses/${course.id}`} className="mt-3 block text-lg font-semibold text-[var(--ink-strong)] hover:underline">
                         {course.nameEn || course.nameAr}
-                      </h4>
+                      </Link>
                       <p className="mt-2 text-xs text-[var(--ink-soft)]">
-                        Package {course.package.code} | {course.category.nameEn || course.category.nameAr}
+                        {localeText.projectScopes.package} {course.package.code} | {course.category.nameEn || course.category.nameAr}
                       </p>
                     </div>
-                    <span className="status-pill">Available</span>
+                    <span className="status-pill">{localeText.projectScopes.active}</span>
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <InfoBox label="Package" value={course.package.code} />
-                    <InfoBox label="Duration" value={course.defaultDurationDays ? `${course.defaultDurationDays} days` : "-"} />
-                    <InfoBox label="Language" value={course.language || "-"} />
+                    <InfoBox label={localeText.projectScopes.package} value={course.package.code} />
+                    <InfoBox label={localeText.projectScopes.duration} value={course.defaultDurationDays ? `${formatNumber(course.defaultDurationDays, numberLocale)} ${localeText.units.days}` : "-"} />
+                    <InfoBox label={localeText.projectScopes.language} value={course.language || "-"} />
                   </div>
-                </Link>
+                  <form action={removeProjectScopeCourse} className="mt-4">
+                    <input type="hidden" name="scopeId" value={scope.id} />
+                    <input type="hidden" name="courseId" value={course.id} />
+                    <button type="submit" className="secondary-button">
+                      {localeText.projectScopes.unassignCourse}
+                    </button>
+                  </form>
+                </div>
               ))}
             </div>
+            {visibleCourses.length === 0 ? (
+              <p className="mt-5 text-sm text-[var(--ink-soft)]">
+                {localeText.projectScopes.noCourses}
+              </p>
+            ) : null}
+            {scope.selectedCourses.length > COURSES_PER_PAGE ? (
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeCoursePage, numberLocale))
+                    .replace("{total}", formatNumber(totalCoursePages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={buildScopeUrl(scope.id, 1, assignSearch)}
+                    aria-disabled={safeCoursePage <= 1}
+                    className={`pagination-link ${safeCoursePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={buildScopeUrl(scope.id, Math.max(1, safeCoursePage - 1), assignSearch)}
+                    aria-disabled={safeCoursePage <= 1}
+                    className={`pagination-link ${safeCoursePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeCoursePage, totalCoursePages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={buildScopeUrl(scope.id, page, assignSearch)}
+                        aria-current={page === safeCoursePage ? "page" : undefined}
+                        className={`pagination-link ${page === safeCoursePage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={buildScopeUrl(scope.id, Math.min(totalCoursePages, safeCoursePage + 1), assignSearch)}
+                    aria-disabled={safeCoursePage >= totalCoursePages}
+                    className={`pagination-link ${safeCoursePage >= totalCoursePages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={buildScopeUrl(scope.id, totalCoursePages, assignSearch)}
+                    aria-disabled={safeCoursePage >= totalCoursePages}
+                    className={`pagination-link ${safeCoursePage >= totalCoursePages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="panel-surface">
-            <p className="eyebrow">Budget & Progress</p>
-            <h3 className="section-title">Budget & Progress</h3>
+            <p className="eyebrow">{localeText.projectScopes.bulkCourses}</p>
+            <h3 className="section-title">{localeText.projectScopes.assignCourses}</h3>
+            <form className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.searchCourses}</span>
+                <input
+                  name="assignQ"
+                  type="search"
+                  className="field-input"
+                  defaultValue={assignSearch}
+                  placeholder={localeText.projectScopes.searchCoursesPlaceholder}
+                />
+              </label>
+              <button type="submit" className="primary-button self-end">
+                {localeText.projectScopes.applySearch}
+              </button>
+              <Link href={`/project-structure/scopes/${scope.id}`} className="secondary-button self-end">
+                {localeText.projectScopes.clearSearch}
+              </Link>
+            </form>
+            <form action={assignProjectScopeCourses} className="mt-5 space-y-4">
+              <input type="hidden" name="scopeId" value={scope.id} />
+              {hiddenSelectedCourseIds.map((courseId) => (
+                <input key={courseId} type="hidden" name="courseIds" value={courseId} />
+              ))}
+              <div className="grid max-h-[28rem] gap-3 overflow-y-auto rounded-[8px] border border-[rgba(17,17,17,0.1)] bg-white p-3 md:grid-cols-2">
+                {allCourses.map((course) => (
+                  <label key={course.id} className="flex items-start gap-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      name="courseIds"
+                      value={course.id}
+                      defaultChecked={selectedCourseIds.has(course.id)}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block font-bold text-[var(--ink-strong)]">
+                        {course.courseCode}
+                      </span>
+                      <span className="block leading-6 text-[var(--ink-soft)]">
+                        {locale === "ar" ? course.nameAr : course.nameEn || course.nameAr}
+                      </span>
+                      <span className="latin-chip mt-2">{course.package.code}</span>
+                    </span>
+                  </label>
+                ))}
+                {allCourses.length === 0 ? (
+                  <p className="text-sm text-[var(--ink-soft)]">
+                    {localeText.projectScopes.noCoursesAvailable}
+                  </p>
+                ) : null}
+              </div>
+              <button type="submit" className="primary-button">
+                {localeText.projectScopes.saveCourses}
+              </button>
+            </form>
+          </div>
+
+          <div className="panel-surface">
+            <p className="eyebrow">{localeText.projectScopes.budgetProgress}</p>
+            <h3 className="section-title">{localeText.projectScopes.budgetProgress}</h3>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              <InfoBox title="Budget" label="Total" value={formatCurrency(scope.budgetAmount, numberLocale)} />
-              <InfoBox title="Invoiced" label="Submitted" value={formatCurrency(scope.invoicedAmount, numberLocale)} />
-              <InfoBox title="Collected" label="Received" value={formatCurrency(scope.collectedAmount, numberLocale)} />
+              <InfoBox title={localeText.projectScopes.budget} label={localeText.projectScopes.total} value={formatCurrency(scope.budgetAmount, numberLocale)} />
+              <InfoBox title={localeText.projectScopes.invoiced} label={localeText.projectScopes.submitted} value={formatCurrency(scope.invoicedAmount, numberLocale)} />
+              <InfoBox title={localeText.projectScopes.collected} label={localeText.projectScopes.received} value={formatCurrency(scope.collectedAmount, numberLocale)} />
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <ProgressBox label="Planned completion" value={plannedCompletion} locale={numberLocale} />
-              <ProgressBox label="Actual completion" value={actualCompletion} locale={numberLocale} />
+              <ProgressBox label={localeText.projectOverview.baselineProgress} value={plannedCompletion} locale={numberLocale} />
+              <ProgressBox label={localeText.projectOverview.actualProgress} value={actualCompletion} locale={numberLocale} />
             </div>
 
             {actualCompletion < plannedCompletion ? (
               <div className="jawraa-subcard mt-5 border-dashed p-4 text-sm font-medium text-[var(--ink-strong)]">
-                Delay flag: actual progress is below baseline.
+                {localeText.projectScopes.delayFlag}
               </div>
             ) : null}
           </div>
         </div>
 
         <div className="panel-surface">
-          <p className="eyebrow">Documents</p>
-          <h3 className="section-title">Documents</h3>
+          <p className="eyebrow">{localeText.projectScopes.documents}</p>
+          <h3 className="section-title">{localeText.projectScopes.documents}</h3>
           <p className="section-copy">
-            Upload files related to this project scope.
+            {localeText.projectScopes.uploadDescription}
           </p>
 
           <form
@@ -202,10 +411,10 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
             <input type="hidden" name="entityType" value={DocumentEntityType.SCOPE} />
             <input type="hidden" name="entityId" value={scope.id} />
             <input type="hidden" name="returnPath" value={`/project-structure/scopes/${scope.id}`} />
-            <input type="hidden" name="contextLabel" value={`${scope.name} document`} />
+            <input type="hidden" name="contextLabel" value={`${scopeName} document`} />
 
             <label className="field-shell">
-              <span className="field-label">File type</span>
+              <span className="field-label">{localeText.projectScopes.fileType}</span>
               <select name="documentType" className="field-input" defaultValue={DocumentType.OTHER}>
                 {Object.entries(documentTypeText()).map(([key, label]) => (
                   <option key={key} value={key}>
@@ -216,7 +425,7 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
             </label>
 
             <label className="field-shell">
-              <span className="field-label">Upload file</span>
+              <span className="field-label">{localeText.projectScopes.uploadFile}</span>
               <input
                 type="file"
                 name="file"
@@ -226,19 +435,19 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
             </label>
 
             <label className="field-shell">
-              <span className="field-label">Description or notes</span>
+              <span className="field-label">{localeText.projectScopes.descriptionNotes}</span>
               <textarea name="notes" rows={3} className="field-input min-h-[6rem] resize-y" />
             </label>
 
             <button type="submit" className="primary-button w-full sm:w-auto">
-              Upload File
+              {localeText.projectScopes.uploadFile}
             </button>
           </form>
 
           <div className="mt-6 space-y-3">
             {documents.length === 0 ? (
               <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
-                No files have been uploaded for this project scope yet.
+                {localeText.projectScopes.noDocuments}
               </div>
             ) : (
               documents.map((document) => (
@@ -247,7 +456,7 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
                     {document.originalFileName || document.fileName}
                   </p>
                   <p className="mt-1 text-xs text-[var(--ink-soft)]">
-                    {documentTypeText()[document.documentType]} | Version {document.version} | File size:{" "}
+                    {documentTypeText()[document.documentType]} | {localeText.projectScopes.version} {document.version} | {localeText.projectScopes.fileSize}:{" "}
                     {formatFileSize(document.fileSizeBytes, numberLocale)}
                   </p>
                   {document.notes ? (
@@ -255,7 +464,7 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
                   ) : null}
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <Link href={document.fileUrl} className="secondary-button w-full sm:w-auto">
-                      Download
+                      {localeText.projectScopes.download}
                     </Link>
                     <form action="/api/project-documents/delete" method="post">
                       <input type="hidden" name="documentId" value={document.id} />
@@ -265,7 +474,7 @@ export default async function ScopeDetailPage({ params }: ScopeDetailPageProps) 
                         value={`/project-structure/scopes/${scope.id}`}
                       />
                       <button type="submit" className="secondary-button w-full sm:w-auto">
-                        Delete File
+                        {localeText.projectScopes.deleteFile}
                       </button>
                     </form>
                   </div>

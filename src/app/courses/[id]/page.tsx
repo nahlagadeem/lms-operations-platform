@@ -77,7 +77,7 @@ function detailText(locale: "en" | "ar") {
   return {
     title: "Course details",
     description:
-      "Review the course information, then add an active course and set the course status from here.",
+      "Review course information, scheduling readiness, and related active courses.",
     back: "Back to courses",
     createRun: "Add Active Course",
     createRunButton: "Add Active Course",

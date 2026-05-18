@@ -54,7 +54,7 @@ function detailText(locale: "en" | "ar") {
   return {
     back: "Back to packages",
     title: "Package details",
-    description: "Review the courses included in this package with a quick planning summary for each one.",
+    description: "Review the courses, participant targets, and planning values for this package.",
     courseList: "Courses in this package",
     courseCount: "Course count",
     target: "Target participants",

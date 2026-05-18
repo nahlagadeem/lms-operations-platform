@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { notFound } from "next/navigation";
+import { isAuthenticated } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 type DownloadRouteProps = {
@@ -10,6 +11,10 @@ type DownloadRouteProps = {
 };
 
 export async function GET(_request: Request, { params }: DownloadRouteProps) {
+  if (!(await isAuthenticated())) {
+    notFound();
+  }
+
   const { id } = await params;
   const document = await db.document.findUnique({
     where: { id },

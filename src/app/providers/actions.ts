@@ -3,6 +3,7 @@
 import { ProviderType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireAuth } from "@/lib/auth";
 import * as providerService from "@/server/services/provider-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -10,6 +11,8 @@ function normalizeText(value: FormDataEntryValue | null) {
 }
 
 export async function createProvider(formData: FormData) {
+  await requireAuth();
+
   const providerType = normalizeText(formData.get("providerType")) as ProviderType;
   const nameAr = normalizeText(formData.get("nameAr"));
   const nameEn = normalizeText(formData.get("nameEn"));

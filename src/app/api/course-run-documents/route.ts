@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentEntityType, DocumentType } from "@prisma/client";
+import { isAuthenticated } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { saveDocumentUpload } from "@/server/services/document-upload-service";
 
@@ -24,6 +25,10 @@ function redirectWithStatus(request: NextRequest, returnPath: string, status: st
 }
 
 export async function POST(request: NextRequest) {
+  if (!(await isAuthenticated())) {
+    return NextResponse.redirect(new URL("/login", request.url), 303);
+  }
+
   const contentType = request.headers.get("content-type") || "";
 
   if (!contentType.includes("multipart/form-data")) {

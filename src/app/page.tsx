@@ -1,23 +1,29 @@
 import Link from "next/link";
 import {
-  ApprovalStatus,
   AttendanceStatus,
   CourseRunStatus,
+  DocumentEntityType,
   Prisma,
-  ReportStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { getProjectSummary } from "@/server/services/project-overview-service";
+import {
+  formatReportingDate,
+  getProjectReportingRows,
+  getReportingCategoryOptions,
+} from "@/server/services/project-reporting-service";
 
 type HomePageProps = {
   searchParams?: Promise<{
     role?: string;
     q?: string;
-    status?: string;
-    scope?: string;
-    alert?: string;
+    category?: string;
+    page?: string;
   }>;
 };
+
+const REPORTING_PAGE_SIZE = 15;
 
 const plannedRunStatuses: CourseRunStatus[] = [
   CourseRunStatus.DRAFT,
@@ -40,9 +46,6 @@ const completedRunStatuses: CourseRunStatus[] = [
   CourseRunStatus.CLOSED,
 ];
 
-const pendingApprovalDays = 3;
-const lowSeatFillThreshold = 60;
-
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -55,6 +58,11 @@ function addDays(date: Date, days: number) {
 
 function normalize(value?: string) {
   return value?.trim() || "";
+}
+
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
 function dashboardRole(value?: string) {
@@ -104,18 +112,31 @@ function ratio(numerator: number, denominator: number) {
 function buildDashboardUrl(params: {
   role: string;
   q?: string;
-  status?: string;
-  scope?: string;
-  alert?: string;
+  category?: string;
+  page?: number;
 }) {
   const search = new URLSearchParams();
   if (params.role !== "GOVERNMENT_PROJECT_MANAGER") search.set("role", params.role);
   if (params.q) search.set("q", params.q);
-  if (params.status) search.set("status", params.status);
-  if (params.scope) search.set("scope", params.scope);
-  if (params.alert) search.set("alert", params.alert);
+  if (params.category) search.set("category", params.category);
+  if (params.page && params.page > 1) search.set("page", String(params.page));
   const query = search.toString();
   return query ? `/?${query}` : "/";
+}
+
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
 }
 
 export const revalidate = 0;
@@ -126,57 +147,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
   const role = dashboardRole(params.role);
-  const showFinance = true;
   const searchTerm = normalize(params.q);
-  const statusFilter = normalize(params.status) as CourseRunStatus | "";
-  const scopeFilter = normalize(params.scope);
-  const alertFilter = normalize(params.alert);
+  const categoryFilter = normalize(params.category);
+  const reportingPage = normalizePage(params.page);
 
   const now = new Date();
   const todayStart = startOfDay(now);
   const tomorrowStart = addDays(todayStart, 1);
   const nextSevenDays = addDays(todayStart, 7);
   const lastSevenDays = addDays(todayStart, -7);
-  const pendingApprovalCutoff = addDays(todayStart, -pendingApprovalDays);
-
-  const reportingWhere: Prisma.CourseRunWhereInput = {
-    status: statusFilter || undefined,
-    course: scopeFilter
-      ? {
-          scopeSelections: {
-            some: {
-              scope: {
-                code: scopeFilter,
-              },
-            },
-          },
-        }
-      : undefined,
-    OR: searchTerm
-      ? [
-          { runCode: { contains: searchTerm, mode: "insensitive" } },
-          { course: { courseCode: { contains: searchTerm, mode: "insensitive" } } },
-          { course: { nameAr: { contains: searchTerm, mode: "insensitive" } } },
-          { course: { nameEn: { contains: searchTerm, mode: "insensitive" } } },
-          { provider: { nameAr: { contains: searchTerm, mode: "insensitive" } } },
-          { provider: { nameEn: { contains: searchTerm, mode: "insensitive" } } },
-        ]
-      : undefined,
-  };
-
-  if (alertFilter === "overdue-reports") {
-    reportingWhere.qualityReports = {
-      some: {
-        reportStatus: { notIn: [ReportStatus.SUBMITTED, ReportStatus.APPROVED] },
-        dueDate: { lt: todayStart },
-      },
-    };
-  }
-
-  if (alertFilter === "pending-approvals") {
-    reportingWhere.approvalStatus = ApprovalStatus.PENDING;
-    reportingWhere.updatedAt = { lt: pendingApprovalCutoff };
-  }
 
   const [
     totalCourses,
@@ -190,22 +169,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     evaluationRows,
     qualitySatisfactionRows,
     activeTrainerCount,
-    pendingApprovals,
-    overdueQualityReports,
-    dueSoonQualityReports,
-    oldPendingApprovals,
-    lowFillRuns,
-    scopes,
     scopeRows,
     monthlyRuns,
-    utilizationByScope,
-    satisfactionTrendRows,
     todayRuns,
     upcomingRuns,
     recentlyCompletedRuns,
-    financeScopes,
-    packageValues,
     reportingRows,
+    projectSummary,
+    projectScopeRows,
+    scopeDocumentCounts,
   ] = await Promise.all([
     db.course.count(),
     db.courseRun.findMany({
@@ -258,44 +230,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         },
       },
     }),
-    db.courseRun.count({
-      where: { approvalStatus: ApprovalStatus.PENDING },
-    }),
-    db.qualityReport.count({
-      where: {
-        reportStatus: { notIn: [ReportStatus.SUBMITTED, ReportStatus.APPROVED] },
-        dueDate: { lt: todayStart },
-      },
-    }),
-    db.qualityReport.count({
-      where: {
-        reportStatus: { notIn: [ReportStatus.SUBMITTED, ReportStatus.APPROVED] },
-        dueDate: { gte: todayStart, lt: addDays(todayStart, 3) },
-      },
-    }),
-    db.courseRun.count({
-      where: {
-        approvalStatus: ApprovalStatus.PENDING,
-        updatedAt: { lt: pendingApprovalCutoff },
-      },
-    }),
-    db.courseRun.findMany({
-      where: {
-        plannedSeats: { gt: 0 },
-        status: { in: liveRunStatuses },
-      },
-      include: {
-        course: {
-          select: { nameAr: true, nameEn: true },
-        },
-      },
-      orderBy: { startDate: "asc" },
-      take: 60,
-    }),
-    db.projectScope.findMany({
-      select: { code: true, name: true },
-      orderBy: { code: "asc" },
-    }),
     db.projectScope.findMany({
       select: {
         id: true,
@@ -322,29 +256,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       select: { startDate: true },
       where: { startDate: { not: null } },
       orderBy: { startDate: "asc" },
-    }),
-    db.projectScope.findMany({
-      select: {
-        code: true,
-        name: true,
-        selectedCourses: {
-          select: {
-            course: {
-              select: {
-                runs: {
-                  select: { plannedSeats: true, confirmedSeats: true },
-                },
-              },
-            },
-          },
-        },
-      },
-      orderBy: { code: "asc" },
-    }),
-    db.qualityReport.findMany({
-      select: { submittedAt: true, createdAt: true, satisfactionRate: true },
-      where: { satisfactionRate: { not: null } },
-      orderBy: { createdAt: "asc" },
     }),
     db.courseRun.findMany({
       where: {
@@ -393,41 +304,35 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       orderBy: { endDate: "desc" },
       take: 8,
     }),
+    getProjectReportingRows(locale, {
+      q: searchTerm,
+      category: categoryFilter,
+    }),
+    getProjectSummary(),
     db.projectScope.findMany({
-      select: {
-        budgetAmount: true,
-        invoicedAmount: true,
-        collectedAmount: true,
-        plannedCompletion: true,
-        actualCompletion: true,
-      },
-    }),
-    db.package.findMany({
-      select: { discountedTotalAmount: true, originalTotalAmount: true },
-    }),
-    db.courseRun.findMany({
-      where: reportingWhere,
       include: {
-        course: {
+        selectedCourses: {
           include: {
-            package: { select: { code: true, nameAr: true, nameEn: true } },
-            scopeSelections: {
-              include: { scope: { select: { code: true, name: true } } },
+            course: {
+              include: {
+                runs: {
+                  where: { status: { in: liveRunStatuses } },
+                  include: {
+                    trainers: { select: { trainerId: true } },
+                    nominations: { select: { participantId: true } },
+                  },
+                },
+              },
             },
           },
         },
-        location: { select: { nameAr: true, nameEn: true, city: true } },
-        qualityReports: {
-          select: { reportStatus: true, dueDate: true, satisfactionRate: true },
-          orderBy: { dueDate: "desc" },
-          take: 1,
-        },
-        _count: {
-          select: { nominations: true, attendanceRecords: true, evaluations: true },
-        },
       },
-      orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
-      take: 75,
+      orderBy: { code: "asc" },
+    }),
+    db.document.groupBy({
+      by: ["entityId"],
+      where: { entityType: DocumentEntityType.SCOPE },
+      _count: { _all: true },
     }),
   ]);
 
@@ -470,44 +375,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       : 0;
   const satisfactionRate =
     qualitySatisfactionRows.length > 0 ? qualitySatisfaction : evaluationSatisfaction;
-  const lowFillCount = lowFillRuns.filter((run) => {
-    const fillRate = ratio(run.confirmedSeats, run.plannedSeats ?? 0);
-    return fillRate < lowSeatFillThreshold;
-  }).length;
-
-  const contractValueFromScopes = financeScopes.reduce(
-    (sum, item) => sum + decimalToNumber(item.budgetAmount),
-    0,
-  );
-  const contractValue =
-    contractValueFromScopes ||
-    packageValues.reduce(
-      (sum, item) =>
-        sum +
-        decimalToNumber(item.discountedTotalAmount ?? item.originalTotalAmount),
-      0,
-    );
-  const invoicedAmount = financeScopes.reduce(
-    (sum, item) => sum + decimalToNumber(item.invoicedAmount),
-    0,
-  );
-  const collectedAmount = financeScopes.reduce(
-    (sum, item) => sum + decimalToNumber(item.collectedAmount),
-    0,
-  );
-  const remainingAmount = Math.max(contractValue - invoicedAmount, 0);
-  const plannedCompletion =
-    financeScopes.length > 0
-      ? financeScopes.reduce((sum, item) => sum + decimalToNumber(item.plannedCompletion), 0) /
-        financeScopes.length
-      : 0;
-  const actualCompletion =
-    financeScopes.length > 0
-      ? financeScopes.reduce((sum, item) => sum + decimalToNumber(item.actualCompletion), 0) /
-        financeScopes.length
-      : 0;
-  const completionState = actualCompletion + 2 >= plannedCompletion ? "On track" : "Delayed";
-  const budgetConsumed = ratio(invoicedAmount, contractValue);
 
   const scopeProgress = scopeRows.map((scope) => {
     const total = scope.selectedCourses.length;
@@ -537,51 +404,53 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     .slice(-8)
     .map(([month, count]) => ({ label: month, value: count }));
 
-  const utilizationChart = utilizationByScope.map((scope) => {
-    const seats = scope.selectedCourses.flatMap((selection) => selection.course.runs);
-    const allocated = seats.reduce((sum, item) => sum + (item.plannedSeats ?? 0), 0);
-    const filled = seats.reduce((sum, item) => sum + item.confirmedSeats, 0);
-    return {
-      label: scope.code,
-      name: scope.name,
-      value: ratio(filled, allocated),
-    };
-  });
-
-  const satisfactionTrend = satisfactionTrendRows.reduce<Record<string, { total: number; count: number }>>(
-    (groups, report) => {
-      const date = report.submittedAt ?? report.createdAt;
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      const current = groups[key] ?? { total: 0, count: 0 };
-      groups[key] = {
-        total: current.total + decimalToNumber(report.satisfactionRate),
-        count: current.count + 1,
-      };
-      return groups;
-    },
-    {},
-  );
-  const satisfactionChart = Object.entries(satisfactionTrend)
-    .slice(-8)
-    .map(([month, item]) => ({ label: month, value: item.count ? item.total / item.count : 0 }));
-
   const reportExportUrl = `/api/dashboard-report?${new URLSearchParams({
     role,
     ...(searchTerm ? { q: searchTerm } : {}),
-    ...(statusFilter ? { status: statusFilter } : {}),
-    ...(scopeFilter ? { scope: scopeFilter } : {}),
-    ...(alertFilter ? { alert: alertFilter } : {}),
+    ...(categoryFilter ? { category: categoryFilter } : {}),
   }).toString()}`;
+  const categoryOptions = getReportingCategoryOptions(locale);
+  const totalReportingPages = Math.max(
+    1,
+    Math.ceil(reportingRows.length / REPORTING_PAGE_SIZE),
+  );
+  const safeReportingPage = Math.min(reportingPage, totalReportingPages);
+  const visibleReportingRows = reportingRows.slice(
+    (safeReportingPage - 1) * REPORTING_PAGE_SIZE,
+    safeReportingPage * REPORTING_PAGE_SIZE,
+  );
+  const scopeDocumentCountById = new Map(
+    scopeDocumentCounts.map((item) => [item.entityId, item._count._all]),
+  );
+  const projectScopeSummaryRows = projectScopeRows.map((scope) => {
+    const activeRuns = scope.selectedCourses.flatMap((selection) => selection.course.runs);
+    const trainerIds = new Set(
+      activeRuns.flatMap((run) => run.trainers.map((trainer) => trainer.trainerId)),
+    );
+    const participantIds = new Set(
+      activeRuns.flatMap((run) =>
+        run.nominations.map((nomination) => nomination.participantId),
+      ),
+    );
+
+    return {
+      id: scope.id,
+      name: locale === "ar" ? scope.nameAr || scope.name : scope.nameEn || scope.name,
+      status: scope.isActive ? localeText.projectScopes.active : localeText.projectScopes.inactive,
+      courses: scope.selectedCourses.length,
+      activeRuns: activeRuns.length,
+      trainers: trainerIds.size,
+      participants: participantIds.size,
+      documents: scopeDocumentCountById.get(scope.id) ?? 0,
+    };
+  });
 
   return (
     <div className="space-y-8">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="eyebrow">Dashboard</p>
-          <h1 className="section-title">Project health dashboard</h1>
-          <p className="section-copy">
-            Live course, participant, report, and finance numbers from the database.
-          </p>
+          <p className="eyebrow">{localeText.home.dashboardEyebrow}</p>
+          <h1 className="section-title">{localeText.home.projectIndicatorsTitle}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={buildDashboardUrl({ role })} className="primary-button">
@@ -590,97 +459,119 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          href="/courses"
-          title="Courses framework"
-          value={formatNumber(totalCourses, numberLocale)}
-          detail={`${formatNumber(completedCourseIds.length, numberLocale)} completed / ${formatNumber(ongoingCourseIds.length, numberLocale)} ongoing / ${formatNumber(plannedCourseIds.length, numberLocale)} planned`}
-        />
-        <KpiCard
-          href="/course-runs"
-          title="Active Courses"
-          value={formatNumber(totalRuns, numberLocale)}
-          detail={`${formatNumber(completedRuns, numberLocale)} completed / ${formatNumber(ongoingRuns, numberLocale)} ongoing / ${formatNumber(upcomingRunsCount, numberLocale)} upcoming`}
-        />
-        <KpiCard
-          href="/courses"
-          title="Participants"
-          value={formatNumber(allTimeTrainees, numberLocale)}
-          detail={`${formatNumber(activeTrainees, numberLocale)} active right now`}
-        />
-        <KpiCard
-          href="/course-runs"
-          title="Seat utilization"
-          value={formatPercent(seatUtilization, numberLocale)}
-          detail={`${formatNumber(filledSeats, numberLocale)} filled / ${formatNumber(allocatedSeats, numberLocale)} allocated`}
-        />
-        <KpiCard
-          href="/course-runs"
-          title="Participant success rate"
-          value={formatPercent(successRate, numberLocale)}
-          detail={`${formatNumber(successfulAttendance, numberLocale)} successful attendance entries`}
-        />
-        <KpiCard
-          href="/course-runs"
-          title="Satisfaction rate"
-          value={formatPercent(satisfactionRate, numberLocale)}
-          detail={`${formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale)} feedback entries`}
-        />
-        <KpiCard
-          href="/providers"
-          title="Active trainers"
-          value={formatNumber(activeTrainerCount, numberLocale)}
-          detail="Approved trainers assigned to live work"
-        />
-        <KpiCard
-          href={buildDashboardUrl({ role, alert: "pending-approvals" })}
-          title="Pending approvals"
-          value={formatNumber(pendingApprovals, numberLocale)}
-          detail={`${formatNumber(oldPendingApprovals, numberLocale)} waiting more than ${pendingApprovalDays} days`}
-          tone={pendingApprovals > 0 ? "warning" : "normal"}
-        />
-        <KpiCard
-          href={buildDashboardUrl({ role, alert: "overdue-reports" })}
-          title="Reports overdue"
-          value={formatNumber(overdueQualityReports, numberLocale)}
-          detail="Report deadline missed"
-          tone={overdueQualityReports > 0 ? "danger" : "normal"}
-        />
+      <ProjectSummarySection
+        localeText={localeText}
+        numberLocale={numberLocale}
+        projectSummary={projectSummary}
+      />
+
+      <section className="panel-surface">
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="eyebrow">{localeText.projectScopes.summaryTitle}</p>
+            <h2 className="section-title">{localeText.projectScopes.summaryTitle}</h2>
+          </div>
+          <Link href="/project-structure" className="primary-button">
+            {localeText.projectScopes.viewDetails}
+          </Link>
+        </div>
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ReadOnlySummaryCard
+            label={localeText.projectScopes.totalProjectScopes}
+            value={formatNumber(projectScopeSummaryRows.length, numberLocale)}
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{localeText.projectScopes.scope}</th>
+                <th>{localeText.projectScopes.status}</th>
+                <th>{localeText.projectScopes.courses}</th>
+                <th>{localeText.projectScopes.activeRuns}</th>
+                <th>{localeText.projectScopes.trainers}</th>
+                <th>{localeText.projectScopes.participants}</th>
+                <th>{localeText.projectScopes.documents}</th>
+                <th>{localeText.projectScopes.viewDetails}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projectScopeSummaryRows.map((scope) => (
+                <tr key={scope.id}>
+                  <td>{scope.name}</td>
+                  <td><span className="status-pill">{scope.status}</span></td>
+                  <td>{formatNumber(scope.courses, numberLocale)}</td>
+                  <td>{formatNumber(scope.activeRuns, numberLocale)}</td>
+                  <td>{formatNumber(scope.trainers, numberLocale)}</td>
+                  <td>{formatNumber(scope.participants, numberLocale)}</td>
+                  <td>{formatNumber(scope.documents, numberLocale)}</td>
+                  <td>
+                    <Link href={`/project-structure/scopes/${scope.id}`} className="secondary-button">
+                      {localeText.projectScopes.viewDetails}
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {projectScopeSummaryRows.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--ink-soft)]">
+              {localeText.projectScopes.noScopes}
+            </p>
+          ) : null}
+        </div>
       </section>
 
-      {showFinance ? (
-        <section className="panel-surface">
-          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="eyebrow">Module B</p>
-              <h2 className="section-title">Financial snapshot</h2>
-            </div>
-            <StatusBadge label={completionState} tone={completionState === "On track" ? "success" : "danger"} />
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard href="/project-structure" title="Total contract value" value={formatCurrency(contractValue, numberLocale)} />
-            <KpiCard href="/project-structure" title="Invoiced so far" value={formatCurrency(invoicedAmount, numberLocale)} />
-            <KpiCard href="/project-structure" title="Collected" value={formatCurrency(collectedAmount, numberLocale)} />
-            <KpiCard href="/project-structure" title="Remaining" value={formatCurrency(remainingAmount, numberLocale)} />
-          </div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <ProgressPanel
-              title="Project completion"
-              primaryLabel={`Actual ${formatPercent(actualCompletion, numberLocale)}`}
-              secondaryLabel={`Baseline ${formatPercent(plannedCompletion, numberLocale)}`}
-              value={actualCompletion}
-              benchmark={plannedCompletion}
-            />
-            <ProgressPanel
-              title="Budget consumed vs remaining"
-              primaryLabel={`${formatPercent(budgetConsumed, numberLocale)} consumed`}
-              secondaryLabel={formatCurrency(remainingAmount, numberLocale)}
-              value={budgetConsumed}
-            />
-          </div>
-        </section>
-      ) : null}
+      <section className="panel-surface">
+        <div className="mb-5">
+          <p className="eyebrow">{localeText.home.coursesSummary}</p>
+          <h2 className="section-title">{localeText.home.coursesSummary}</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KpiCard
+            href="/courses"
+            title="Courses framework"
+            value={formatNumber(totalCourses, numberLocale)}
+            detail={`${formatNumber(completedCourseIds.length, numberLocale)} completed / ${formatNumber(ongoingCourseIds.length, numberLocale)} ongoing / ${formatNumber(plannedCourseIds.length, numberLocale)} planned`}
+          />
+          <KpiCard
+            href="/course-runs"
+            title="Active Courses"
+            value={formatNumber(totalRuns, numberLocale)}
+            detail={`${formatNumber(completedRuns, numberLocale)} completed / ${formatNumber(ongoingRuns, numberLocale)} ongoing / ${formatNumber(upcomingRunsCount, numberLocale)} upcoming`}
+          />
+          <KpiCard
+            href="/courses"
+            title="Participants"
+            value={formatNumber(allTimeTrainees, numberLocale)}
+            detail={`${formatNumber(activeTrainees, numberLocale)} active right now`}
+          />
+          <KpiCard
+            href="/course-runs"
+            title="Seat utilization"
+            value={formatPercent(seatUtilization, numberLocale)}
+            detail={`${formatNumber(filledSeats, numberLocale)} filled / ${formatNumber(allocatedSeats, numberLocale)} allocated`}
+          />
+          <KpiCard
+            href="/course-runs"
+            title="Participant success rate"
+            value={formatPercent(successRate, numberLocale)}
+            detail={`${formatNumber(successfulAttendance, numberLocale)} successful attendance entries`}
+          />
+          <KpiCard
+            href="/course-runs"
+            title="Satisfaction rate"
+            value={formatPercent(satisfactionRate, numberLocale)}
+            detail={`${formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale)} feedback entries`}
+          />
+          <KpiCard
+            href="/providers"
+            title="Active trainers"
+            value={formatNumber(activeTrainerCount, numberLocale)}
+            detail="Approved trainers assigned to live work"
+          />
+        </div>
+      </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
         <ActivityPanel title="Courses running today" items={todayRuns.map((run) => ({
@@ -714,80 +605,43 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <ChartPanel title="Monthly training activity">
           <BarChart rows={monthlyChart} numberLocale={numberLocale} />
         </ChartPanel>
-        <ChartPanel title="Seat utilization by project scope">
-          {utilizationChart.map((item) => (
-            <ProgressRow
-              key={item.label}
-              label={`${item.label} ${item.name}`}
-              value={item.value}
-              detail={formatPercent(item.value, numberLocale)}
-            />
-          ))}
-        </ChartPanel>
-        <ChartPanel title="Participant satisfaction trend">
-          <BarChart rows={satisfactionChart} numberLocale={numberLocale} suffix="%" maxValue={100} />
-        </ChartPanel>
-      </section>
-
-      <section className="panel-surface">
-        <div className="mb-5">
-          <p className="eyebrow">Alerts and Report Deadlines</p>
-          <h2 className="section-title">Immediate attention</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <AlertCard href={buildDashboardUrl({ role })} title="Reports due within 3 days" value={dueSoonQualityReports} tone="warning" locale={numberLocale} />
-          <AlertCard href={buildDashboardUrl({ role, alert: "overdue-reports" })} title="Reports overdue" value={overdueQualityReports} tone="danger" locale={numberLocale} />
-          <AlertCard href={buildDashboardUrl({ role, alert: "pending-approvals" })} title={`Approvals over ${pendingApprovalDays} days`} value={oldPendingApprovals} tone="warning" locale={numberLocale} />
-          <AlertCard href={buildDashboardUrl({ role })} title={`Runs below ${lowSeatFillThreshold}% fill`} value={lowFillCount} tone="warning" locale={numberLocale} />
-        </div>
       </section>
 
       <section className="panel-surface">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="eyebrow">Reporting</p>
-            <h2 className="section-title">Filterable reporting table</h2>
+            <p className="eyebrow">{localeText.reporting.title}</p>
+            <h2 className="section-title">{localeText.reporting.title}</h2>
           </div>
           <a href={reportExportUrl} className="primary-button">
-            Export CSV
+            {localeText.reporting.exportCsv}
           </a>
         </div>
 
-        <form className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto]">
+        <form className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_0.8fr_auto]">
           <input type="hidden" name="role" value={role} />
           <label className="field-shell">
-            <span className="field-label">Search</span>
-            <input name="q" type="search" defaultValue={searchTerm} className="field-input" placeholder="Course, session, or training provider" />
+            <span className="field-label">{localeText.reporting.search}</span>
+            <input
+              name="q"
+              type="search"
+              defaultValue={searchTerm}
+              className="field-input"
+              placeholder={localeText.reporting.searchPlaceholder}
+            />
           </label>
           <label className="field-shell">
-            <span className="field-label">Status</span>
-            <select name="status" defaultValue={statusFilter} className="field-input">
-              <option value="">All statuses</option>
-              {Object.values(CourseRunStatus).map((item) => (
-                <option key={item} value={item}>{localeText.courseRunStatuses[item]}</option>
+            <span className="field-label">{localeText.reporting.category}</span>
+            <select name="category" defaultValue={categoryFilter} className="field-input">
+              <option value="">{localeText.reporting.allCategories}</option>
+              {categoryOptions.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
               ))}
-            </select>
-          </label>
-          <label className="field-shell">
-            <span className="field-label">Project Scope</span>
-            <select name="scope" defaultValue={scopeFilter} className="field-input">
-              <option value="">All project scopes</option>
-              {scopes.map((scope) => (
-                <option key={scope.code} value={scope.code}>{scope.code} {scope.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field-shell">
-            <span className="field-label">Alert</span>
-            <select name="alert" defaultValue={alertFilter} className="field-input">
-              <option value="">All runs</option>
-              <option value="overdue-reports">Overdue reports</option>
-              <option value="pending-approvals">Pending approvals</option>
             </select>
           </label>
           <div className="flex flex-col gap-2 sm:flex-row xl:items-end">
-            <button type="submit" className="primary-button">Apply</button>
-            <Link href={buildDashboardUrl({ role })} className="secondary-button">Reset</Link>
+            <button type="submit" className="primary-button">{localeText.reporting.apply}</button>
+            <Link href={buildDashboardUrl({ role })} className="secondary-button">{localeText.reporting.reset}</Link>
           </div>
         </form>
 
@@ -795,40 +649,119 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Run</th>
-                <th>Course</th>
-                <th>Project Scope</th>
-                <th>Status</th>
-                <th>Dates</th>
-                <th>Seats</th>
-                <th>Report</th>
-                <th>Satisfaction</th>
+                <th>{localeText.reporting.number}</th>
+                <th>{localeText.reporting.category}</th>
+                <th>{localeText.reporting.nameDescription}</th>
+                <th>{localeText.reporting.relatedCourseProject}</th>
+                <th>{localeText.reporting.ownerResponsible}</th>
+                <th>{localeText.reporting.status}</th>
+                <th>{localeText.reporting.date}</th>
+                <th>{localeText.reporting.notes}</th>
               </tr>
             </thead>
             <tbody>
-              {reportingRows.map((run) => {
-                const qualityReport = run.qualityReports[0];
-                const scopesLabel = run.course.scopeSelections
-                  .map((selection) => selection.scope.code)
-                  .join(", ") || "-";
-                return (
-                  <tr key={run.id}>
-                    <td className="latin-cell">
-                      <Link href={`/course-runs/${run.id}`} className="block w-full font-semibold">{run.runCode}</Link>
-                    </td>
-                    <td>{run.course.nameEn || run.course.nameAr}</td>
-                    <td>{scopesLabel}</td>
-                    <td><span className="status-pill">{localeText.courseRunStatuses[run.status]}</span></td>
-                    <td>{formatDate(run.startDate, numberLocale)} - {formatDate(run.endDate, numberLocale)}</td>
-                    <td>{formatNumber(run.confirmedSeats, numberLocale)} / {formatNumber(run.plannedSeats ?? 0, numberLocale)}</td>
-                    <td>{qualityReport ? qualityReport.reportStatus : "-"}</td>
-                    <td>{qualityReport?.satisfactionRate ? formatPercent(decimalToNumber(qualityReport.satisfactionRate), numberLocale) : "-"}</td>
-                  </tr>
-                );
-              })}
+              {visibleReportingRows.map((row, index) => (
+                <tr key={row.id}>
+                  <td className="latin-cell">
+                    {formatNumber((safeReportingPage - 1) * REPORTING_PAGE_SIZE + index + 1, numberLocale)}
+                  </td>
+                  <td>{row.categoryLabel}</td>
+                  <td>{row.name}</td>
+                  <td>{row.related}</td>
+                  <td>{row.owner}</td>
+                  <td><span className="status-pill">{row.status}</span></td>
+                  <td>{formatReportingDate(row.date, locale)}</td>
+                  <td>{row.notes || "-"}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
+          {reportingRows.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--ink-soft)]">
+              {localeText.reporting.noRows}
+            </p>
+          ) : null}
         </div>
+        {reportingRows.length > REPORTING_PAGE_SIZE ? (
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-[var(--ink-soft)]">
+              {localeText.pagination.pageIndicator
+                .replace("{current}", formatNumber(safeReportingPage, numberLocale))
+                .replace("{total}", formatNumber(totalReportingPages, numberLocale))}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={buildDashboardUrl({
+                  role,
+                  q: searchTerm,
+                  category: categoryFilter,
+                  page: 1,
+                })}
+                aria-disabled={safeReportingPage <= 1}
+                className={`pagination-link ${safeReportingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.first}
+              </Link>
+              <Link
+                href={buildDashboardUrl({
+                  role,
+                  q: searchTerm,
+                  category: categoryFilter,
+                  page: Math.max(1, safeReportingPage - 1),
+                })}
+                aria-disabled={safeReportingPage <= 1}
+                className={`pagination-link ${safeReportingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.previous}
+              </Link>
+              {paginationPages(safeReportingPage, totalReportingPages).map((page, index) =>
+                page === "ellipsis" ? (
+                  <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                    ...
+                  </span>
+                ) : (
+                  <Link
+                    key={page}
+                    href={buildDashboardUrl({
+                      role,
+                      q: searchTerm,
+                      category: categoryFilter,
+                      page,
+                    })}
+                    aria-current={page === safeReportingPage ? "page" : undefined}
+                    className={`pagination-link ${page === safeReportingPage ? "pagination-link-active" : ""}`}
+                  >
+                    {formatNumber(page, numberLocale)}
+                  </Link>
+                ),
+              )}
+              <Link
+                href={buildDashboardUrl({
+                  role,
+                  q: searchTerm,
+                  category: categoryFilter,
+                  page: Math.min(totalReportingPages, safeReportingPage + 1),
+                })}
+                aria-disabled={safeReportingPage >= totalReportingPages}
+                className={`pagination-link ${safeReportingPage >= totalReportingPages ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.next}
+              </Link>
+              <Link
+                href={buildDashboardUrl({
+                  role,
+                  q: searchTerm,
+                  category: categoryFilter,
+                  page: totalReportingPages,
+                })}
+                aria-disabled={safeReportingPage >= totalReportingPages}
+                className={`pagination-link ${safeReportingPage >= totalReportingPages ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.last}
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -863,42 +796,107 @@ function KpiCard({
   );
 }
 
-function StatusBadge({ label, tone }: { label: string; tone: "success" | "danger" }) {
+function ProjectSummarySection({
+  localeText,
+  numberLocale,
+  projectSummary,
+}: {
+  localeText: ReturnType<typeof t>;
+  numberLocale: string;
+  projectSummary: {
+    startDate: Date | null;
+    expectedEndDate: Date | null;
+    baselineProgress: Prisma.Decimal;
+    actualProgress: Prisma.Decimal;
+    totalProjectValue: Prisma.Decimal;
+    totalProjectInvoices: Prisma.Decimal;
+    totalCollectedValue: Prisma.Decimal;
+    remainingUnbilledValue: Prisma.Decimal;
+  };
+}) {
   return (
-    <span className={`status-pill ${tone === "success" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
-      {label}
-    </span>
+    <section className="panel-surface">
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="eyebrow">{localeText.home.projectSummary}</p>
+          <h2 className="section-title">{localeText.home.projectSummary}</h2>
+        </div>
+        <Link href="/project-details" className="primary-button">
+          {localeText.buttons.projectDetails}
+        </Link>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <ReadOnlySummaryCard
+          label={localeText.projectOverview.startDate}
+          value={formatDate(projectSummary.startDate, numberLocale)}
+        />
+        <ReadOnlySummaryCard
+          label={localeText.projectOverview.expectedEndDate}
+          value={formatDate(projectSummary.expectedEndDate, numberLocale)}
+        />
+        <ReadOnlyProgressCard
+          label={localeText.projectOverview.baselineProgress}
+          value={formatPercent(decimalToNumber(projectSummary.baselineProgress), numberLocale)}
+          percent={decimalToNumber(projectSummary.baselineProgress)}
+        />
+        <ReadOnlyProgressCard
+          label={localeText.projectOverview.actualProgress}
+          value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
+          percent={decimalToNumber(projectSummary.actualProgress)}
+        />
+        <ReadOnlySummaryCard
+          label={localeText.projectOverview.totalProjectValue}
+          value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
+        />
+        <ReadOnlySummaryCard
+          label={localeText.projectOverview.totalProjectInvoices}
+          value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
+        />
+        <ReadOnlySummaryCard
+          label={localeText.projectOverview.totalCollectedValue}
+          value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
+        />
+        <ReadOnlySummaryCard
+          label={localeText.projectOverview.remainingUnbilledValue}
+          value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
+        />
+      </div>
+    </section>
   );
 }
 
-function ProgressPanel({
-  title,
-  primaryLabel,
-  secondaryLabel,
-  value,
-  benchmark,
-}: {
-  title: string;
-  primaryLabel: string;
-  secondaryLabel: string;
-  value: number;
-  benchmark?: number;
-}) {
+function ReadOnlySummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="jawraa-subcard p-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-semibold text-[var(--ink-strong)]">{title}</p>
-        <p className="text-sm text-[var(--ink-soft)]">{secondaryLabel}</p>
+    <div className="jawraa-subcard p-4">
+      <p className="text-sm font-semibold text-[var(--ink-soft)]">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-[var(--ink-strong)]">{value}</p>
+    </div>
+  );
+}
+
+function ReadOnlyProgressCard({
+  label,
+  value,
+  percent,
+}: {
+  label: string;
+  value: string;
+  percent: number;
+}) {
+  const clamped = Math.min(Math.max(percent, 0), 100);
+
+  return (
+    <div className="jawraa-subcard p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-semibold text-[var(--ink-soft)]">{label}</p>
+        <p className="text-sm font-bold text-[var(--ink-strong)]">{value}</p>
       </div>
       <div className="mt-4 h-3 overflow-hidden rounded-full bg-[rgba(17,17,17,0.08)]">
-        <div className="h-full rounded-full bg-[var(--brand-yellow)]" style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
+        <div
+          className="h-full rounded-full bg-[var(--brand-yellow)]"
+          style={{ width: `${clamped}%` }}
+        />
       </div>
-      {benchmark !== undefined ? (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-[rgba(17,17,17,0.05)]">
-          <div className="h-full rounded-full bg-[var(--brand-ink)]" style={{ width: `${Math.min(Math.max(benchmark, 0), 100)}%` }} />
-        </div>
-      ) : null}
-      <p className="mt-3 text-sm font-semibold text-[var(--ink-strong)]">{primaryLabel}</p>
     </div>
   );
 }
@@ -985,26 +983,5 @@ function BarChart({
         </div>
       ))}
     </div>
-  );
-}
-
-function AlertCard({
-  href,
-  title,
-  value,
-  tone,
-  locale,
-}: {
-  href: string;
-  title: string;
-  value: number;
-  tone: "warning" | "danger";
-  locale: string;
-}) {
-  return (
-    <Link href={href} className={`rounded-[8px] border p-4 ${tone === "danger" && value > 0 ? "border-red-500 bg-red-50" : "border-amber-400 bg-amber-50"}`}>
-      <p className="text-sm font-semibold text-[var(--ink-soft)]">{title}</p>
-      <p className="mt-2 text-2xl font-bold text-[var(--ink-strong)]">{formatNumber(value, locale)}</p>
-    </Link>
   );
 }
