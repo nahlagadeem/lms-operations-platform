@@ -4,6 +4,7 @@ import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import { getPoCourseTracking } from "@/server/services/purchase-order-service";
 import {
   assignProjectScopeCourses,
   removeProjectScopeCourse,
@@ -101,7 +102,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const requestedCoursePage = normalizePage(queryParams.coursePage);
   const assignSearch = normalizeSearch(queryParams.assignQ);
 
-  const [scope, documents, allCourses] = await Promise.all([
+  const [scope, documents, allCourses, tracking] = await Promise.all([
     db.projectScope.findUnique({
       where: { id },
       include: {
@@ -158,6 +159,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
       },
       orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
     }),
+    getPoCourseTracking(id),
   ]);
 
   if (!scope) {
@@ -171,6 +173,9 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const actualCompletion = Number(scope.actualCompletion ?? 0);
   const plannedCompletion = Number(scope.plannedCompletion ?? 0);
   const scopeName = formatPurchaseOrderTitle(scope, locale);
+  const trackingByEntryId = new Map(
+    tracking?.rows.map((row) => [row.purchaseOrderCourseEntryId, row] as const) ?? [],
+  );
   const totalCoursePages = Math.max(1, Math.ceil(scope.selectedCourses.length / COURSES_PER_PAGE));
   const safeCoursePage = Math.min(requestedCoursePage, totalCoursePages);
   const visibleCourses = scope.selectedCourses.slice(
@@ -213,6 +218,34 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
         <MetricCard title={localeText.projectScopes.remaining} value={formatCurrency(new Prisma.Decimal(remaining), numberLocale)} />
       </section>
 
+      {tracking ? (
+        <section className="panel-surface">
+          <p className="eyebrow">{localeText.projectScopes.trackingTitle}</p>
+          <h3 className="section-title">{localeText.projectScopes.trackingTitle}</h3>
+          <p className="section-copy">{localeText.projectScopes.trackingDescription}</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              title={localeText.projectScopes.estimatedSeats}
+              value={formatNumber(tracking.summary.estimatedSeats, numberLocale)}
+            />
+            <MetricCard
+              title={localeText.projectScopes.actualSeats}
+              value={formatNumber(tracking.summary.actualSeats, numberLocale)}
+            />
+            <MetricCard
+              title={localeText.projectScopes.remainingSeats}
+              value={formatNumber(tracking.summary.remainingSeats, numberLocale)}
+            />
+            <MetricCard
+              title={localeText.projectScopes.fulfillmentPct}
+              value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                tracking.summary.fulfillmentPct,
+              )}%`}
+            />
+          </div>
+        </section>
+      ) : null}
+
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
           <div className="panel-surface">
@@ -224,6 +257,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               {visibleCourses.map((entry) => {
                 const course = entry.course;
+                const trackingRow = trackingByEntryId.get(entry.id);
                 return (
                 <div
                   key={entry.id}
@@ -251,6 +285,41 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       value={formatNumber(entry._count.courseRuns, numberLocale)}
                     />
                   </div>
+                  {trackingRow ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <InfoBox
+                        label={localeText.projectScopes.estimatedSeats}
+                        value={formatNumber(trackingRow.estimatedSeats, numberLocale)}
+                      />
+                      <InfoBox
+                        label={localeText.projectScopes.actualSeats}
+                        value={formatNumber(trackingRow.actualSeats, numberLocale)}
+                      />
+                      <InfoBox
+                        label={localeText.projectScopes.remainingSeats}
+                        value={formatNumber(trackingRow.remainingSeats, numberLocale)}
+                      />
+                      <InfoBox
+                        label={localeText.projectScopes.fulfillmentPct}
+                        value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                          trackingRow.fulfillmentPct,
+                        )}%`}
+                      />
+                    </div>
+                  ) : null}
+                  {trackingRow ? (
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                      {trackingRow.overageFlag ? (
+                        <span className="status-pill">{localeText.projectScopes.overageFlag}</span>
+                      ) : null}
+                      {trackingRow.shortfallFlag ? (
+                        <span className="status-pill">{localeText.projectScopes.shortfallFlag}</span>
+                      ) : null}
+                      {trackingRow.zeroActualFlag ? (
+                        <span className="status-pill">{localeText.projectScopes.zeroActualFlag}</span>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <form action={updatePurchaseOrderCourseEntryEstimatedSeats} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                     <input type="hidden" name="purchaseOrderId" value={scope.id} />
                     <input type="hidden" name="purchaseOrderCourseEntryId" value={entry.id} />
