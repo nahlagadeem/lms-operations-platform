@@ -14,15 +14,6 @@ function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function parseOptionalInt(value: string) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function parseOptionalDate(value: string) {
   if (!value) {
     return null;
@@ -35,139 +26,145 @@ function parseOptionalDate(value: string) {
 export async function createTraining(formData: FormData) {
   await requireAuth();
 
-  const courseId = normalizeText(formData.get("courseId"));
+  const purchaseOrderCourseEntryId = normalizeText(
+    formData.get("purchaseOrderCourseEntryId"),
+  );
+  const expectedCourseId = normalizeText(formData.get("courseId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
   const status = normalizeText(formData.get("status")) as TrainingStatus;
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
-  const plannedSeats = parseOptionalInt(normalizeText(formData.get("estimatedSeats")));
   const notes = normalizeText(formData.get("notes"));
 
-  if (!courseId || !deliveryMode || !status) {
-    throw new Error("Please choose a course and try again.");
+  if (!purchaseOrderCourseEntryId || !deliveryMode || !status) {
+    throw new Error("Please choose a Purchase Order Course Entry and try again.");
   }
 
-  const createdRun = await trainingService.createTraining({
-    courseId,
+  const createdTraining = await trainingService.createTraining({
+    purchaseOrderCourseEntryId,
+    expectedCourseId: expectedCourseId || undefined,
     deliveryMode,
     status,
     startDate,
     endDate,
-    plannedSeats,
     notes,
   });
 
-  revalidatePath(`/courses/${courseId}`);
+  revalidatePath(`/courses/${createdTraining.courseId}`);
+  revalidatePath("/project-structure");
   revalidatePath("/trainings");
-  redirect(`/trainings/${createdRun.id}`);
+  redirect(`/trainings/${createdTraining.id}`);
 }
 
 export async function updateTraining(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("trainingId"));
-  const providerId = normalizeText(formData.get("vendorId"));
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const purchaseOrderCourseEntryId = normalizeText(
+    formData.get("purchaseOrderCourseEntryId"),
+  );
+  const vendorId = normalizeText(formData.get("vendorId"));
   const locationId = normalizeText(formData.get("locationId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
   const status = normalizeText(formData.get("status")) as TrainingStatus;
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
-  const plannedSeats = parseOptionalInt(normalizeText(formData.get("estimatedSeats")));
   const notes = normalizeText(formData.get("notes"));
 
-  if (!courseRunId || !deliveryMode || !status) {
+  if (!trainingId || !purchaseOrderCourseEntryId || !deliveryMode || !status) {
     throw new Error("Please complete the required training details.");
   }
 
   await trainingService.updateTraining({
-    courseRunId,
-    providerId,
+    trainingId,
+    purchaseOrderCourseEntryId,
+    vendorId,
     locationId,
     deliveryMode,
     status,
     startDate,
     endDate,
-    plannedSeats,
     notes,
   });
 
+  revalidatePath("/project-structure");
   revalidatePath("/trainings");
-  revalidatePath(`/trainings/${courseRunId}`);
-  redirect(`/trainings/${courseRunId}`);
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
 }
 
 export async function assignInstructorToTraining(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("trainingId"));
-  const trainerId = normalizeText(formData.get("instructorId"));
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const instructorId = normalizeText(formData.get("instructorId"));
   const role = normalizeText(formData.get("role"));
   const isPrimary = normalizeText(formData.get("isPrimary")) === "true";
 
-  if (!courseRunId || !trainerId) {
+  if (!trainingId || !instructorId) {
     throw new Error("Missing instructor assignment fields.");
   }
 
   await trainingService.assignInstructorToTraining({
-    courseRunId,
-    trainerId,
+    trainingId,
+    instructorId,
     role,
     isPrimary,
   });
 
   revalidatePath("/trainings");
-  revalidatePath(`/trainings/${courseRunId}`);
-  redirect(`/trainings/${courseRunId}`);
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
 }
 
 export async function removeInstructorFromTraining(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("trainingId"));
-  const trainerId = normalizeText(formData.get("instructorId"));
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const instructorId = normalizeText(formData.get("instructorId"));
 
-  if (!courseRunId || !trainerId) {
+  if (!trainingId || !instructorId) {
     throw new Error("Missing instructor removal fields.");
   }
 
-  await trainingService.removeInstructorFromTraining(courseRunId, trainerId);
+  await trainingService.removeInstructorFromTraining(trainingId, instructorId);
 
   revalidatePath("/trainings");
-  revalidatePath(`/trainings/${courseRunId}`);
-  redirect(`/trainings/${courseRunId}`);
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
 }
 
 export async function enrollExistingAttendee(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("trainingId"));
-  const participantId = normalizeText(formData.get("attendeeId"));
-  const nominationStatus = normalizeText(
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const attendeeId = normalizeText(formData.get("attendeeId"));
+  const enrollmentStatus = normalizeText(
     formData.get("enrollmentStatus"),
   ) as EnrollmentStatus;
   const notes = normalizeText(formData.get("notes"));
 
-  if (!courseRunId || !participantId || !nominationStatus) {
+  if (!trainingId || !attendeeId || !enrollmentStatus) {
     throw new Error("Missing enrollment fields.");
   }
 
   await trainingService.enrollExistingAttendee({
-    courseRunId,
-    participantId,
-    nominationStatus,
+    trainingId,
+    attendeeId,
+    enrollmentStatus,
     notes,
   });
 
   revalidatePath("/trainings");
-  revalidatePath(`/trainings/${courseRunId}`);
-  redirect(`/trainings/${courseRunId}`);
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
 }
 
 export async function createAttendeeAndEnroll(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("trainingId"));
-  const participantType = normalizeText(
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const attendeeType = normalizeText(
     formData.get("attendeeType"),
   ) as AttendeeType;
   const fullNameAr = normalizeText(formData.get("fullNameAr"));
@@ -177,18 +174,18 @@ export async function createAttendeeAndEnroll(formData: FormData) {
   const organizationName = normalizeText(formData.get("organizationName"));
   const jobTitle = normalizeText(formData.get("jobTitle"));
   const nationalIdOrIqama = normalizeText(formData.get("nationalIdOrIqama"));
-  const nominationStatus = normalizeText(
+  const enrollmentStatus = normalizeText(
     formData.get("enrollmentStatus"),
   ) as EnrollmentStatus;
   const notes = normalizeText(formData.get("notes"));
 
-  if (!courseRunId || !participantType || !fullNameAr || !nominationStatus) {
+  if (!trainingId || !attendeeType || !fullNameAr || !enrollmentStatus) {
     throw new Error("Missing attendee enrollment fields.");
   }
 
   await trainingService.createAttendeeAndEnroll({
-    courseRunId,
-    participantType,
+    trainingId,
+    attendeeType,
     fullNameAr,
     fullNameEn,
     email,
@@ -196,51 +193,51 @@ export async function createAttendeeAndEnroll(formData: FormData) {
     organizationName,
     jobTitle,
     nationalIdOrIqama,
-    nominationStatus,
+    enrollmentStatus,
     notes,
   });
 
   revalidatePath("/trainings");
-  revalidatePath(`/trainings/${courseRunId}`);
-  redirect(`/trainings/${courseRunId}`);
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
 }
 
 export async function updateEnrollmentStatus(formData: FormData) {
   await requireAuth();
 
-  const nominationId = normalizeText(formData.get("enrollmentId"));
-  const courseRunId = normalizeText(formData.get("trainingId"));
-  const nominationStatus = normalizeText(
+  const enrollmentId = normalizeText(formData.get("enrollmentId"));
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const enrollmentStatus = normalizeText(
     formData.get("enrollmentStatus"),
   ) as EnrollmentStatus;
 
-  if (!nominationId || !courseRunId || !nominationStatus) {
+  if (!enrollmentId || !trainingId || !enrollmentStatus) {
     throw new Error("Missing enrollment status update fields.");
   }
 
   await trainingService.updateEnrollmentStatus({
-    nominationId,
-    courseRunId,
-    nominationStatus,
+    enrollmentId,
+    trainingId,
+    enrollmentStatus,
   });
 
   revalidatePath("/trainings");
-  revalidatePath(`/trainings/${courseRunId}`);
-  redirect(`/trainings/${courseRunId}`);
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
 }
 
 export async function recordAttendance(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("trainingId"));
-  const participantId = normalizeText(formData.get("attendeeId"));
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const attendeeId = normalizeText(formData.get("attendeeId"));
   const attendanceDateValue = normalizeText(formData.get("attendanceDate"));
   const attendanceStatus = normalizeText(
     formData.get("attendanceStatus"),
   ) as AttendanceStatus;
   const notes = normalizeText(formData.get("notes"));
 
-  if (!courseRunId || !participantId || !attendanceDateValue || !attendanceStatus) {
+  if (!trainingId || !attendeeId || !attendanceDateValue || !attendanceStatus) {
     throw new Error("Missing attendance fields.");
   }
 
@@ -251,14 +248,14 @@ export async function recordAttendance(formData: FormData) {
   }
 
   await trainingService.recordAttendance({
-    courseRunId,
-    participantId,
+    trainingId,
+    attendeeId,
     attendanceDate,
     attendanceStatus,
     notes,
   });
 
   revalidatePath("/trainings");
-  revalidatePath(`/trainings/${courseRunId}`);
-  redirect(`/trainings/${courseRunId}`);
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
 }

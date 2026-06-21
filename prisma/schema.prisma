@@ -159,18 +159,18 @@ enum ProjectActivityType {
 }
 
 model ProjectSummary {
-  id                     String   @id @default(cuid())
-  singletonKey           String   @unique @default("ACTIVE")
+  id                     String    @id @default(cuid())
+  singletonKey           String    @unique @default("ACTIVE")
   startDate              DateTime?
   expectedEndDate        DateTime?
-  baselineProgress       Decimal  @default(0) @db.Decimal(5, 2)
-  actualProgress         Decimal  @default(0) @db.Decimal(5, 2)
-  totalProjectValue      Decimal  @default(0) @db.Decimal(18, 2)
-  totalProjectInvoices   Decimal  @default(0) @db.Decimal(18, 2)
-  totalCollectedValue    Decimal  @default(0) @db.Decimal(18, 2)
-  remainingUnbilledValue Decimal  @default(0) @db.Decimal(18, 2)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  baselineProgress       Decimal   @default(0) @db.Decimal(5, 2)
+  actualProgress         Decimal   @default(0) @db.Decimal(5, 2)
+  totalProjectValue      Decimal   @default(0) @db.Decimal(18, 2)
+  totalProjectInvoices   Decimal   @default(0) @db.Decimal(18, 2)
+  totalCollectedValue    Decimal   @default(0) @db.Decimal(18, 2)
+  remainingUnbilledValue Decimal   @default(0) @db.Decimal(18, 2)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 }
 
 model ProjectActivity {
@@ -210,45 +210,46 @@ model ProjectIssue {
 }
 
 model Package {
-  id                   String       @id @default(cuid())
-  scopeId              String?
-  code                 String       @unique
-  nameAr               String
-  nameEn               String?
-  description          String?
-  expectedTraineeCount Int?
-  originalTotalAmount  Decimal?     @db.Decimal(18, 2)
-  discountedTotalAmount Decimal?    @db.Decimal(18, 2)
-  isActive             Boolean      @default(true)
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  scope                ProjectScope? @relation(fields: [scopeId], references: [id], onDelete: SetNull)
-  courses              Course[]
+  id                    String        @id @default(cuid())
+  scopeId               String?
+  code                  String        @unique
+  nameAr                String
+  nameEn                String?
+  description           String?
+  expectedTraineeCount  Int?
+  originalTotalAmount   Decimal?      @db.Decimal(18, 2)
+  discountedTotalAmount Decimal?      @db.Decimal(18, 2)
+  isActive              Boolean       @default(true)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  scope                 ProjectScope? @relation(fields: [scopeId], references: [id], onDelete: SetNull)
+  courses               Course[]
 
   @@index([scopeId])
 }
 
 model ProjectScope {
-  id                    String    @id @default(cuid())
-  code                  String    @unique
-  name                  String
-  nameAr                String?
-  nameEn                String?
-  description           String?
-  region                String?
-  startDate             DateTime?
-  expectedEndDate       DateTime?
-  notes                 String?
-  plannedCompletion     Decimal?  @db.Decimal(5, 2)
-  actualCompletion      Decimal?  @db.Decimal(5, 2)
-  budgetAmount          Decimal?  @db.Decimal(18, 2)
-  invoicedAmount        Decimal?  @db.Decimal(18, 2)
-  collectedAmount       Decimal?  @db.Decimal(18, 2)
-  isActive              Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  packages              Package[]
-  selectedCourses       ProjectScopeCourse[]
+  id                String               @id @default(cuid())
+  code              String               @unique
+  name              String
+  nameAr            String?
+  nameEn            String?
+  description       String?
+  region            String?
+  startDate         DateTime?
+  expectedEndDate   DateTime?
+  notes             String?
+  plannedCompletion Decimal?             @db.Decimal(5, 2)
+  actualCompletion  Decimal?             @db.Decimal(5, 2)
+  budgetAmount      Decimal?             @db.Decimal(18, 2)
+  invoicedAmount    Decimal?             @db.Decimal(18, 2)
+  collectedAmount   Decimal?             @db.Decimal(18, 2)
+  isActive          Boolean              @default(true)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  packages          Package[]
+  selectedCourses   ProjectScopeCourse[]
+  courseRuns        CourseRun[]
 }
 
 model CourseCategory {
@@ -261,39 +262,41 @@ model CourseCategory {
 }
 
 model Course {
-  id                        String         @id @default(cuid())
-  packageId                 String
-  categoryId                String
-  courseCode                String         @unique
-  nameAr                    String
-  nameEn                    String?
-  description               String?
-  deliveryType              DeliveryType
-  unitOfMeasure             String?
-  defaultDurationDays       Int?
-  defaultDurationHours      Int?
-  language                  String?
-  isExternal                Boolean        @default(false)
-  requiresCertificate       Boolean        @default(false)
-  requiresProviderRegistration Boolean     @default(false)
-  activeStatus              ActiveStatus   @default(ACTIVE)
-  createdAt                 DateTime       @default(now())
-  updatedAt                 DateTime       @updatedAt
-  package                   Package        @relation(fields: [packageId], references: [id], onDelete: Restrict)
-  category                  CourseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  pricingRecords            CoursePricing[]
-  runs                      CourseRun[]
-  scopeSelections           ProjectScopeCourse[]
+  id                           String               @id @default(cuid())
+  packageId                    String
+  categoryId                   String
+  courseCode                   String               @unique
+  nameAr                       String
+  nameEn                       String?
+  description                  String?
+  deliveryType                 DeliveryType
+  unitOfMeasure                String?
+  defaultDurationDays          Int?
+  defaultDurationHours         Int?
+  language                     String?
+  isExternal                   Boolean              @default(false)
+  requiresCertificate          Boolean              @default(false)
+  requiresProviderRegistration Boolean              @default(false)
+  activeStatus                 ActiveStatus         @default(ACTIVE)
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
+  package                      Package              @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  category                     CourseCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  pricingRecords               CoursePricing[]
+  runs                         CourseRun[]
+  scopeSelections              ProjectScopeCourse[]
 }
 
 model ProjectScopeCourse {
-  id        String       @id @default(cuid())
-  scopeId   String
-  courseId  String
-  sortOrder Int
-  createdAt DateTime     @default(now())
-  scope     ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
-  course    Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  scopeId        String
+  courseId       String
+  sortOrder      Int
+  estimatedSeats Int?
+  createdAt      DateTime     @default(now())
+  scope          ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  course         Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseRuns     CourseRun[]
 
   @@unique([scopeId, courseId])
   @@index([scopeId, sortOrder])
@@ -301,23 +304,23 @@ model ProjectScopeCourse {
 }
 
 model CoursePricing {
-  id                           String    @id @default(cuid())
-  courseId                     String
-  originalUnitPriceWithTax     Decimal?  @db.Decimal(18, 2)
-  originalUnitPriceWithoutTax  Decimal?  @db.Decimal(18, 2)
-  discountPercentage           Decimal?  @db.Decimal(5, 4)
-  discountAmount               Decimal?  @db.Decimal(18, 2)
-  finalUnitPriceWithoutTax     Decimal?  @db.Decimal(18, 2)
-  currencyCode                 String    @default("SAR")
-  effectiveFrom                DateTime?
-  effectiveTo                  DateTime?
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
-  course                       Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id                          String    @id @default(cuid())
+  courseId                    String
+  originalUnitPriceWithTax    Decimal?  @db.Decimal(18, 2)
+  originalUnitPriceWithoutTax Decimal?  @db.Decimal(18, 2)
+  discountPercentage          Decimal?  @db.Decimal(5, 4)
+  discountAmount              Decimal?  @db.Decimal(18, 2)
+  finalUnitPriceWithoutTax    Decimal?  @db.Decimal(18, 2)
+  currencyCode                String    @default("SAR")
+  effectiveFrom               DateTime?
+  effectiveTo                 DateTime?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  course                      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }
 
 model Provider {
-  id            String         @id @default(cuid())
+  id            String       @id @default(cuid())
   providerType  ProviderType
   nameAr        String
   nameEn        String?
@@ -327,32 +330,32 @@ model Provider {
   email         String?
   phone         String?
   website       String?
-  isActive      Boolean        @default(true)
+  isActive      Boolean      @default(true)
   notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
   trainers      Trainer[]
   courseRuns    CourseRun[]
 }
 
 model Trainer {
-  id                 String              @id @default(cuid())
-  providerId         String?
-  fullNameAr         String
-  fullNameEn         String?
-  email              String?
-  phone              String?
-  nationality        String?
-  yearsOfExperience  Int?
-  isApproved         Boolean             @default(false)
-  approvalDate       DateTime?
-  bio                String?
-  specialization     String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  provider           Provider?           @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  credentials        TrainerCredential[]
-  courseAssignments  CourseRunTrainer[]
+  id                String              @id @default(cuid())
+  providerId        String?
+  fullNameAr        String
+  fullNameEn        String?
+  email             String?
+  phone             String?
+  nationality       String?
+  yearsOfExperience Int?
+  isApproved        Boolean             @default(false)
+  approvalDate      DateTime?
+  bio               String?
+  specialization    String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  provider          Provider?           @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  credentials       TrainerCredential[]
+  courseAssignments CourseRunTrainer[]
 }
 
 model TrainerCredential {
@@ -391,38 +394,45 @@ model Location {
 }
 
 model CourseRun {
-  id                 String             @id @default(cuid())
-  courseId           String
-  providerId         String?
-  locationId         String?
-  runCode            String             @unique
-  status             CourseRunStatus    @default(DRAFT)
-  deliveryMode       DeliveryMode
-  startDate          DateTime?
-  endDate            DateTime?
-  startTime          String?
-  endTime            String?
-  plannedSeats       Int?
-  confirmedSeats     Int               @default(0)
-  attendanceRequired Boolean           @default(true)
-  certificateRequired Boolean          @default(false)
-  courseCardStatus   CourseCardStatus  @default(NOT_STARTED)
-  approvalStatus     ApprovalStatus    @default(PENDING)
-  rescheduleCount    Int               @default(0)
-  ownerUserId        String?
-  notes              String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  course             Course            @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  provider           Provider?         @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  location           Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  ownerUser          AppUser?          @relation("OwnedCourseRuns", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  trainers           CourseRunTrainer[]
-  documents          CourseRunDocument[]
-  nominations        Nomination[]
-  attendanceRecords  AttendanceRecord[]
+  id                   String              @id @default(cuid())
+  courseId             String
+  projectScopeId       String?
+  projectScopeCourseId String?
+  providerId           String?
+  locationId           String?
+  runCode              String              @unique
+  status               CourseRunStatus     @default(DRAFT)
+  deliveryMode         DeliveryMode
+  startDate            DateTime?
+  endDate              DateTime?
+  startTime            String?
+  endTime              String?
+  plannedSeats         Int?
+  confirmedSeats       Int                 @default(0)
+  attendanceRequired   Boolean             @default(true)
+  certificateRequired  Boolean             @default(false)
+  courseCardStatus     CourseCardStatus    @default(NOT_STARTED)
+  approvalStatus       ApprovalStatus      @default(PENDING)
+  rescheduleCount      Int                 @default(0)
+  ownerUserId          String?
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  course               Course              @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  projectScope         ProjectScope?       @relation(fields: [projectScopeId], references: [id], onDelete: SetNull)
+  projectScopeCourse   ProjectScopeCourse? @relation(fields: [projectScopeCourseId], references: [id], onDelete: SetNull)
+  provider             Provider?           @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  location             Location?           @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  ownerUser            AppUser?            @relation("OwnedCourseRuns", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  trainers             CourseRunTrainer[]
+  documents            CourseRunDocument[]
+  nominations          Nomination[]
+  attendanceRecords    AttendanceRecord[]
   evaluations        Evaluation[]
-  qualityReports     QualityReport[]
+  qualityReports       QualityReport[]
+
+  @@index([projectScopeId])
+  @@index([projectScopeCourseId])
 }
 
 model CourseRunTrainer {
@@ -482,22 +492,22 @@ model Document {
 }
 
 model Participant {
-  id               String            @id @default(cuid())
-  participantType  ParticipantType
+  id                String             @id @default(cuid())
+  participantType   ParticipantType
   nationalIdOrIqama String?
-  employeeNumber   String?
-  fullNameAr       String
-  fullNameEn       String?
-  email            String?
-  phone            String?
-  organizationName String?
-  jobTitle         String?
-  department       String?
-  city             String?
-  isActive         Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  nominations      Nomination[]
+  employeeNumber    String?
+  fullNameAr        String
+  fullNameEn        String?
+  email             String?
+  phone             String?
+  organizationName  String?
+  jobTitle          String?
+  department        String?
+  city              String?
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  nominations       Nomination[]
   attendanceRecords AttendanceRecord[]
   evaluations      Evaluation[]
 
@@ -505,22 +515,22 @@ model Participant {
 }
 
 model Nomination {
-  id                         String           @id @default(cuid())
+  id                         String            @id @default(cuid())
   courseRunId                String
   participantId              String
-  nominationStatus           NominationStatus @default(NOMINATED)
+  nominationStatus           NominationStatus  @default(NOMINATED)
   nominatedByUserId          String?
-  nominatedAt                DateTime         @default(now())
+  nominatedAt                DateTime          @default(now())
   confirmationStatus         NominationStatus?
   confirmedAt                DateTime?
   declineReason              String?
   replacementForNominationId String?
   notes                      String?
-  courseRun                  CourseRun        @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
-  participant                Participant      @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  nominatedByUser            AppUser?         @relation("NominatedParticipants", fields: [nominatedByUserId], references: [id], onDelete: SetNull)
-  replacementFor            Nomination?      @relation("NominationReplacement", fields: [replacementForNominationId], references: [id], onDelete: SetNull)
-  replacements              Nomination[]     @relation("NominationReplacement")
+  courseRun                  CourseRun         @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  participant                Participant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  nominatedByUser            AppUser?          @relation("NominatedParticipants", fields: [nominatedByUserId], references: [id], onDelete: SetNull)
+  replacementFor             Nomination?       @relation("NominationReplacement", fields: [replacementForNominationId], references: [id], onDelete: SetNull)
+  replacements               Nomination[]      @relation("NominationReplacement")
 
   @@unique([courseRunId, participantId])
 }
@@ -591,35 +601,35 @@ model FinalProjectReport {
 }
 
 model AppUser {
-  id                    String               @id @default(cuid())
-  fullName              String
-  email                 String               @unique
-  role                  UserRole
-  department            String?
-  isActive              Boolean              @default(true)
-  lastLoginAt           DateTime?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  ownedCourseRuns       CourseRun[]          @relation("OwnedCourseRuns")
-  uploadedDocuments     CourseRunDocument[]  @relation("UploadedDocuments")
-  uploadedGlobalDocuments Document[]         @relation("UploadedGlobalDocuments")
-  nominatedParticipants Nomination[]         @relation("NominatedParticipants")
-  recordedAttendance    AttendanceRecord[]   @relation("RecordedAttendance")
-  submittedQualityReports QualityReport[]    @relation("SubmittedQualityReports")
-  generatedFinalReports FinalProjectReport[] @relation("GeneratedFinalReports")
-  auditLogs             AuditLog[]
+  id                      String               @id @default(cuid())
+  fullName                String
+  email                   String               @unique
+  role                    UserRole
+  department              String?
+  isActive                Boolean              @default(true)
+  lastLoginAt             DateTime?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  ownedCourseRuns         CourseRun[]          @relation("OwnedCourseRuns")
+  uploadedDocuments       CourseRunDocument[]  @relation("UploadedDocuments")
+  uploadedGlobalDocuments Document[]           @relation("UploadedGlobalDocuments")
+  nominatedParticipants   Nomination[]         @relation("NominatedParticipants")
+  recordedAttendance      AttendanceRecord[]   @relation("RecordedAttendance")
+  submittedQualityReports QualityReport[]      @relation("SubmittedQualityReports")
+  generatedFinalReports   FinalProjectReport[] @relation("GeneratedFinalReports")
+  auditLogs               AuditLog[]
 }
 
 model AuditLog {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   actorUserId   String?
   entityType    String
   entityId      String
   actionType    String
   oldValuesJson Json?
   newValuesJson Json?
-  createdAt     DateTime  @default(now())
-  actorUser     AppUser?  @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  actorUser     AppUser? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
 }

@@ -88,31 +88,69 @@ export async function updateProjectScope(input: UpdateProjectScopeInput) {
 export async function replaceProjectScopeCourses(scopeId: string, courseIds: string[]) {
   const uniqueCourseIds = Array.from(new Set(courseIds.filter(Boolean)));
 
-  await db.$transaction([
-    db.projectScopeCourse.deleteMany({
+  await db.$transaction(async (tx) => {
+    const existingEntries = await tx.projectScopeCourse.findMany({
       where: { scopeId },
-    }),
-    ...(uniqueCourseIds.length > 0
-      ? [
-          db.projectScopeCourse.createMany({
-            data: uniqueCourseIds.map((courseId, index) => ({
-              scopeId,
-              courseId,
-              sortOrder: index + 1,
-            })),
-            skipDuplicates: true,
-          }),
-        ]
-      : []),
-  ]);
+      select: { id: true, courseId: true },
+    });
+    const retainedCourseIds = new Set(uniqueCourseIds);
+    const removedEntryIds = existingEntries
+      .filter((entry) => !retainedCourseIds.has(entry.courseId))
+      .map((entry) => entry.id);
+
+    if (removedEntryIds.length > 0) {
+      await tx.courseRun.updateMany({
+        where: { projectScopeCourseId: { in: removedEntryIds } },
+        data: { projectScopeId: null, projectScopeCourseId: null },
+      });
+      await tx.projectScopeCourse.deleteMany({
+        where: { id: { in: removedEntryIds } },
+      });
+    }
+
+    for (const [index, courseId] of uniqueCourseIds.entries()) {
+      await tx.projectScopeCourse.upsert({
+        where: { scopeId_courseId: { scopeId, courseId } },
+        update: { sortOrder: index + 1 },
+        create: { scopeId, courseId, sortOrder: index + 1 },
+      });
+    }
+  });
 }
 
 export async function removeProjectScopeCourse(scopeId: string, courseId: string) {
-  await db.projectScopeCourse.deleteMany({
-    where: {
-      scopeId,
-      courseId,
-    },
+  await db.$transaction(async (tx) => {
+    const entry = await tx.projectScopeCourse.findUnique({
+      where: { scopeId_courseId: { scopeId, courseId } },
+      select: { id: true },
+    });
+    if (!entry) return;
+
+    await tx.courseRun.updateMany({
+      where: { projectScopeCourseId: entry.id },
+      data: { projectScopeId: null, projectScopeCourseId: null },
+    });
+    await tx.projectScopeCourse.delete({ where: { id: entry.id } });
+  });
+}
+
+export async function updatePurchaseOrderCourseEntryEstimatedSeats(
+  purchaseOrderId: string,
+  purchaseOrderCourseEntryId: string,
+  estimatedSeats: number | null,
+) {
+  const result = await db.projectScopeCourse.updateMany({
+    where: { id: purchaseOrderCourseEntryId, scopeId: purchaseOrderId },
+    data: { estimatedSeats },
+  });
+
+  if (result.count !== 1) {
+    throw new Error("Purchase Order Course Entry was not found.");
+  }
+
+  await db.courseRun.updateMany({
+    where: { projectScopeCourseId: purchaseOrderCourseEntryId },
+    data: { plannedSeats: estimatedSeats },
   });
 }
 

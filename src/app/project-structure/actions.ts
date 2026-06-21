@@ -15,6 +15,12 @@ function parseOptionalDate(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function parseOptionalInt(value: string) {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function parseScopeForm(formData: FormData) {
   const code = normalizeText(formData.get("code"));
   const nameAr = normalizeText(formData.get("nameAr"));
@@ -126,4 +132,28 @@ export async function removeProjectScopeCourse(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/project-structure");
   revalidatePath(`/project-structure/scopes/${scopeId}`);
+}
+
+export async function updatePurchaseOrderCourseEntryEstimatedSeats(formData: FormData) {
+  await requireAuth();
+
+  const purchaseOrderId = normalizeText(formData.get("purchaseOrderId"));
+  const purchaseOrderCourseEntryId = normalizeText(
+    formData.get("purchaseOrderCourseEntryId"),
+  );
+  const estimatedSeats = parseOptionalInt(normalizeText(formData.get("estimatedSeats")));
+  if (!purchaseOrderId || !purchaseOrderCourseEntryId) {
+    throw new Error("Purchase Order and Course Entry are required.");
+  }
+
+  await projectScopeService.updatePurchaseOrderCourseEntryEstimatedSeats(
+    purchaseOrderId,
+    purchaseOrderCourseEntryId,
+    estimatedSeats,
+  );
+
+  revalidatePath("/");
+  revalidatePath("/project-structure");
+  revalidatePath(`/project-structure/scopes/${purchaseOrderId}`);
+  revalidatePath("/trainings");
 }

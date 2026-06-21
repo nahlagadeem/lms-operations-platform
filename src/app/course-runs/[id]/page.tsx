@@ -13,6 +13,7 @@ import {
 import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
+import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 
 type CourseRunDetailPageProps = {
   params: Promise<{
@@ -335,7 +336,15 @@ export default async function CourseRunDetailPage({
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const completionThreshold = 0.75;
 
-  const [run, documents, providers, locations, trainers, participants] = await Promise.all([
+  const [
+    run,
+    documents,
+    providers,
+    locations,
+    trainers,
+    participants,
+    purchaseOrderCourseEntries,
+  ] = await Promise.all([
     db.courseRun.findUnique({
       where: { id },
       include: {
@@ -344,6 +353,10 @@ export default async function CourseRunDetailPage({
             package: true,
             category: true,
           },
+        },
+        projectScope: true,
+        projectScopeCourse: {
+          include: { course: true },
         },
         provider: true,
         location: true,
@@ -408,6 +421,10 @@ export default async function CourseRunDetailPage({
       },
       orderBy: { fullNameAr: "asc" },
       take: 300,
+    }),
+    db.projectScopeCourse.findMany({
+      include: { scope: true, course: true },
+      orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
     }),
   ]);
 
@@ -529,6 +546,22 @@ export default async function CourseRunDetailPage({
               <InfoCard
                 label={localeText.courseRuns.course}
                 value={`${run.course.courseCode} | ${run.course.nameEn || run.course.nameAr}`}
+              />
+              <InfoCard
+                label={localeText.courseRuns.purchaseOrder}
+                value={
+                  run.projectScope
+                    ? `${formatPurchaseOrderCode(run.projectScope.code, locale)} | ${formatPurchaseOrderTitle(run.projectScope, locale)}`
+                    : details.notAssigned
+                }
+              />
+              <InfoCard
+                label={localeText.courseRuns.purchaseOrderCourseEntry}
+                value={
+                  run.projectScopeCourse
+                    ? `${run.projectScopeCourse.course.courseCode} | ${run.projectScopeCourse.course.nameEn || run.projectScopeCourse.course.nameAr}`
+                    : details.notAssigned
+                }
               />
               <InfoCard
                 label={localeText.courseRuns.mode}
@@ -824,8 +857,9 @@ export default async function CourseRunDetailPage({
               <ProgressCard
                 label={details.plannedSeats}
                 value={
-                  training.estimatedSeats !== null
-                    ? formatNumber(training.estimatedSeats, numberLocale)
+                  run.projectScopeCourse?.estimatedSeats !== null &&
+                  run.projectScopeCourse?.estimatedSeats !== undefined
+                    ? formatNumber(run.projectScopeCourse.estimatedSeats, numberLocale)
                     : "-"
                 }
                 tone="ink"
@@ -972,6 +1006,30 @@ export default async function CourseRunDetailPage({
               <form action={updateTraining} className="space-y-4">
                 <input type="hidden" name="trainingId" value={run.id} />
 
+                <label className="field-shell">
+                  <span className="field-label">
+                    {localeText.courseRuns.purchaseOrderCourseEntry}
+                  </span>
+                  <select
+                    name="purchaseOrderCourseEntryId"
+                    className="field-input"
+                    defaultValue={run.projectScopeCourseId || ""}
+                    required
+                  >
+                    <option value="" disabled>
+                      {localeText.courseRuns.selectPurchaseOrderCourseEntry}
+                    </option>
+                    {purchaseOrderCourseEntries.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {formatPurchaseOrderCode(entry.scope.code, locale)} |{" "}
+                        {formatPurchaseOrderTitle(entry.scope, locale)} |{" "}
+                        {entry.course.courseCode} | {entry.course.nameEn || entry.course.nameAr} |{" "}
+                        {localeText.courseRuns.plannedSeats}: {entry.estimatedSeats ?? "-"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
                     <span className="field-label">{localeText.courseRuns.status}</span>
@@ -1055,18 +1113,6 @@ export default async function CourseRunDetailPage({
                     </select>
                   </label>
                 </div>
-
-                <label className="field-shell">
-                  <span className="field-label">{localeText.courseRuns.plannedSeats}</span>
-                  <input
-                    type="number"
-                    name="estimatedSeats"
-                    min="0"
-                    step="1"
-                    className="field-input"
-                    defaultValue={run.plannedSeats ?? ""}
-                  />
-                </label>
 
                 <label className="field-shell">
                   <span className="field-label">{localeText.courseRuns.notes}</span>

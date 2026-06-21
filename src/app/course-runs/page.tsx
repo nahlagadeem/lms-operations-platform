@@ -4,6 +4,7 @@ import { createTraining } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
+import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 
 type CourseRunsPageProps = {
   searchParams?: Promise<{
@@ -118,7 +119,7 @@ export default async function CourseRunsPage({
     ongoingRuns,
     completedRuns,
     packages,
-    courses,
+    purchaseOrderCourseEntries,
     courseRuns,
   ] = await Promise.all([
     db.courseRun.count(),
@@ -143,17 +144,24 @@ export default async function CourseRunsPage({
       select: { id: true, code: true, nameAr: true, nameEn: true },
       orderBy: { code: "asc" },
     }),
-    db.course.findMany({
+    db.projectScopeCourse.findMany({
       select: {
         id: true,
-        courseCode: true,
-        nameAr: true,
-        nameEn: true,
-        package: {
-          select: { code: true, nameAr: true, nameEn: true },
+        estimatedSeats: true,
+        scope: {
+          select: { id: true, code: true, name: true, nameAr: true, nameEn: true },
+        },
+        course: {
+          select: {
+            id: true,
+            courseCode: true,
+            nameAr: true,
+            nameEn: true,
+            package: { select: { code: true } },
+          },
         },
       },
-      orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
+      orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
     }),
     db.courseRun.findMany({
       where: whereClause,
@@ -164,6 +172,10 @@ export default async function CourseRunsPage({
               select: { code: true, nameAr: true, nameEn: true },
             },
           },
+        },
+        projectScope: true,
+        projectScopeCourse: {
+          include: { course: true },
         },
       },
       orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
@@ -276,6 +288,8 @@ export default async function CourseRunsPage({
                   <th>{localeText.courseRuns.runCode}</th>
                   <th>{localeText.courseRuns.packageName}</th>
                   <th>{localeText.courseRuns.courseName}</th>
+                  <th>{localeText.courseRuns.purchaseOrder}</th>
+                  <th>{localeText.courseRuns.purchaseOrderCourseEntry}</th>
                   <th>{localeText.courseRuns.status}</th>
                   <th>{localeText.courseRuns.dates}</th>
                   <th>{localeText.courseRuns.mode}</th>
@@ -311,6 +325,20 @@ export default async function CourseRunsPage({
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {run.projectScope
+                          ? `${formatPurchaseOrderCode(run.projectScope.code, locale)} | ${formatPurchaseOrderTitle(run.projectScope, locale)}`
+                          : "-"}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {run.projectScopeCourse
+                          ? `${run.projectScopeCourse.course.courseCode} | ${run.projectScopeCourse.course.nameEn || run.projectScopeCourse.course.nameAr}`
+                          : "-"}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
                         <span className="status-pill">
                           {localeText.courseRunStatuses[run.status]}
                         </span>
@@ -333,8 +361,9 @@ export default async function CourseRunsPage({
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {training.estimatedSeats !== null
-                          ? formatNumber(training.estimatedSeats, numberLocale)
+                        {run.projectScopeCourse?.estimatedSeats !== null &&
+                        run.projectScopeCourse?.estimatedSeats !== undefined
+                          ? formatNumber(run.projectScopeCourse.estimatedSeats, numberLocale)
                           : "-"}
                       </Link>
                     </td>
@@ -364,15 +393,22 @@ export default async function CourseRunsPage({
 
             <form action={createTraining} className="mt-6 space-y-4">
               <label className="field-shell">
-                <span className="field-label">{localeText.courseRuns.course}</span>
-                <select name="courseId" className="field-input" defaultValue="">
+                <span className="field-label">{localeText.courseRuns.purchaseOrderCourseEntry}</span>
+                <select
+                  name="purchaseOrderCourseEntryId"
+                  className="field-input"
+                  defaultValue=""
+                  required
+                >
                   <option value="" disabled>
-                    {localeText.courseRuns.selectCourse}
+                    {localeText.courseRuns.selectPurchaseOrderCourseEntry}
                   </option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.courseCode} | {course.nameEn || course.nameAr} |{" "}
-                      {course.package.nameEn || course.package.nameAr}
+                  {purchaseOrderCourseEntries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {formatPurchaseOrderCode(entry.scope.code, locale)} |{" "}
+                      {formatPurchaseOrderTitle(entry.scope, locale)} |{" "}
+                      {entry.course.courseCode} | {entry.course.nameEn || entry.course.nameAr} |{" "}
+                      {localeText.courseRuns.plannedSeats}: {entry.estimatedSeats ?? "-"}
                     </option>
                   ))}
                 </select>
@@ -421,17 +457,6 @@ export default async function CourseRunsPage({
                   <input type="date" name="endDate" className="field-input" />
                 </label>
               </div>
-
-              <label className="field-shell">
-                <span className="field-label">{localeText.courseRuns.plannedSeats}</span>
-                <input
-                  type="number"
-                  name="estimatedSeats"
-                  min="0"
-                  step="1"
-                  className="field-input"
-                />
-              </label>
 
               <label className="field-shell">
                 <span className="field-label">{localeText.courseRuns.notes}</span>

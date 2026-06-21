@@ -231,6 +231,10 @@ export default async function CourseDetailPage({
         orderBy: { createdAt: "desc" },
         take: 1,
       },
+      scopeSelections: {
+        include: { scope: true },
+        orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
+      },
       runs: {
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
         include: {
@@ -485,6 +489,29 @@ export default async function CourseDetailPage({
               <form action={createTraining} className="mt-6 space-y-4">
               <input type="hidden" name="courseId" value={course.id} />
 
+              <label className="field-shell">
+                <span className="field-label">
+                  {localeText.courseRuns.purchaseOrderCourseEntry}
+                </span>
+                <select
+                  name="purchaseOrderCourseEntryId"
+                  className="field-input"
+                  defaultValue=""
+                  required
+                >
+                  <option value="" disabled>
+                    {localeText.courseRuns.selectPurchaseOrderCourseEntry}
+                  </option>
+                  {course.scopeSelections.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.scope.code} | {entry.scope.nameEn || entry.scope.nameAr || entry.scope.name} |{" "}
+                      {course.courseCode} | {course.nameEn || course.nameAr} |{" "}
+                      {localeText.courseRuns.plannedSeats}: {entry.estimatedSeats ?? "-"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="field-shell">
                   <span className="field-label">{details.status}</span>
@@ -528,17 +555,6 @@ export default async function CourseDetailPage({
                   <input type="date" name="endDate" className="field-input" />
                 </label>
               </div>
-
-              <label className="field-shell">
-                <span className="field-label">{details.plannedSeats}</span>
-                <input
-                  type="number"
-                  name="estimatedSeats"
-                  min="0"
-                  step="1"
-                  className="field-input"
-                />
-              </label>
 
               <label className="field-shell">
                 <span className="field-label">{details.notes}</span>

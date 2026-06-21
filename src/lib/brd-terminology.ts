@@ -11,6 +11,8 @@ import type {
   CourseRunTrainer,
   Nomination,
   Participant,
+  ProjectScope,
+  ProjectScopeCourse,
   Provider,
   Trainer,
 } from "@prisma/client";
@@ -18,6 +20,8 @@ import type {
 // Persistence keeps the original Prisma identifiers to avoid a destructive migration.
 // Application and UI code can use these BRD-safe aliases instead.
 export type Training = CourseRun;
+export type PurchaseOrder = ProjectScope;
+export type PurchaseOrderCourseEntry = ProjectScopeCourse;
 export type Attendee = Participant;
 export type Enrollment = Nomination;
 export type Attendance = AttendanceRecord;

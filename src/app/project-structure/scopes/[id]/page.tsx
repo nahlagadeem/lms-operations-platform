@@ -7,6 +7,7 @@ import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchas
 import {
   assignProjectScopeCourses,
   removeProjectScopeCourse,
+  updatePurchaseOrderCourseEntryEstimatedSeats,
 } from "@/app/project-structure/actions";
 
 type ScopeDetailPageProps = {
@@ -120,6 +121,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 category: true,
               },
             },
+            _count: { select: { courseRuns: true } },
           },
           orderBy: { sortOrder: "asc" },
         },
@@ -220,9 +222,11 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
             </h3>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              {visibleCourses.map(({ course }) => (
+              {visibleCourses.map((entry) => {
+                const course = entry.course;
+                return (
                 <div
-                  key={course.id}
+                  key={entry.id}
                   className="jawraa-subcard p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -238,11 +242,33 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     <span className="status-pill">{localeText.projectScopes.active}</span>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <InfoBox label={localeText.projectScopes.package} value={course.package.code} />
                     <InfoBox label={localeText.projectScopes.duration} value={course.defaultDurationDays ? `${formatNumber(course.defaultDurationDays, numberLocale)} ${localeText.units.days}` : "-"} />
                     <InfoBox label={localeText.projectScopes.language} value={course.language || "-"} />
+                    <InfoBox
+                      label={localeText.projectScopes.linkedTrainings}
+                      value={formatNumber(entry._count.courseRuns, numberLocale)}
+                    />
                   </div>
+                  <form action={updatePurchaseOrderCourseEntryEstimatedSeats} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <input type="hidden" name="purchaseOrderId" value={scope.id} />
+                    <input type="hidden" name="purchaseOrderCourseEntryId" value={entry.id} />
+                    <label className="field-shell flex-1">
+                      <span className="field-label">{localeText.projectScopes.estimatedSeats}</span>
+                      <input
+                        type="number"
+                        name="estimatedSeats"
+                        min="0"
+                        step="1"
+                        className="field-input"
+                        defaultValue={entry.estimatedSeats ?? ""}
+                      />
+                    </label>
+                    <button type="submit" className="primary-button">
+                      {localeText.buttons.save}
+                    </button>
+                  </form>
                   <form action={removeProjectScopeCourse} className="mt-4">
                     <input type="hidden" name="scopeId" value={scope.id} />
                     <input type="hidden" name="courseId" value={course.id} />
@@ -251,7 +277,8 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     </button>
                   </form>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {visibleCourses.length === 0 ? (
               <p className="mt-5 text-sm text-[var(--ink-soft)]">
