@@ -115,13 +115,13 @@ export async function loadWorkbookFromExcel(workbookPath: string) {
   const activeScope = await db.projectScope.upsert({
     where: { code: "01" },
     update: {
-      name: "Scope 1",
-      description: "Current active scope with selected courses from the imported catalog.",
+      name: "PO 1",
+      description: "Current active purchase order with selected courses from the imported catalog.",
     },
     create: {
       code: "01",
-      name: "Scope 1",
-      description: "Current active scope with selected courses from the imported catalog.",
+      name: "PO 1",
+      description: "Current active purchase order with selected courses from the imported catalog.",
       invoicedAmount: new Prisma.Decimal(0),
       collectedAmount: new Prisma.Decimal(0),
       plannedCompletion: new Prisma.Decimal(35),

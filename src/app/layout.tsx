@@ -72,8 +72,8 @@ export default async function RootLayout({
 
   const navigationItems = [
     { href: "/", label: localeText.nav.home },
-    { href: "/project-structure", label: localeText.nav.projectScope },
     { href: "/packages", label: localeText.nav.packages },
+    { href: "/project-structure", label: localeText.nav.projectScope },
     { href: "/courses", label: localeText.nav.courses },
     { href: "/course-runs", label: localeText.nav.courseRuns },
     { href: "/project-details", label: localeText.nav.projectDetails },

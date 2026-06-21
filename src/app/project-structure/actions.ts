@@ -32,7 +32,7 @@ function parseScopeForm(formData: FormData) {
   const file = formData.get("file");
 
   if (!code || !nameAr || !nameEn) {
-    throw new Error("Scope code, Arabic name, and English name are required.");
+    throw new Error("Purchase order code, Arabic name, and English name are required.");
   }
 
   return {
