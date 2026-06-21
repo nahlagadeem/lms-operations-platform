@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import { getAttendanceRate, getTrainingCapacity } from "@/server/services/capacity-service";
 
 type CourseRunDetailPageProps = {
   params: Promise<{
@@ -101,6 +102,12 @@ function detailText(locale: "en" | "ar") {
       completionRule: "يعتبر الحاضر مؤهلاً عند حضور 75% على الأقل من الجلسات المسجلة.",
       eligibleCount: "الحضور المؤهلون",
       threshold: "حد الاكتمال",
+      capacityTitle: "سعة التدريب",
+      capacityDescription: "المقاعد التقديرية مقابل المقاعد المؤكدة لهذا التدريب.",
+      utilizationPct: "نسبة الاستغلال %",
+      remainingCapacity: "السعة المتبقية",
+      fullyBooked: "محجوز بالكامل",
+      overCapacityBy: "التجاوز بمقدار",
       documents: "المستندات",
       documentVault: "المستندات",
       documentVaultDescription: "ارفع واحفظ المستندات المتعلقة بهذا البرنامج التدريبي الجاري مثل الحضور والتقارير والشهادات والصور.",
@@ -189,6 +196,12 @@ function detailText(locale: "en" | "ar") {
     completionRule: "An attendee is ready to complete the training after attending at least 75% of its sessions.",
     eligibleCount: "Eligible attendees",
     threshold: "Completion threshold",
+    capacityTitle: "Training Capacity",
+    capacityDescription: "Estimated seats versus actual confirmed seats for this training.",
+    utilizationPct: "Utilization %",
+    remainingCapacity: "Remaining Capacity",
+    fullyBooked: "Fully Booked",
+    overCapacityBy: "Over Capacity by",
     documents: "Documents",
     documentVault: "Documents",
     documentVaultDescription: "Upload training files such as attendance sheets, reports, certificates, and photos.",
@@ -431,6 +444,11 @@ export default async function CourseRunDetailPage({
   if (!run) notFound();
 
   const training = getTrainingBusinessFields(run);
+  const trainingCapacity = getTrainingCapacity({
+    plannedSeats: run.plannedSeats,
+    confirmedSeats: run.confirmedSeats,
+  });
+  const attendanceSummary = await getAttendanceRate(run.id);
 
   const attendanceByParticipant = new Map<
     string,
@@ -856,18 +874,42 @@ export default async function CourseRunDetailPage({
               />
               <ProgressCard
                 label={details.plannedSeats}
-                value={
-                  run.projectScopeCourse?.estimatedSeats !== null &&
-                  run.projectScopeCourse?.estimatedSeats !== undefined
-                    ? formatNumber(run.projectScopeCourse.estimatedSeats, numberLocale)
-                    : "-"
-                }
+                value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
                 tone="ink"
               />
               <ProgressCard
                 label={details.confirmedSeats}
-                value={formatNumber(training.actualSeats, numberLocale)}
+                value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
                 tone="sand"
+              />
+              <ProgressCard
+                label={details.utilizationPct}
+                value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                  trainingCapacity.utilizationPct,
+                )}%`}
+                tone="teal"
+              />
+              <ProgressCard
+                label={details.remainingCapacity}
+                value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
+                tone="ink"
+              />
+              <ProgressCard
+                label={details.fullyBooked}
+                value={trainingCapacity.fullyBooked ? details.yes : details.no}
+                tone="sand"
+              />
+              <ProgressCard
+                label={details.overCapacityBy}
+                value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
+                tone="teal"
+              />
+              <ProgressCard
+                label={details.attendanceRate}
+                value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                  attendanceSummary.attendanceRate,
+                )}%`}
+                tone="ink"
               />
               <ProgressCard
                 label={details.courseStatus}
