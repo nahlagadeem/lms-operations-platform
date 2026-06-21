@@ -22,7 +22,7 @@ const projectScopes = [
     id: "scope-01",
     code: "01",
     name: "Western Region Training Delivery",
-    description: "Dummy project scope covering Makkah, Madinah, Tabuk, and nearby delivery locations.",
+    description: "Dummy purchase order covering Makkah, Madinah, Tabuk, and nearby delivery locations.",
     budget: 1_800_000,
     invoiced: 840_000,
     collected: 700_000,
@@ -31,7 +31,7 @@ const projectScopes = [
     id: "scope-02",
     code: "02",
     name: "Eastern & Northern Region Training Delivery",
-    description: "Dummy project scope covering Dammam, Hail, Arar, and Sakaka delivery locations.",
+    description: "Dummy purchase order covering Dammam, Hail, Arar, and Sakaka delivery locations.",
     budget: 1_500_000,
     invoiced: 700_000,
     collected: 580_000,
@@ -40,7 +40,7 @@ const projectScopes = [
     id: "scope-03",
     code: "03",
     name: "Southern & Central Region Training Delivery",
-    description: "Dummy project scope covering Jazan, Najran, Al Baha, Buraydah, and Abha delivery locations.",
+    description: "Dummy purchase order covering Jazan, Najran, Al Baha, Buraydah, and Abha delivery locations.",
     budget: 1_200_000,
     invoiced: 560_000,
     collected: 470_000,
@@ -57,7 +57,7 @@ const providerDefinitions = [
     contactPerson: "Hassan Al-Qahtani",
     email: "hassan.alqahtani@riyadhacademy.sa",
     phone: "+966 50 421 7780",
-    notes: "Assigned to Scope 1.",
+    notes: "Assigned to PO 1.",
   },
   {
     key: "gulf-pdc",
@@ -68,7 +68,7 @@ const providerDefinitions = [
     contactPerson: "Maha Al-Salem",
     email: "maha.alsalem@gulfpdc.sa",
     phone: "+966 55 733 2148",
-    notes: "Assigned to Scope 2.",
+    notes: "Assigned to PO 2.",
   },
   {
     key: "al-manar",
@@ -79,7 +79,7 @@ const providerDefinitions = [
     contactPerson: "Omar Al-Farhan",
     email: "omar.alfarhan@almanartraining.sa",
     phone: "+966 56 118 9044",
-    notes: "Assigned to Scope 3.",
+    notes: "Assigned to PO 3.",
   },
 ];
 

@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import { getProjectSummary } from "@/server/services/project-overview-service";
 import {
   formatReportingDate,
@@ -386,7 +387,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ).length;
     return {
       code: scope.code,
-      name: scope.name,
+      name: formatPurchaseOrderTitle(scope, locale),
       completed,
       ongoing,
       total,
@@ -435,7 +436,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
     return {
       id: scope.id,
-      name: locale === "ar" ? scope.nameAr || scope.name : scope.nameEn || scope.name,
+      code: formatPurchaseOrderCode(scope.code, locale),
+      name: formatPurchaseOrderTitle(scope, locale),
       status: scope.isActive ? localeText.projectScopes.active : localeText.projectScopes.inactive,
       courses: scope.selectedCourses.length,
       activeRuns: activeRuns.length,
@@ -498,7 +500,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <tbody>
               {projectScopeSummaryRows.map((scope) => (
                 <tr key={scope.id}>
-                  <td>{scope.name}</td>
+                  <td>
+                    <div className="space-y-1">
+                      <p className="latin-chip">{scope.code}</p>
+                      <p className="font-semibold text-[var(--ink-strong)]">{scope.name}</p>
+                    </div>
+                  </td>
                   <td><span className="status-pill">{scope.status}</span></td>
                   <td>{formatNumber(scope.courses, numberLocale)}</td>
                   <td>{formatNumber(scope.activeRuns, numberLocale)}</td>
@@ -592,11 +599,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <ChartPanel title="Course completion by project scope">
+          <ChartPanel title="Course completion by purchase order">
           {scopeProgress.map((item) => (
             <ProgressRow
               key={item.code}
-              label={`${item.code} ${item.name}`}
+              label={item.name}
               value={item.percent}
               detail={`${formatNumber(item.completed, numberLocale)} of ${formatNumber(item.total, numberLocale)}`}
             />

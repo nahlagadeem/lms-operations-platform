@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import {
   createProjectScope,
   deleteProjectScope,
@@ -255,9 +256,9 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="latin-chip">{scope.code}</p>
+                  <p className="latin-chip">{formatPurchaseOrderCode(scope.code, locale)}</p>
                   <h3 className="mt-4 text-2xl font-semibold text-[var(--ink-strong)]">
-                    {locale === "ar" ? scope.nameAr || scope.name : scope.nameEn || scope.name}
+                    {formatPurchaseOrderTitle(scope, locale)}
                   </h3>
                   <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
                     {scope.description || localeText.projectScopes.description}
@@ -332,7 +333,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                         className="field-input"
                         required
                         dir="rtl"
-                        defaultValue={scope.nameAr || scope.name}
+                        defaultValue={formatPurchaseOrderTitle(scope, "ar")}
                       />
                     </label>
                     <label className="field-shell">
@@ -342,7 +343,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                         className="field-input"
                         required
                         dir="ltr"
-                        defaultValue={scope.nameEn || scope.name}
+                        defaultValue={formatPurchaseOrderTitle(scope, "en")}
                       />
                     </label>
                     <label className="field-shell">

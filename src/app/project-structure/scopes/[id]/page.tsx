@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import {
   assignProjectScopeCourses,
   removeProjectScopeCourse,
@@ -167,7 +168,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const remaining = Math.max(0, budget - invoiced);
   const actualCompletion = Number(scope.actualCompletion ?? 0);
   const plannedCompletion = Number(scope.plannedCompletion ?? 0);
-  const scopeName = locale === "ar" ? scope.nameAr || scope.name : scope.nameEn || scope.name;
+  const scopeName = formatPurchaseOrderTitle(scope, locale);
   const totalCoursePages = Math.max(1, Math.ceil(scope.selectedCourses.length / COURSES_PER_PAGE));
   const safeCoursePage = Math.min(requestedCoursePage, totalCoursePages);
   const visibleCourses = scope.selectedCourses.slice(
@@ -193,6 +194,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
               <span>{localeText.projectScopes.backToScopes}</span>
             </Link>
             <p className="eyebrow">{localeText.projectScopes.title}</p>
+            <p className="latin-chip mt-1">{formatPurchaseOrderCode(scope.code, locale)}</p>
             <h2 className="section-title">{scopeName}</h2>
             <p className="section-copy">
               {localeText.projectScopes.detailDescription}

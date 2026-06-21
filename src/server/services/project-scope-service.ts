@@ -2,6 +2,8 @@ import "server-only";
 
 import { DocumentEntityType, DocumentType } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getLocale } from "@/lib/locale";
+import { formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import { saveDocumentUpload } from "@/server/services/document-upload-service";
 
 export type CreateProjectScopeInput = {
@@ -23,6 +25,7 @@ export type UpdateProjectScopeInput = CreateProjectScopeInput & {
 };
 
 export async function createProjectScope(input: CreateProjectScopeInput) {
+  const locale = await getLocale();
   const createdScope = await db.projectScope.create({
     data: {
       code: input.code,
@@ -46,7 +49,7 @@ export async function createProjectScope(input: CreateProjectScopeInput) {
       entityId: createdScope.id,
       documentType: DocumentType.OTHER,
       file: input.file,
-      contextLabel: `${createdScope.name} document`,
+      contextLabel: `${formatPurchaseOrderTitle(createdScope, locale)} document`,
       notes: input.notes,
     });
   }
@@ -55,6 +58,7 @@ export async function createProjectScope(input: CreateProjectScopeInput) {
 }
 
 export async function updateProjectScope(input: UpdateProjectScopeInput) {
+  const locale = await getLocale();
   const updatedScope = await db.projectScope.update({
     where: { id: input.id },
     data: {
@@ -73,7 +77,7 @@ export async function updateProjectScope(input: UpdateProjectScopeInput) {
       entityId: updatedScope.id,
       documentType: DocumentType.OTHER,
       file: input.file,
-      contextLabel: `${updatedScope.name} document`,
+      contextLabel: `${formatPurchaseOrderTitle(updatedScope, locale)} document`,
       notes: input.notes,
     });
   }
