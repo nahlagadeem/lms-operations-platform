@@ -54,10 +54,10 @@ function detailText(locale: "en" | "ar") {
   return {
     back: "Back to packages",
     title: "Package details",
-    description: "Review the courses, participant targets, and planning values for this package.",
+    description: "Review the courses, attendee targets, and planning values for this package.",
     courseList: "Courses in this package",
     courseCount: "Course count",
-    target: "Target participants",
+    target: "Target attendees",
     discountedValue: "Discounted value",
     code: "Code",
     category: "Category",

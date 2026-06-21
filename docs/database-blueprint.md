@@ -1,13 +1,13 @@
-# LMS Operations Platform Database Blueprint
+# Training Services Management Platform Database Blueprint
 
 ## Purpose
-This system is an internal operations platform for managing a large training/LMS project. It is not a learner-facing LMS. It manages:
+This system is an internal operations platform for managing training services. It is not a learner-facing LMS. It manages:
 
 - package-based course catalogs
-- course scheduling and delivery
-- trainers and providers
+- training scheduling and delivery
+- instructors and vendors
 - locations and cities
-- participant nominations and attendance
+- attendee enrollments and attendance
 - evaluations and quality reports
 - operational status tracking
 - internal reporting and exports
@@ -18,10 +18,23 @@ This system is an internal operations platform for managing a large training/LMS
 
 ## Data Design Principles
 - Separate course catalog from actual course delivery
-- Keep package, course, and course run as different entities
+- Keep package, course, and training as different entities
 - Support operational workflow, not just static lists
 - Make filtering and reporting first-class concerns
 - Keep room for importing Excel data now and scaling later
+
+## BRD terminology and persistence compatibility
+
+The public business hierarchy is **Package → Course → Training → Enrollment**. The existing PostgreSQL schema predates the BRD and retains physical Prisma identifiers such as `CourseRun`, `Participant`, `Nomination`, `Provider`, and `Trainer` to avoid a destructive migration. Application code maps them as follows:
+
+- `CourseRun` → Training (`runCode` → Training Code, `plannedSeats` → Estimated Seats, `confirmedSeats` → Actual Seats)
+- `Participant` → Attendee
+- `Nomination` → Enrollment
+- `Provider` → Vendor
+- `Trainer` → Instructor
+- `AttendanceRecord` → Attendance
+
+The remaining legacy names below describe physical database identifiers, not user-facing terminology.
 
 ## Core Entities
 

@@ -200,7 +200,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
         </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-2">
-          <Link href="/providers" className="jawraa-subcard block p-4 transition hover:border-[var(--brand-yellow-strong)] hover:bg-[var(--brand-yellow-soft)]">
+          <Link href="/vendors" className="jawraa-subcard block p-4 transition hover:border-[var(--brand-yellow-strong)] hover:bg-[var(--brand-yellow-soft)]">
             <p className="font-semibold text-[var(--ink-strong)]">
               {localeText.courses.trainingProviders}
             </p>

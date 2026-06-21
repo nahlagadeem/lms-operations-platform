@@ -2,15 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DocumentEntityType, DocumentType } from "@prisma/client";
 import {
-  assignTrainerToCourseRun,
-  createParticipantAndNominate,
-  nominateExistingParticipant,
+  assignInstructorToTraining,
+  createAttendeeAndEnroll,
+  enrollExistingAttendee,
   recordAttendance,
-  removeTrainerFromCourseRun,
-  updateCourseRun,
-  updateNominationStatus,
+  removeInstructorFromTraining,
+  updateEnrollmentStatus,
+  updateTraining,
 } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
+import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 
 type CourseRunDetailPageProps = {
@@ -34,22 +35,22 @@ function formatDateInput(value: Date | null) {
 function detailText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      title: "تفاصيل التشغيل",
+      title: "تفاصيل التدريب",
       description:
-        "راجع معلومات التشغيل الحالية، ثم استخدم الأزرار العلوية لتعديل التشغيل أو إضافة مدرب أو إدارة الترشيحات.",
-      edit: "تعديل التشغيل",
-      editButton: "فتح تعديل التشغيل",
+        "راجع معلومات التدريب الحالية، ثم استخدم الأزرار العلوية لتعديل التدريب أو إضافة مدرب أو إدارة التسجيلات.",
+      edit: "تعديل التدريب",
+      editButton: "فتح تعديل التدريب",
       addTrainer: "إضافة مدرب",
       addTrainerButton: "فتح إضافة مدرب",
-      addNomination: "إضافة ترشيح",
-      addNominationButton: "فتح إضافة ترشيح",
+      addNomination: "إضافة تسجيل",
+      addNominationButton: "فتح إضافة تسجيل",
       addAttendance: "تسجيل حضور",
       addAttendanceButton: "فتح تسجيل الحضور",
       summary: "الملخص",
       progress: "مؤشرات التقدم",
-      provider: "الجهة المنفذة",
+      provider: "المورد",
       location: "الموقع",
-      chooseProvider: "اختر جهة",
+      chooseProvider: "اختر موردا",
       chooseLocation: "اختر موقع",
       save: "حفظ التعديلات",
       back: "العودة",
@@ -63,11 +64,11 @@ function detailText(locale: "en" | "ar") {
       primaryTrainer: "مدرب رئيسي",
       noTrainers: "لا يوجد مدربون مسندون حتى الآن",
       remove: "إزالة",
-      nominations: "الترشيحات",
-      currentNominations: "الترشيحات الحالية",
-      chooseParticipant: "اختر مستفيداً",
-      nominationStatus: "حالة الترشيح",
-      participantType: "نوع المستفيد",
+      nominations: "التسجيلات",
+      currentNominations: "التسجيلات الحالية",
+      chooseParticipant: "اختر أحد الحضور",
+      nominationStatus: "حالة التسجيل",
+      participantType: "نوع الحضور",
       participantNameAr: "الاسم بالعربية",
       participantNameEn: "الاسم بالإنجليزية",
       participantEmail: "البريد الإلكتروني",
@@ -75,17 +76,17 @@ function detailText(locale: "en" | "ar") {
       participantOrg: "الجهة",
       participantJobTitle: "المسمى الوظيفي",
       participantNationalId: "رقم الهوية / الإقامة",
-      existingParticipant: "ترشيح من سجل موجود",
-      quickCreateParticipant: "إضافة مستفيد جديد وترشيحه",
-      noNominations: "لا توجد ترشيحات حتى الآن",
-      saveNomination: "حفظ الترشيح",
-      createAndNominate: "إضافة وترشيح",
+      existingParticipant: "تسجيل حضور موجود",
+      quickCreateParticipant: "إضافة حضور جديد وتسجيله",
+      noNominations: "لا توجد تسجيلات حتى الآن",
+      saveNomination: "حفظ التسجيل",
+      createAndNominate: "إضافة وتسجيل",
       attendance: "الحضور",
       attendanceLog: "سجل الحضور",
       noAttendance: "لا توجد سجلات حضور حتى الآن",
       attendanceDate: "تاريخ الحضور",
       attendanceStatus: "حالة الحضور",
-      chooseAttendee: "اختر متدرباً مرشحاً",
+      chooseAttendee: "اختر من الحضور المسجلين",
       saveAttendance: "حفظ الحضور",
       recordedAttendance: "الحضور المسجل",
       completion: "الاكتمال والأهلية",
@@ -96,8 +97,8 @@ function detailText(locale: "en" | "ar") {
       totalSessions: "إجمالي الجلسات",
       completionEligible: "مؤهل للاكتمال",
       certificateEligible: "مؤهل للشهادة",
-      completionRule: "يعتبر المتدرب مؤهلاً عند حضور 75% على الأقل من الجلسات المسجلة.",
-      eligibleCount: "المؤهلون",
+      completionRule: "يعتبر الحاضر مؤهلاً عند حضور 75% على الأقل من الجلسات المسجلة.",
+      eligibleCount: "الحضور المؤهلون",
       threshold: "حد الاكتمال",
       documents: "المستندات",
       documentVault: "المستندات",
@@ -106,56 +107,56 @@ function detailText(locale: "en" | "ar") {
       documentFile: "الملف",
       documentNotes: "وصف أو ملاحظات",
       uploadDocument: "رفع المستند",
-      noDocuments: "لا توجد مستندات مرفوعة لهذا التشغيل حتى الآن",
+      noDocuments: "لا توجد مستندات مرفوعة لهذا التدريب حتى الآن",
       download: "تحميل",
       fileSize: "حجم الملف",
       version: "الإصدار",
       attendanceRequired: "يتطلب حضور",
       certificateRequired: "يتطلب شهادة",
-      confirmedSeats: "المقاعد المؤكدة",
+      confirmedSeats: "المقاعد الفعلية",
       yes: "نعم",
       no: "لا",
       close: "إغلاق",
-      plannedSeats: "المقاعد المخططة",
-      courseStatus: "حالة التشغيل",
+      plannedSeats: "المقاعد التقديرية",
+      courseStatus: "حالة التدريب",
     };
   }
 
   return {
-    title: "Active Course Details",
+    title: "Training Details",
     description:
-      "Review the current delivery information first, then use the top actions to edit the delivery, add a trainer, or manage nominations.",
-    edit: "Edit Course",
-    editButton: "Edit Course",
-    addTrainer: "Add Trainer",
-    addTrainerButton: "Add Trainer",
-    addNomination: "Add Registration",
-    addNominationButton: "Add Registration",
+      "Review the current training information, then use the top actions to edit the training, add an instructor, or manage enrollments.",
+    edit: "Edit Training",
+    editButton: "Edit Training",
+    addTrainer: "Add Instructor",
+    addTrainerButton: "Add Instructor",
+    addNomination: "Add Enrollment",
+    addNominationButton: "Add Enrollment",
     addAttendance: "Add Attendance",
     addAttendanceButton: "Add Attendance",
     summary: "Summary",
     progress: "Progress indicators",
-    provider: "Training Provider",
+    provider: "Vendor",
     location: "Location",
-    chooseProvider: "Choose a training provider",
+    chooseProvider: "Choose a vendor",
     chooseLocation: "Choose a location",
     save: "Save Changes",
     back: "Back",
     notAssigned: "Not assigned yet",
     noNotes: "No notes provided",
-    trainerAssignments: "Trainer assignments",
-    currentTrainers: "Current trainers",
-    chooseTrainer: "Choose a trainer",
-    trainerRole: "Trainer role",
-    trainerRolePlaceholder: "Lead trainer or supporting trainer",
-    primaryTrainer: "Primary trainer",
-    noTrainers: "No trainers are assigned yet",
+    trainerAssignments: "Instructor assignments",
+    currentTrainers: "Current instructors",
+    chooseTrainer: "Choose an instructor",
+    trainerRole: "Instructor role",
+    trainerRolePlaceholder: "Lead instructor or supporting instructor",
+    primaryTrainer: "Primary instructor",
+    noTrainers: "No instructors are assigned yet",
     remove: "Remove",
-    nominations: "Registrations",
-    currentNominations: "Current Registrations",
-    chooseParticipant: "Choose a participant",
-    nominationStatus: "Registration status",
-    participantType: "Participant type",
+    nominations: "Enrollments",
+    currentNominations: "Current Enrollments",
+    chooseParticipant: "Choose an attendee",
+    nominationStatus: "Enrollment status",
+    participantType: "Attendee type",
     participantNameAr: "Arabic name",
     participantNameEn: "English name",
     participantEmail: "Email",
@@ -163,17 +164,17 @@ function detailText(locale: "en" | "ar") {
     participantOrg: "Organization",
     participantJobTitle: "Job title",
     participantNationalId: "National ID / Iqama",
-    existingParticipant: "Register an existing participant",
-    quickCreateParticipant: "Add a new participant and register",
-    noNominations: "No participants are registered yet. Click Add Registration to get started.",
-    saveNomination: "Save Registration",
-    createAndNominate: "Add and Register",
+    existingParticipant: "Enroll an existing attendee",
+    quickCreateParticipant: "Add a new attendee and enroll",
+    noNominations: "No attendees are enrolled yet. Click Add Enrollment to get started.",
+    saveNomination: "Save Enrollment",
+    createAndNominate: "Add and Enroll",
     attendance: "Attendance",
     attendanceLog: "Attendance log",
     noAttendance: "No attendance entries have been added yet. Click Add Attendance to get started.",
     attendanceDate: "Attendance date",
     attendanceStatus: "Attendance status",
-    chooseAttendee: "Choose a nominated attendee",
+    chooseAttendee: "Choose an enrolled attendee",
     saveAttendance: "Save attendance",
     recordedAttendance: "Attendance entries",
     completion: "Completion and eligibility",
@@ -184,28 +185,28 @@ function detailText(locale: "en" | "ar") {
     totalSessions: "Total sessions",
     completionEligible: "Completion eligible",
     certificateEligible: "Ready to issue certificate",
-    completionRule: "A participant is ready to complete the course after attending at least 75% of the course sessions.",
-    eligibleCount: "Eligible participants",
+    completionRule: "An attendee is ready to complete the training after attending at least 75% of its sessions.",
+    eligibleCount: "Eligible attendees",
     threshold: "Completion threshold",
     documents: "Documents",
     documentVault: "Documents",
-    documentVaultDescription: "Upload files related to this active course, such as attendance sheets, reports, certificates, and photos.",
+    documentVaultDescription: "Upload training files such as attendance sheets, reports, certificates, and photos.",
     documentType: "Document type",
     documentFile: "File",
     documentNotes: "Description or notes",
     uploadDocument: "Upload File",
-    noDocuments: "No files have been uploaded for this active course yet.",
+    noDocuments: "No files have been uploaded for this training yet.",
     download: "Download",
     fileSize: "File size",
     version: "Version",
     attendanceRequired: "Attendance required",
     certificateRequired: "Issue certificate",
-    confirmedSeats: "Confirmed seats",
+    confirmedSeats: "Actual Seats",
     yes: "Yes",
     no: "No",
     close: "Close",
-    plannedSeats: "Planned seats",
-    courseStatus: "Course Status",
+    plannedSeats: "Estimated Seats",
+    courseStatus: "Training Status",
   };
 }
 
@@ -222,7 +223,7 @@ function nominationStatusText(locale: "en" | "ar") {
   }
 
   return {
-    NOMINATED: "Nominated",
+    NOMINATED: "Enrolled",
     CONTACTED: "Contacted",
     CONFIRMED: "Confirmed",
     DECLINED: "Declined",
@@ -243,7 +244,7 @@ function participantTypeText(locale: "en" | "ar") {
   }
 
   return {
-    STUDENT: "Participant",
+    STUDENT: "Attendee",
     TEACHER: "Teacher",
     OWNER: "Owner",
     COORDINATOR: "Coordinator",
@@ -311,8 +312,8 @@ function formatFileSize(bytes: number | null, locale: string) {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
 }
 
-function panelHref(id: string, panel: "edit" | "trainer" | "nomination" | "attendance") {
-  return `/course-runs/${id}?panel=${panel}`;
+function panelHref(id: string, panel: "edit" | "instructor" | "enrollment" | "attendance") {
+  return `/trainings/${id}?panel=${panel}`;
 }
 
 export default async function CourseRunDetailPage({
@@ -323,8 +324,8 @@ export default async function CourseRunDetailPage({
   const query = (await searchParams) ?? {};
   const openPanel =
     query.panel === "edit" ||
-    query.panel === "trainer" ||
-    query.panel === "nomination" ||
+    query.panel === "instructor" ||
+    query.panel === "enrollment" ||
     query.panel === "attendance"
       ? query.panel
       : "";
@@ -412,6 +413,8 @@ export default async function CourseRunDetailPage({
 
   if (!run) notFound();
 
+  const training = getTrainingBusinessFields(run);
+
   const attendanceByParticipant = new Map<
     string,
     {
@@ -471,7 +474,7 @@ export default async function CourseRunDetailPage({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Link
-              href="/course-runs"
+              href="/trainings"
               className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
               <span aria-hidden="true">←</span>
@@ -479,7 +482,7 @@ export default async function CourseRunDetailPage({
             </Link>
             <p className="eyebrow">{details.title}</p>
             <h2 className="section-title">
-              {run.runCode} | {run.course.nameEn || run.course.nameAr}
+              {training.trainingCode} | {run.course.nameEn || run.course.nameAr}
             </h2>
             <p className="section-copy">{details.description}</p>
           </div>
@@ -489,13 +492,13 @@ export default async function CourseRunDetailPage({
               {details.edit}
             </Link>
             <Link
-              href={panelHref(run.id, "trainer")}
+              href={panelHref(run.id, "instructor")}
               className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
             >
               {details.addTrainer}
             </Link>
             <Link
-              href={panelHref(run.id, "nomination")}
+              href={panelHref(run.id, "enrollment")}
               className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
             >
               {details.addNomination}
@@ -581,11 +584,11 @@ export default async function CourseRunDetailPage({
                       </p>
                     </div>
 
-                    <form action={updateNominationStatus} className="w-full sm:w-auto">
-                      <input type="hidden" name="courseRunId" value={run.id} />
-                      <input type="hidden" name="nominationId" value={nomination.id} />
+                    <form action={updateEnrollmentStatus} className="w-full sm:w-auto">
+                      <input type="hidden" name="trainingId" value={run.id} />
+                      <input type="hidden" name="enrollmentId" value={nomination.id} />
                       <select
-                        name="nominationStatus"
+                        name="enrollmentStatus"
                         defaultValue={nomination.nominationStatus}
                         className="field-input min-w-[14rem]"
                       >
@@ -770,9 +773,9 @@ export default async function CourseRunDetailPage({
                       ) : null}
                     </div>
 
-                    <form action={removeTrainerFromCourseRun}>
-                      <input type="hidden" name="courseRunId" value={run.id} />
-                      <input type="hidden" name="trainerId" value={assignment.trainerId} />
+                    <form action={removeInstructorFromTraining}>
+                      <input type="hidden" name="trainingId" value={run.id} />
+                      <input type="hidden" name="instructorId" value={assignment.trainerId} />
                       <button type="submit" className="secondary-button w-full sm:w-auto">
                         {details.remove}
                       </button>
@@ -821,15 +824,15 @@ export default async function CourseRunDetailPage({
               <ProgressCard
                 label={details.plannedSeats}
                 value={
-                  run.plannedSeats !== null
-                    ? formatNumber(run.plannedSeats, numberLocale)
+                  training.estimatedSeats !== null
+                    ? formatNumber(training.estimatedSeats, numberLocale)
                     : "-"
                 }
                 tone="ink"
               />
               <ProgressCard
                 label={details.confirmedSeats}
-                value={formatNumber(run.confirmedSeats, numberLocale)}
+                value={formatNumber(training.actualSeats, numberLocale)}
                 tone="sand"
               />
               <ProgressCard
@@ -854,7 +857,7 @@ export default async function CourseRunDetailPage({
               className="mt-5 space-y-4"
             >
               <input type="hidden" name="courseRunId" value={run.id} />
-              <input type="hidden" name="returnPath" value={`/course-runs/${run.id}`} />
+              <input type="hidden" name="returnPath" value={`/trainings/${run.id}`} />
 
               <div className="grid gap-4 xl:grid-cols-3">
                 <label className="field-shell">
@@ -946,28 +949,28 @@ export default async function CourseRunDetailPage({
                 <p className="eyebrow">
                   {openPanel === "edit"
                     ? details.edit
-                    : openPanel === "trainer"
+                    : openPanel === "instructor"
                       ? details.addTrainer
                       : details.addNomination}
                 </p>
                 <h3 className="section-title">
                   {openPanel === "edit"
                     ? details.editButton
-                    : openPanel === "trainer"
+                    : openPanel === "instructor"
                       ? details.addTrainerButton
-                      : openPanel === "nomination"
+                      : openPanel === "enrollment"
                         ? details.addNominationButton
                         : details.addAttendanceButton}
                 </h3>
               </div>
-              <Link href={`/course-runs/${run.id}`} className="secondary-button">
+              <Link href={`/trainings/${run.id}`} className="secondary-button">
                 {details.close}
               </Link>
             </div>
 
             {openPanel === "edit" ? (
-              <form action={updateCourseRun} className="space-y-4">
-                <input type="hidden" name="courseRunId" value={run.id} />
+              <form action={updateTraining} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
@@ -1023,7 +1026,7 @@ export default async function CourseRunDetailPage({
                   <label className="field-shell">
                     <span className="field-label">{details.provider}</span>
                     <select
-                      name="providerId"
+                      name="vendorId"
                       className="field-input"
                       defaultValue={run.providerId || ""}
                     >
@@ -1057,7 +1060,7 @@ export default async function CourseRunDetailPage({
                   <span className="field-label">{localeText.courseRuns.plannedSeats}</span>
                   <input
                     type="number"
-                    name="plannedSeats"
+                    name="estimatedSeats"
                     min="0"
                     step="1"
                     className="field-input"
@@ -1079,13 +1082,13 @@ export default async function CourseRunDetailPage({
                   {details.save}
                 </button>
               </form>
-            ) : openPanel === "trainer" ? (
-              <form action={assignTrainerToCourseRun} className="space-y-4">
-                <input type="hidden" name="courseRunId" value={run.id} />
+            ) : openPanel === "instructor" ? (
+              <form action={assignInstructorToTraining} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
 
                 <label className="field-shell">
                   <span className="field-label">{details.addTrainer}</span>
-                  <select name="trainerId" className="field-input" defaultValue="">
+                  <select name="instructorId" className="field-input" defaultValue="">
                     <option value="" disabled>
                       {details.chooseTrainer}
                     </option>
@@ -1116,10 +1119,10 @@ export default async function CourseRunDetailPage({
                   {details.addTrainer}
                 </button>
               </form>
-            ) : openPanel === "nomination" ? (
+            ) : openPanel === "enrollment" ? (
               <div className="space-y-6">
-                <form action={nominateExistingParticipant} className="space-y-4">
-                  <input type="hidden" name="courseRunId" value={run.id} />
+                <form action={enrollExistingAttendee} className="space-y-4">
+                  <input type="hidden" name="trainingId" value={run.id} />
 
                   <div>
                     <p className="eyebrow">{details.existingParticipant}</p>
@@ -1127,7 +1130,7 @@ export default async function CourseRunDetailPage({
 
                   <label className="field-shell">
                     <span className="field-label">{details.chooseParticipant}</span>
-                    <select name="participantId" className="field-input" defaultValue="">
+                    <select name="attendeeId" className="field-input" defaultValue="">
                       <option value="" disabled>
                         {details.chooseParticipant}
                       </option>
@@ -1143,7 +1146,7 @@ export default async function CourseRunDetailPage({
                     <label className="field-shell">
                       <span className="field-label">{details.nominationStatus}</span>
                       <select
-                        name="nominationStatus"
+                        name="enrollmentStatus"
                         className="field-input"
                         defaultValue="NOMINATED"
                       >
@@ -1173,8 +1176,8 @@ export default async function CourseRunDetailPage({
 
                 <div className="h-px bg-[var(--line-soft)]" />
 
-                <form action={createParticipantAndNominate} className="space-y-4">
-                  <input type="hidden" name="courseRunId" value={run.id} />
+                <form action={createAttendeeAndEnroll} className="space-y-4">
+                  <input type="hidden" name="trainingId" value={run.id} />
 
                   <div>
                     <p className="eyebrow">{details.quickCreateParticipant}</p>
@@ -1184,7 +1187,7 @@ export default async function CourseRunDetailPage({
                     <label className="field-shell">
                       <span className="field-label">{details.participantType}</span>
                       <select
-                        name="participantType"
+                        name="attendeeType"
                         className="field-input"
                         defaultValue="STUDENT"
                       >
@@ -1199,7 +1202,7 @@ export default async function CourseRunDetailPage({
                     <label className="field-shell">
                       <span className="field-label">{details.nominationStatus}</span>
                       <select
-                        name="nominationStatus"
+                        name="enrollmentStatus"
                         className="field-input"
                         defaultValue="NOMINATED"
                       >
@@ -1270,11 +1273,11 @@ export default async function CourseRunDetailPage({
               </div>
             ) : (
               <form action={recordAttendance} className="space-y-4">
-                <input type="hidden" name="courseRunId" value={run.id} />
+                <input type="hidden" name="trainingId" value={run.id} />
 
                 <label className="field-shell">
                   <span className="field-label">{details.chooseAttendee}</span>
-                  <select name="participantId" className="field-input" defaultValue="">
+                  <select name="attendeeId" className="field-input" defaultValue="">
                     <option value="" disabled>
                       {details.chooseAttendee}
                     </option>

@@ -26,7 +26,7 @@ const latinFont = IBM_Plex_Sans({
 export const metadata: Metadata = {
   title: "JAWRAA",
   description:
-    "Training project dashboard for courses, participants, providers, locations, and reports.",
+    "Training services management platform for courses, trainings, attendees, vendors, locations, and reports.",
   icons: {
     icon: "/jawraa-logo.svg",
     shortcut: "/jawraa-logo.svg",
@@ -75,7 +75,7 @@ export default async function RootLayout({
     { href: "/packages", label: localeText.nav.packages },
     { href: "/project-structure", label: localeText.nav.projectScope },
     { href: "/courses", label: localeText.nav.courses },
-    { href: "/course-runs", label: localeText.nav.courseRuns },
+    { href: "/trainings", label: localeText.nav.courseRuns },
     { href: "/project-details", label: localeText.nav.projectDetails },
   ];
 

@@ -14,7 +14,7 @@ function safeReturnPath(value: string, courseRunId: string) {
     return value;
   }
 
-  return courseRunId ? `/course-runs/${courseRunId}` : "/course-runs";
+  return courseRunId ? `/trainings/${courseRunId}` : "/trainings";
 }
 
 function redirectWithStatus(request: NextRequest, returnPath: string, status: string) {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   const contentType = request.headers.get("content-type") || "";
 
   if (!contentType.includes("multipart/form-data")) {
-    return redirectWithStatus(request, "/course-runs", "invalid");
+    return redirectWithStatus(request, "/trainings", "invalid");
   }
 
   let formData: FormData;
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     formData = await request.formData();
   } catch {
-    return redirectWithStatus(request, "/course-runs", "invalid");
+    return redirectWithStatus(request, "/trainings", "invalid");
   }
 
   const courseRunId = normalizeText(formData.get("courseRunId"));
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!runExists) {
-    return redirectWithStatus(request, "/course-runs", "missing");
+    return redirectWithStatus(request, "/trainings", "missing");
   }
 
   try {
@@ -68,14 +68,14 @@ export async function POST(request: NextRequest) {
       entityId: courseRunId,
       documentType,
       file,
-      contextLabel: "Active course file",
+      contextLabel: "Training file",
       notes,
     });
   } catch {
     return redirectWithStatus(request, returnPath, "invalid");
   }
 
-  revalidatePath("/course-runs");
+  revalidatePath("/trainings");
   revalidatePath(returnPath);
 
   return NextResponse.redirect(new URL(returnPath, request.url), 303);

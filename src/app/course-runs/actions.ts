@@ -2,15 +2,13 @@
 
 import {
   AttendanceStatus,
-  NominationStatus,
-  ParticipantType,
-  CourseRunStatus,
   DeliveryMode,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
-import * as courseRunService from "@/server/services/course-run-service";
+import { AttendeeType, EnrollmentStatus, TrainingStatus } from "@/lib/brd-terminology";
+import * as trainingService from "@/server/services/training-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -34,22 +32,22 @@ function parseOptionalDate(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export async function createCourseRun(formData: FormData) {
+export async function createTraining(formData: FormData) {
   await requireAuth();
 
   const courseId = normalizeText(formData.get("courseId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
-  const status = normalizeText(formData.get("status")) as CourseRunStatus;
+  const status = normalizeText(formData.get("status")) as TrainingStatus;
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
-  const plannedSeats = parseOptionalInt(normalizeText(formData.get("plannedSeats")));
+  const plannedSeats = parseOptionalInt(normalizeText(formData.get("estimatedSeats")));
   const notes = normalizeText(formData.get("notes"));
 
   if (!courseId || !deliveryMode || !status) {
     throw new Error("Please choose a course and try again.");
   }
 
-  const createdRun = await courseRunService.createCourseRun({
+  const createdRun = await trainingService.createTraining({
     courseId,
     deliveryMode,
     status,
@@ -60,28 +58,28 @@ export async function createCourseRun(formData: FormData) {
   });
 
   revalidatePath(`/courses/${courseId}`);
-  revalidatePath("/course-runs");
-  redirect(`/course-runs/${createdRun.id}`);
+  revalidatePath("/trainings");
+  redirect(`/trainings/${createdRun.id}`);
 }
 
-export async function updateCourseRun(formData: FormData) {
+export async function updateTraining(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("courseRunId"));
-  const providerId = normalizeText(formData.get("providerId"));
+  const courseRunId = normalizeText(formData.get("trainingId"));
+  const providerId = normalizeText(formData.get("vendorId"));
   const locationId = normalizeText(formData.get("locationId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
-  const status = normalizeText(formData.get("status")) as CourseRunStatus;
+  const status = normalizeText(formData.get("status")) as TrainingStatus;
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
-  const plannedSeats = parseOptionalInt(normalizeText(formData.get("plannedSeats")));
+  const plannedSeats = parseOptionalInt(normalizeText(formData.get("estimatedSeats")));
   const notes = normalizeText(formData.get("notes"));
 
   if (!courseRunId || !deliveryMode || !status) {
-    throw new Error("Please complete the required course details.");
+    throw new Error("Please complete the required training details.");
   }
 
-  await courseRunService.updateCourseRun({
+  await trainingService.updateTraining({
     courseRunId,
     providerId,
     locationId,
@@ -93,85 +91,85 @@ export async function updateCourseRun(formData: FormData) {
     notes,
   });
 
-  revalidatePath("/course-runs");
-  revalidatePath(`/course-runs/${courseRunId}`);
-  redirect(`/course-runs/${courseRunId}`);
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${courseRunId}`);
+  redirect(`/trainings/${courseRunId}`);
 }
 
-export async function assignTrainerToCourseRun(formData: FormData) {
+export async function assignInstructorToTraining(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("courseRunId"));
-  const trainerId = normalizeText(formData.get("trainerId"));
+  const courseRunId = normalizeText(formData.get("trainingId"));
+  const trainerId = normalizeText(formData.get("instructorId"));
   const role = normalizeText(formData.get("role"));
   const isPrimary = normalizeText(formData.get("isPrimary")) === "true";
 
   if (!courseRunId || !trainerId) {
-    throw new Error("Missing trainer assignment fields.");
+    throw new Error("Missing instructor assignment fields.");
   }
 
-  await courseRunService.assignTrainerToCourseRun({
+  await trainingService.assignInstructorToTraining({
     courseRunId,
     trainerId,
     role,
     isPrimary,
   });
 
-  revalidatePath("/course-runs");
-  revalidatePath(`/course-runs/${courseRunId}`);
-  redirect(`/course-runs/${courseRunId}`);
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${courseRunId}`);
+  redirect(`/trainings/${courseRunId}`);
 }
 
-export async function removeTrainerFromCourseRun(formData: FormData) {
+export async function removeInstructorFromTraining(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("courseRunId"));
-  const trainerId = normalizeText(formData.get("trainerId"));
+  const courseRunId = normalizeText(formData.get("trainingId"));
+  const trainerId = normalizeText(formData.get("instructorId"));
 
   if (!courseRunId || !trainerId) {
-    throw new Error("Missing trainer removal fields.");
+    throw new Error("Missing instructor removal fields.");
   }
 
-  await courseRunService.removeTrainerFromCourseRun(courseRunId, trainerId);
+  await trainingService.removeInstructorFromTraining(courseRunId, trainerId);
 
-  revalidatePath("/course-runs");
-  revalidatePath(`/course-runs/${courseRunId}`);
-  redirect(`/course-runs/${courseRunId}`);
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${courseRunId}`);
+  redirect(`/trainings/${courseRunId}`);
 }
 
-export async function nominateExistingParticipant(formData: FormData) {
+export async function enrollExistingAttendee(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("courseRunId"));
-  const participantId = normalizeText(formData.get("participantId"));
+  const courseRunId = normalizeText(formData.get("trainingId"));
+  const participantId = normalizeText(formData.get("attendeeId"));
   const nominationStatus = normalizeText(
-    formData.get("nominationStatus"),
-  ) as NominationStatus;
+    formData.get("enrollmentStatus"),
+  ) as EnrollmentStatus;
   const notes = normalizeText(formData.get("notes"));
 
   if (!courseRunId || !participantId || !nominationStatus) {
-    throw new Error("Missing nomination fields.");
+    throw new Error("Missing enrollment fields.");
   }
 
-  await courseRunService.nominateExistingParticipant({
+  await trainingService.enrollExistingAttendee({
     courseRunId,
     participantId,
     nominationStatus,
     notes,
   });
 
-  revalidatePath("/course-runs");
-  revalidatePath(`/course-runs/${courseRunId}`);
-  redirect(`/course-runs/${courseRunId}`);
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${courseRunId}`);
+  redirect(`/trainings/${courseRunId}`);
 }
 
-export async function createParticipantAndNominate(formData: FormData) {
+export async function createAttendeeAndEnroll(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("courseRunId"));
+  const courseRunId = normalizeText(formData.get("trainingId"));
   const participantType = normalizeText(
-    formData.get("participantType"),
-  ) as ParticipantType;
+    formData.get("attendeeType"),
+  ) as AttendeeType;
   const fullNameAr = normalizeText(formData.get("fullNameAr"));
   const fullNameEn = normalizeText(formData.get("fullNameEn"));
   const email = normalizeText(formData.get("email"));
@@ -180,15 +178,15 @@ export async function createParticipantAndNominate(formData: FormData) {
   const jobTitle = normalizeText(formData.get("jobTitle"));
   const nationalIdOrIqama = normalizeText(formData.get("nationalIdOrIqama"));
   const nominationStatus = normalizeText(
-    formData.get("nominationStatus"),
-  ) as NominationStatus;
+    formData.get("enrollmentStatus"),
+  ) as EnrollmentStatus;
   const notes = normalizeText(formData.get("notes"));
 
   if (!courseRunId || !participantType || !fullNameAr || !nominationStatus) {
-    throw new Error("Missing participant nomination fields.");
+    throw new Error("Missing attendee enrollment fields.");
   }
 
-  await courseRunService.createParticipantAndNominate({
+  await trainingService.createAttendeeAndEnroll({
     courseRunId,
     participantType,
     fullNameAr,
@@ -202,40 +200,40 @@ export async function createParticipantAndNominate(formData: FormData) {
     notes,
   });
 
-  revalidatePath("/course-runs");
-  revalidatePath(`/course-runs/${courseRunId}`);
-  redirect(`/course-runs/${courseRunId}`);
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${courseRunId}`);
+  redirect(`/trainings/${courseRunId}`);
 }
 
-export async function updateNominationStatus(formData: FormData) {
+export async function updateEnrollmentStatus(formData: FormData) {
   await requireAuth();
 
-  const nominationId = normalizeText(formData.get("nominationId"));
-  const courseRunId = normalizeText(formData.get("courseRunId"));
+  const nominationId = normalizeText(formData.get("enrollmentId"));
+  const courseRunId = normalizeText(formData.get("trainingId"));
   const nominationStatus = normalizeText(
-    formData.get("nominationStatus"),
-  ) as NominationStatus;
+    formData.get("enrollmentStatus"),
+  ) as EnrollmentStatus;
 
   if (!nominationId || !courseRunId || !nominationStatus) {
-    throw new Error("Missing nomination status update fields.");
+    throw new Error("Missing enrollment status update fields.");
   }
 
-  await courseRunService.updateNominationStatus({
+  await trainingService.updateEnrollmentStatus({
     nominationId,
     courseRunId,
     nominationStatus,
   });
 
-  revalidatePath("/course-runs");
-  revalidatePath(`/course-runs/${courseRunId}`);
-  redirect(`/course-runs/${courseRunId}`);
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${courseRunId}`);
+  redirect(`/trainings/${courseRunId}`);
 }
 
 export async function recordAttendance(formData: FormData) {
   await requireAuth();
 
-  const courseRunId = normalizeText(formData.get("courseRunId"));
-  const participantId = normalizeText(formData.get("participantId"));
+  const courseRunId = normalizeText(formData.get("trainingId"));
+  const participantId = normalizeText(formData.get("attendeeId"));
   const attendanceDateValue = normalizeText(formData.get("attendanceDate"));
   const attendanceStatus = normalizeText(
     formData.get("attendanceStatus"),
@@ -252,7 +250,7 @@ export async function recordAttendance(formData: FormData) {
     throw new Error("Attendance date is invalid.");
   }
 
-  await courseRunService.recordAttendance({
+  await trainingService.recordAttendance({
     courseRunId,
     participantId,
     attendanceDate,
@@ -260,7 +258,7 @@ export async function recordAttendance(formData: FormData) {
     notes,
   });
 
-  revalidatePath("/course-runs");
-  revalidatePath(`/course-runs/${courseRunId}`);
-  redirect(`/course-runs/${courseRunId}`);
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${courseRunId}`);
+  redirect(`/trainings/${courseRunId}`);
 }

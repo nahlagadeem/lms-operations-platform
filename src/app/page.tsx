@@ -542,57 +542,57 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             detail={`${formatNumber(completedCourseIds.length, numberLocale)} completed / ${formatNumber(ongoingCourseIds.length, numberLocale)} ongoing / ${formatNumber(plannedCourseIds.length, numberLocale)} planned`}
           />
           <KpiCard
-            href="/course-runs"
-            title="Active Courses"
+            href="/trainings"
+            title="Trainings"
             value={formatNumber(totalRuns, numberLocale)}
             detail={`${formatNumber(completedRuns, numberLocale)} completed / ${formatNumber(ongoingRuns, numberLocale)} ongoing / ${formatNumber(upcomingRunsCount, numberLocale)} upcoming`}
           />
           <KpiCard
             href="/courses"
-            title="Participants"
+            title="Attendees"
             value={formatNumber(allTimeTrainees, numberLocale)}
             detail={`${formatNumber(activeTrainees, numberLocale)} active right now`}
           />
           <KpiCard
-            href="/course-runs"
+            href="/trainings"
             title="Seat utilization"
             value={formatPercent(seatUtilization, numberLocale)}
-            detail={`${formatNumber(filledSeats, numberLocale)} filled / ${formatNumber(allocatedSeats, numberLocale)} allocated`}
+            detail={`${formatNumber(filledSeats, numberLocale)} actual / ${formatNumber(allocatedSeats, numberLocale)} estimated seats`}
           />
           <KpiCard
-            href="/course-runs"
-            title="Participant success rate"
+            href="/trainings"
+            title="Attendee success rate"
             value={formatPercent(successRate, numberLocale)}
             detail={`${formatNumber(successfulAttendance, numberLocale)} successful attendance entries`}
           />
           <KpiCard
-            href="/course-runs"
+            href="/trainings"
             title="Satisfaction rate"
             value={formatPercent(satisfactionRate, numberLocale)}
             detail={`${formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale)} feedback entries`}
           />
           <KpiCard
-            href="/providers"
-            title="Active trainers"
+            href="/vendors"
+            title="Active instructors"
             value={formatNumber(activeTrainerCount, numberLocale)}
-            detail="Approved trainers assigned to live work"
+            detail="Approved instructors assigned to live work"
           />
         </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <ActivityPanel title="Courses running today" items={todayRuns.map((run) => ({
-          href: `/course-runs/${run.id}`,
+        <ActivityPanel title="Trainings running today" items={todayRuns.map((run) => ({
+          href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"} / ${run.trainers[0]?.trainer.fullNameEn || run.trainers[0]?.trainer.fullNameAr || "-"}`,
         }))} />
         <ActivityPanel title="Upcoming in next 7 days" items={upcomingRuns.map((run) => ({
-          href: `/course-runs/${run.id}`,
+          href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${formatDate(run.startDate, numberLocale)} / ${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"}`,
         }))} />
         <ActivityPanel title="Completed in last 7 days" items={recentlyCompletedRuns.map((run) => ({
-          href: `/course-runs/${run.id}`,
+          href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${formatDate(run.endDate, numberLocale)} / ${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"}`,
         }))} />

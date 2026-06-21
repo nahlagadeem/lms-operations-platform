@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
-import { createCourseRun } from "@/app/course-runs/actions";
+import { createTraining } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
+import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 
 type CourseRunsPageProps = {
@@ -67,15 +68,15 @@ function formatDateRange(
 function pageText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      addButton: "إضافة تشغيل جديد",
+      addButton: "إضافة تدريب جديد",
       toggleButton: "فتح نموذج الإضافة",
       close: "إغلاق",
     };
   }
 
   return {
-    addButton: "Add Course",
-    toggleButton: "Add Course",
+    addButton: "Add Training",
+    toggleButton: "Add Training",
     close: "Close",
   };
 }
@@ -188,7 +189,7 @@ export default async function CourseRunsPage({
             <p className="section-copy">{localeText.courseRuns.description}</p>
           </div>
           <Link
-            href="/course-runs?panel=create"
+            href="/trainings?panel=create"
             className="primary-button w-full sm:w-auto"
           >
             {uiText.addButton}
@@ -252,7 +253,7 @@ export default async function CourseRunsPage({
             <button type="submit" className="primary-button w-full sm:w-auto">
               {localeText.courseRuns.applyFilters}
             </button>
-            <Link href="/course-runs" className="secondary-button w-full sm:w-auto">
+            <Link href="/trainings" className="secondary-button w-full sm:w-auto">
               {localeText.courseRuns.resetFilters}
             </Link>
           </div>
@@ -282,7 +283,9 @@ export default async function CourseRunsPage({
                 </tr>
               </thead>
               <tbody>
-                {prioritizedRuns.map((run) => (
+                {prioritizedRuns.map((run) => {
+                  const training = getTrainingBusinessFields(run);
+                  return (
                   <tr
                     key={run.id}
                     className="cursor-pointer transition hover:bg-white"
@@ -290,31 +293,31 @@ export default async function CourseRunsPage({
                   >
                     <td className="latin-cell">
                       <Link
-                        href={`/course-runs/${run.id}`}
+                        href={`/trainings/${run.id}`}
                         className="block w-full font-semibold text-[var(--brand-ink)] no-underline"
                       >
-                        {run.runCode}
+                        {training.trainingCode}
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
                         {run.course.package.nameEn || run.course.package.nameAr}
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
                         {run.course.nameEn || run.course.nameAr}
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
                         <span className="status-pill">
                           {localeText.courseRunStatuses[run.status]}
                         </span>
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
                         {formatDateRange(
                           run.startDate,
                           run.endDate,
@@ -324,19 +327,20 @@ export default async function CourseRunsPage({
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
                         {localeText.deliveryModes[run.deliveryMode]}
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
-                        {run.plannedSeats !== null
-                          ? formatNumber(run.plannedSeats, numberLocale)
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {training.estimatedSeats !== null
+                          ? formatNumber(training.estimatedSeats, numberLocale)
                           : "-"}
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -351,14 +355,14 @@ export default async function CourseRunsPage({
                 <p className="eyebrow">{localeText.courseRuns.createTitle}</p>
                 <h3 className="section-title">{uiText.toggleButton}</h3>
               </div>
-              <Link href="/course-runs" className="secondary-button">
+              <Link href="/trainings" className="secondary-button">
                 {uiText.close}
               </Link>
             </div>
 
             <p className="section-copy">{localeText.courseRuns.createDescription}</p>
 
-            <form action={createCourseRun} className="mt-6 space-y-4">
+            <form action={createTraining} className="mt-6 space-y-4">
               <label className="field-shell">
                 <span className="field-label">{localeText.courseRuns.course}</span>
                 <select name="courseId" className="field-input" defaultValue="">
@@ -422,7 +426,7 @@ export default async function CourseRunsPage({
                 <span className="field-label">{localeText.courseRuns.plannedSeats}</span>
                 <input
                   type="number"
-                  name="plannedSeats"
+                  name="estimatedSeats"
                   min="0"
                   step="1"
                   className="field-input"

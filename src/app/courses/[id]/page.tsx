@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActiveStatus, CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
-import { createCourseRun } from "@/app/course-runs/actions";
+import { createTraining } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 
@@ -19,16 +19,16 @@ function detailText(locale: "en" | "ar") {
     return {
       title: "تفاصيل الدورة",
       description:
-        "هذه بطاقة الدورة الأساسية قبل التشغيل. راجع المعلومات ثم ابدأ نسخة تشغيلية وحدد حالتها وتفاصيلها التنفيذية.",
+        "هذه بطاقة الدورة الأساسية قبل التدريب. راجع المعلومات ثم أنشئ تدريبا وحدد حالته وتفاصيله التنفيذية.",
       back: "العودة إلى الدورات",
-      createRun: "إنشاء تشغيل للدورة",
-      createRunButton: "فتح إنشاء التشغيل",
+      createRun: "إنشاء تدريب",
+      createRunButton: "فتح إنشاء التدريب",
       close: "إغلاق",
       overview: "نظرة عامة",
-      planning: "التخطيط والتشغيل",
+      planning: "التخطيط والتدريب",
       pricing: "التسعير",
-      relatedRuns: "التشغيلات المرتبطة",
-      noRuns: "لا توجد تشغيلات مرتبطة بهذه الدورة حتى الآن.",
+      relatedRuns: "التدريبات المرتبطة",
+      noRuns: "لا توجد تدريبات مرتبطة بهذه الدورة حتى الآن.",
       descriptionLabel: "وصف الدورة",
       noDescription: "لا يوجد وصف متاح لهذه الدورة حالياً.",
       package: "الحزمة",
@@ -41,11 +41,11 @@ function detailText(locale: "en" | "ar") {
       activeStatus: "حالة السجل",
       attendance: "يتطلب حضور",
       certificate: "يتطلب شهادة",
-      providerRegistration: "يتطلب تسجيل جهة",
+      providerRegistration: "يتطلب تسجيل مورد",
       external: "تنفيذ خارجي",
       targetUse: "الاستخدام التشغيلي",
       startOperationalNote:
-        "يمكن من هذه الصفحة تحويل الدورة إلى تشغيل فعلي ثم استكمال المدرب والموقع والجدولة.",
+        "يمكن من هذه الصفحة إنشاء تدريب فعلي ثم استكمال المدرب والموقع والجدولة.",
       latestPrice: "السعر النهائي الحالي",
       originalPrice: "السعر الأصلي",
       discountAmount: "قيمة الخصم",
@@ -54,39 +54,39 @@ function detailText(locale: "en" | "ar") {
       unspecified: "غير محدد",
       yes: "نعم",
       no: "لا",
-      countRuns: "إجمالي التشغيلات",
+      countRuns: "إجمالي التدريبات",
       countOngoing: "الجارية",
       countCompleted: "المكتملة",
       createDescription:
-        "ابدأ تشغيل هذه الدورة مباشرة من هنا. يمكنك اعتبارها جارية الآن أو اختيار حالة تشغيل أخرى ثم متابعة التفاصيل.",
+        "أنشئ تدريبا لهذه الدورة مباشرة من هنا. يمكنك اعتباره جاريا الآن أو اختيار حالة أخرى ثم متابعة التفاصيل.",
       status: "الحالة",
       deliveryMode: "نمط التنفيذ",
       startDate: "تاريخ البداية",
       endDate: "تاريخ النهاية",
-      plannedSeats: "المقاعد المخططة",
+      plannedSeats: "المقاعد التقديرية",
       notes: "ملاحظات",
       notesPlaceholder: "ملاحظات تشغيلية داخلية",
-      startNow: "بدء التشغيل",
-      runCode: "كود التشغيل",
+      startNow: "إنشاء التدريب",
+      runCode: "رمز التدريب",
       dates: "التواريخ",
       noDates: "التواريخ غير محددة",
-      openRun: "فتح التشغيل",
+      openRun: "فتح التدريب",
     };
   }
 
   return {
     title: "Course details",
     description:
-      "Review course information, scheduling readiness, and related active courses.",
+      "Review course information, scheduling readiness, and related trainings.",
     back: "Back to courses",
-    createRun: "Add Active Course",
-    createRunButton: "Add Active Course",
+    createRun: "Add Training",
+    createRunButton: "Add Training",
     close: "Close",
     overview: "Course overview",
     planning: "Planning and operations",
     pricing: "Pricing snapshot",
-    relatedRuns: "Related active courses",
-    noRuns: "No active courses are linked to this course yet. Click Add Active Course to get started.",
+    relatedRuns: "Related Trainings",
+    noRuns: "No trainings are linked to this course yet. Click Add Training to get started.",
     descriptionLabel: "Course description",
     noDescription: "No description is available for this course yet.",
     package: "Package",
@@ -99,11 +99,11 @@ function detailText(locale: "en" | "ar") {
     activeStatus: "Course availability",
     attendance: "Attendance required",
     certificate: "Issue certificate",
-    providerRegistration: "Training provider registration",
+    providerRegistration: "Vendor registration",
     external: "External delivery",
     targetUse: "Operational use",
     startOperationalNote:
-      "From this page, add an active course, then complete the trainer, location, and schedule details.",
+      "From this page, add a training, then complete the instructor, location, and schedule details.",
     latestPrice: "Current final price",
     originalPrice: "Original price",
     discountAmount: "Discount amount",
@@ -112,23 +112,23 @@ function detailText(locale: "en" | "ar") {
     unspecified: "Unspecified",
     yes: "Yes",
     no: "No",
-    countRuns: "Total active courses",
+    countRuns: "Total trainings",
     countOngoing: "In progress",
     countCompleted: "Completed",
     createDescription:
-      "Add an active course directly from here. You can mark it as in progress immediately or choose another course status first.",
+      "Add a training directly from here. You can mark it as in progress immediately or choose another training status first.",
     status: "Status",
     deliveryMode: "Delivery mode",
     startDate: "Start date",
     endDate: "End date",
-    plannedSeats: "Planned seats",
+    plannedSeats: "Estimated Seats",
     notes: "Notes",
     notesPlaceholder: "Internal operational notes",
-    startNow: "Add Course",
-    runCode: "Course Session",
+    startNow: "Add Training",
+    runCode: "Training Code",
     dates: "Dates",
     noDates: "Dates not set",
-    openRun: "View Details",
+    openRun: "View Training",
   };
 }
 
@@ -357,7 +357,7 @@ export default async function CourseDetailPage({
                 course.runs.map((run) => (
                   <Link
                     key={run.id}
-                    href={`/course-runs/${run.id}`}
+                    href={`/trainings/${run.id}`}
                     className="jawraa-subcard block px-4 py-4 transition hover:shadow-[0_12px_28px_rgba(17,17,17,0.06)]"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -482,7 +482,7 @@ export default async function CourseDetailPage({
 
             <p className="section-copy">{details.createDescription}</p>
 
-            <form action={createCourseRun} className="mt-6 space-y-4">
+              <form action={createTraining} className="mt-6 space-y-4">
               <input type="hidden" name="courseId" value={course.id} />
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -533,7 +533,7 @@ export default async function CourseDetailPage({
                 <span className="field-label">{details.plannedSeats}</span>
                 <input
                   type="number"
-                  name="plannedSeats"
+                  name="estimatedSeats"
                   min="0"
                   step="1"
                   className="field-input"

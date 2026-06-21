@@ -123,7 +123,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             <a href="#add-project-scope" className="primary-button">
               {localeText.projectScopes.addScope}
             </a>
-            <Link href="/course-runs" className="secondary-button">
+            <Link href="/trainings" className="secondary-button">
               {localeText.projectScopes.activeRuns}
             </Link>
           </div>
