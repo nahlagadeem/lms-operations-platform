@@ -243,6 +243,7 @@ export async function updateEnrollmentStatus(formData: FormData) {
   const enrollmentStatus = normalizeText(
     formData.get("enrollmentStatus"),
   ) as EnrollmentStatus;
+  const notes = normalizeText(formData.get("notes"));
 
   if (!enrollmentId || !trainingId || !enrollmentStatus) {
     throw new Error("Missing enrollment status update fields.");
@@ -252,6 +253,7 @@ export async function updateEnrollmentStatus(formData: FormData) {
     enrollmentId,
     trainingId,
     enrollmentStatus,
+    notes,
   });
 
   revalidatePath("/trainings");

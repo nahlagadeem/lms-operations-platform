@@ -212,11 +212,13 @@ export async function updateEnrollmentStatus(input: {
   enrollmentId: string;
   trainingId: string;
   enrollmentStatus: EnrollmentStatus;
+  notes?: string;
 }) {
   return compatibilityService.updateNominationStatus({
     nominationId: input.enrollmentId,
     courseRunId: input.trainingId,
     nominationStatus: input.enrollmentStatus,
+    notes: input.notes,
   });
 }
 

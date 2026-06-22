@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DocumentEntityType, DocumentType, Prisma, TrainingCity } from "@prisma/client";
 import {
@@ -15,6 +15,7 @@ import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import { getAttendanceRate, getTrainingCapacity } from "@/server/services/capacity-service";
+import { getTrainingEnrollmentSummary } from "@/server/services/enrollment-service";
 import { getTrainingFinancials } from "@/server/services/training-financial-service";
 
 type CourseRunDetailPageProps = {
@@ -23,6 +24,8 @@ type CourseRunDetailPageProps = {
   }>;
   searchParams?: Promise<{
     panel?: string;
+    attendee?: string;
+    status?: string;
   }>;
 };
 
@@ -54,106 +57,116 @@ function formatDateInput(value: Date | null) {
 function detailText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      title: "تفاصيل التدريب",
+      title: "ØªÙØ§ØµÙŠÙ„ Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
       description:
-        "راجع معلومات التدريب الحالية، ثم استخدم الأزرار العلوية لتعديل التدريب أو إضافة مدرب أو إدارة التسجيلات.",
-      edit: "تعديل التدريب",
-      editButton: "فتح تعديل التدريب",
-      addTrainer: "إضافة مدرب",
-      addTrainerButton: "فتح إضافة مدرب",
-      addNomination: "إضافة تسجيل",
-      addNominationButton: "فتح إضافة تسجيل",
-      addAttendance: "تسجيل حضور",
-      addAttendanceButton: "فتح تسجيل الحضور",
-      summary: "الملخص",
-      progress: "مؤشرات التقدم",
-      provider: "المورد",
-      location: "الموقع",
-      chooseProvider: "اختر موردا",
-      chooseLocation: "اختر موقع",
-      save: "حفظ التعديلات",
-      back: "العودة",
-      notAssigned: "غير مسند بعد",
-      noNotes: "لا توجد ملاحظات",
-      trainerAssignments: "إسنادات المدربين",
-      currentTrainers: "المدربون الحاليون",
-      chooseTrainer: "اختر مدرب",
-      trainerRole: "دور المدرب",
-      trainerRolePlaceholder: "مدرب رئيسي أو مساعد",
-      primaryTrainer: "مدرب رئيسي",
-      noTrainers: "لا يوجد مدربون مسندون حتى الآن",
-      remove: "إزالة",
-      nominations: "التسجيلات",
-      currentNominations: "التسجيلات الحالية",
-      chooseParticipant: "اختر أحد الحضور",
-      nominationStatus: "حالة التسجيل",
-      participantType: "نوع الحضور",
-      participantNameAr: "الاسم بالعربية",
-      participantNameEn: "الاسم بالإنجليزية",
-      participantEmail: "البريد الإلكتروني",
-      participantPhone: "الجوال",
-      participantOrg: "الجهة",
-      participantJobTitle: "المسمى الوظيفي",
-      participantNationalId: "رقم الهوية / الإقامة",
-      existingParticipant: "تسجيل حضور موجود",
-      quickCreateParticipant: "إضافة حضور جديد وتسجيله",
-      noNominations: "لا توجد تسجيلات حتى الآن",
-      saveNomination: "حفظ التسجيل",
-      createAndNominate: "إضافة وتسجيل",
-      attendance: "الحضور",
-      attendanceLog: "سجل الحضور",
-      noAttendance: "لا توجد سجلات حضور حتى الآن",
-      attendanceDate: "تاريخ الحضور",
-      attendanceStatus: "حالة الحضور",
-      chooseAttendee: "اختر من الحضور المسجلين",
-      saveAttendance: "حفظ الحضور",
-      recordedAttendance: "الحضور المسجل",
-      completion: "الاكتمال والأهلية",
-      completionSummary: "ملخص الاكتمال",
-      noCompletionData: "لا توجد بيانات حضور كافية لحساب الاكتمال حتى الآن",
-      attendanceRate: "نسبة الحضور",
-      attendedDays: "أيام الحضور",
-      totalSessions: "إجمالي الجلسات",
-      completionEligible: "مؤهل للاكتمال",
-      certificateEligible: "مؤهل للشهادة",
-      completionRule: "يعتبر الحاضر مؤهلاً عند حضور 75% على الأقل من الجلسات المسجلة.",
-      eligibleCount: "الحضور المؤهلون",
-      threshold: "حد الاكتمال",
-      capacityTitle: "سعة التدريب",
-      capacityDescription: "المقاعد التقديرية مقابل المقاعد المؤكدة لهذا التدريب.",
-      utilizationPct: "نسبة الاستغلال %",
-      remainingCapacity: "السعة المتبقية",
-      fullyBooked: "محجوز بالكامل",
-      overCapacityBy: "التجاوز بمقدار",
-      financialTitle: "المؤشرات المالية",
-      financialDescription: "الإيراد وتكلفة المورد وهامش الربح لهذا التدريب.",
-      vendorCost: "تكلفة المورد",
-      revenue: "الإيراد",
-      grossMargin: "هامش الربح",
-      marginPct: "هامش الربح %",
-      documents: "المستندات",
-      documentVault: "المستندات",
-      documentVaultDescription: "ارفع واحفظ المستندات المتعلقة بهذا البرنامج التدريبي الجاري مثل الحضور والتقارير والشهادات والصور.",
-      documentType: "نوع المستند",
-      documentFile: "الملف",
-      documentNotes: "وصف أو ملاحظات",
-      uploadDocument: "رفع المستند",
-      noDocuments: "لا توجد مستندات مرفوعة لهذا التدريب حتى الآن",
-      download: "تحميل",
-      fileSize: "حجم الملف",
-      version: "الإصدار",
-      attendanceRequired: "يتطلب حضور",
-      certificateRequired: "يتطلب شهادة",
-      confirmedSeats: "المقاعد الفعلية",
-      vendor: "المورد",
-      city: "المدينة",
-      selectCity: "اختر المدينة",
-      daysHeld: "أيام التعاقد",
-      yes: "نعم",
-      no: "لا",
-      close: "إغلاق",
-      plannedSeats: "المقاعد التقديرية",
-      courseStatus: "حالة التدريب",
+        "Ø±Ø§Ø¬Ø¹ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„ØªØ¯Ø±ÙŠØ¨ Ø§Ù„Ø­Ø§Ù„ÙŠØ©ØŒ Ø«Ù… Ø§Ø³ØªØ®Ø¯Ù… Ø§Ù„Ø£Ø²Ø±Ø§Ø± Ø§Ù„Ø¹Ù„ÙˆÙŠØ© Ù„ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„ØªØ¯Ø±ÙŠØ¨ Ø£Ùˆ Ø¥Ø¶Ø§ÙØ© Ù…Ø¯Ø±Ø¨ Ø£Ùˆ Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„ØªØ³Ø¬ÙŠÙ„Ø§Øª.",
+      edit: "ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
+      editButton: "ÙØªØ­ ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
+      addTrainer: "Ø¥Ø¶Ø§ÙØ© Ù…Ø¯Ø±Ø¨",
+      addTrainerButton: "ÙØªØ­ Ø¥Ø¶Ø§ÙØ© Ù…Ø¯Ø±Ø¨",
+      addNomination: "Ø¥Ø¶Ø§ÙØ© ØªØ³Ø¬ÙŠÙ„",
+      addNominationButton: "ÙØªØ­ Ø¥Ø¶Ø§ÙØ© ØªØ³Ø¬ÙŠÙ„",
+      addAttendance: "ØªØ³Ø¬ÙŠÙ„ Ø­Ø¶ÙˆØ±",
+      addAttendanceButton: "ÙØªØ­ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø­Ø¶ÙˆØ±",
+      summary: "Ø§Ù„Ù…Ù„Ø®Øµ",
+      progress: "Ù…Ø¤Ø´Ø±Ø§Øª Ø§Ù„ØªÙ‚Ø¯Ù…",
+      provider: "Ø§Ù„Ù…ÙˆØ±Ø¯",
+      location: "Ø§Ù„Ù…ÙˆÙ‚Ø¹",
+      chooseProvider: "Ø§Ø®ØªØ± Ù…ÙˆØ±Ø¯Ø§",
+      chooseLocation: "Ø§Ø®ØªØ± Ù…ÙˆÙ‚Ø¹",
+      save: "Ø­ÙØ¸ Ø§Ù„ØªØ¹Ø¯ÙŠÙ„Ø§Øª",
+      back: "Ø§Ù„Ø¹ÙˆØ¯Ø©",
+      notAssigned: "ØºÙŠØ± Ù…Ø³Ù†Ø¯ Ø¨Ø¹Ø¯",
+      noNotes: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ù„Ø§Ø­Ø¸Ø§Øª",
+      trainerAssignments: "Ø¥Ø³Ù†Ø§Ø¯Ø§Øª Ø§Ù„Ù…Ø¯Ø±Ø¨ÙŠÙ†",
+      currentTrainers: "Ø§Ù„Ù…Ø¯Ø±Ø¨ÙˆÙ† Ø§Ù„Ø­Ø§Ù„ÙŠÙˆÙ†",
+      chooseTrainer: "Ø§Ø®ØªØ± Ù…Ø¯Ø±Ø¨",
+      trainerRole: "Ø¯ÙˆØ± Ø§Ù„Ù…Ø¯Ø±Ø¨",
+      trainerRolePlaceholder: "Ù…Ø¯Ø±Ø¨ Ø±Ø¦ÙŠØ³ÙŠ Ø£Ùˆ Ù…Ø³Ø§Ø¹Ø¯",
+      primaryTrainer: "Ù…Ø¯Ø±Ø¨ Ø±Ø¦ÙŠØ³ÙŠ",
+      noTrainers: "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ù…Ø¯Ø±Ø¨ÙˆÙ† Ù…Ø³Ù†Ø¯ÙˆÙ† Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†",
+      remove: "Ø¥Ø²Ø§Ù„Ø©",
+      nominations: "Ø§Ù„ØªØ³Ø¬ÙŠÙ„Ø§Øª",
+      currentNominations: "Ø§Ù„ØªØ³Ø¬ÙŠÙ„Ø§Øª Ø§Ù„Ø­Ø§Ù„ÙŠØ©",
+      chooseParticipant: "Ø§Ø®ØªØ± Ø£Ø­Ø¯ Ø§Ù„Ø­Ø¶ÙˆØ±",
+      nominationStatus: "Ø­Ø§Ù„Ø© Ø§Ù„ØªØ³Ø¬ÙŠÙ„",
+      participantType: "Ù†ÙˆØ¹ Ø§Ù„Ø­Ø¶ÙˆØ±",
+      participantNameAr: "Ø§Ù„Ø§Ø³Ù… Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©",
+      participantNameEn: "Ø§Ù„Ø§Ø³Ù… Ø¨Ø§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠØ©",
+      participantEmail: "Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ",
+      participantPhone: "Ø§Ù„Ø¬ÙˆØ§Ù„",
+      participantOrg: "Ø§Ù„Ø¬Ù‡Ø©",
+      participantJobTitle: "Ø§Ù„Ù…Ø³Ù…Ù‰ Ø§Ù„ÙˆØ¸ÙŠÙÙŠ",
+      participantNationalId: "Ø±Ù‚Ù… Ø§Ù„Ù‡ÙˆÙŠØ© / Ø§Ù„Ø¥Ù‚Ø§Ù…Ø©",
+      existingParticipant: "ØªØ³Ø¬ÙŠÙ„ Ø­Ø¶ÙˆØ± Ù…ÙˆØ¬ÙˆØ¯",
+      quickCreateParticipant: "Ø¥Ø¶Ø§ÙØ© Ø­Ø¶ÙˆØ± Ø¬Ø¯ÙŠØ¯ ÙˆØªØ³Ø¬ÙŠÙ„Ù‡",
+      noNominations: "Ù„Ø§ ØªÙˆØ¬Ø¯ ØªØ³Ø¬ÙŠÙ„Ø§Øª Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†",
+      saveNomination: "Ø­ÙØ¸ Ø§Ù„ØªØ³Ø¬ÙŠÙ„",
+      createAndNominate: "Ø¥Ø¶Ø§ÙØ© ÙˆØªØ³Ø¬ÙŠÙ„",
+      attendance: "Ø§Ù„Ø­Ø¶ÙˆØ±",
+      attendanceLog: "Ø³Ø¬Ù„ Ø§Ù„Ø­Ø¶ÙˆØ±",
+      noAttendance: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø³Ø¬Ù„Ø§Øª Ø­Ø¶ÙˆØ± Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†",
+      attendanceDate: "ØªØ§Ø±ÙŠØ® Ø§Ù„Ø­Ø¶ÙˆØ±",
+      attendanceStatus: "Ø­Ø§Ù„Ø© Ø§Ù„Ø­Ø¶ÙˆØ±",
+      chooseAttendee: "Ø§Ø®ØªØ± Ù…Ù† Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ù…Ø³Ø¬Ù„ÙŠÙ†",
+      saveAttendance: "Ø­ÙØ¸ Ø§Ù„Ø­Ø¶ÙˆØ±",
+      recordedAttendance: "Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ù…Ø³Ø¬Ù„",
+      completion: "Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„ ÙˆØ§Ù„Ø£Ù‡Ù„ÙŠØ©",
+      completionSummary: "Ù…Ù„Ø®Øµ Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„",
+      noCompletionData: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¨ÙŠØ§Ù†Ø§Øª Ø­Ø¶ÙˆØ± ÙƒØ§ÙÙŠØ© Ù„Ø­Ø³Ø§Ø¨ Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„ Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†",
+      attendanceRate: "Ù†Ø³Ø¨Ø© Ø§Ù„Ø­Ø¶ÙˆØ±",
+      attendedDays: "Ø£ÙŠØ§Ù… Ø§Ù„Ø­Ø¶ÙˆØ±",
+      totalSessions: "Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¬Ù„Ø³Ø§Øª",
+      completionEligible: "Ù…Ø¤Ù‡Ù„ Ù„Ù„Ø§ÙƒØªÙ…Ø§Ù„",
+      certificateEligible: "Ù…Ø¤Ù‡Ù„ Ù„Ù„Ø´Ù‡Ø§Ø¯Ø©",
+      completionRule: "ÙŠØ¹ØªØ¨Ø± Ø§Ù„Ø­Ø§Ø¶Ø± Ù…Ø¤Ù‡Ù„Ø§Ù‹ Ø¹Ù†Ø¯ Ø­Ø¶ÙˆØ± 75% Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„ Ù…Ù† Ø§Ù„Ø¬Ù„Ø³Ø§Øª Ø§Ù„Ù…Ø³Ø¬Ù„Ø©.",
+      eligibleCount: "Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ù…Ø¤Ù‡Ù„ÙˆÙ†",
+      threshold: "Ø­Ø¯ Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„",
+      capacityTitle: "Ø³Ø¹Ø© Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
+      capacityDescription: "Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„ØªÙ‚Ø¯ÙŠØ±ÙŠØ© Ù…Ù‚Ø§Ø¨Ù„ Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„Ù…Ø¤ÙƒØ¯Ø© Ù„Ù‡Ø°Ø§ Ø§Ù„ØªØ¯Ø±ÙŠØ¨.",
+      utilizationPct: "Ù†Ø³Ø¨Ø© Ø§Ù„Ø§Ø³ØªØºÙ„Ø§Ù„ %",
+      remainingCapacity: "Ø§Ù„Ø³Ø¹Ø© Ø§Ù„Ù…ØªØ¨Ù‚ÙŠØ©",
+      fullyBooked: "Ù…Ø­Ø¬ÙˆØ² Ø¨Ø§Ù„ÙƒØ§Ù…Ù„",
+      overCapacityBy: "Ø§Ù„ØªØ¬Ø§ÙˆØ² Ø¨Ù…Ù‚Ø¯Ø§Ø±",
+      financialTitle: "Ø§Ù„Ù…Ø¤Ø´Ø±Ø§Øª Ø§Ù„Ù…Ø§Ù„ÙŠØ©",
+      financialDescription: "Ø§Ù„Ø¥ÙŠØ±Ø§Ø¯ ÙˆØªÙƒÙ„ÙØ© Ø§Ù„Ù…ÙˆØ±Ø¯ ÙˆÙ‡Ø§Ù…Ø´ Ø§Ù„Ø±Ø¨Ø­ Ù„Ù‡Ø°Ø§ Ø§Ù„ØªØ¯Ø±ÙŠØ¨.",
+      vendorCost: "ØªÙƒÙ„ÙØ© Ø§Ù„Ù…ÙˆØ±Ø¯",
+      revenue: "Ø§Ù„Ø¥ÙŠØ±Ø§Ø¯",
+      grossMargin: "Ù‡Ø§Ù…Ø´ Ø§Ù„Ø±Ø¨Ø­",
+      marginPct: "Ù‡Ø§Ù…Ø´ Ø§Ù„Ø±Ø¨Ø­ %",
+      documents: "Ø§Ù„Ù…Ø³ØªÙ†Ø¯Ø§Øª",
+      documentVault: "Ø§Ù„Ù…Ø³ØªÙ†Ø¯Ø§Øª",
+      documentVaultDescription: "Ø§Ø±ÙØ¹ ÙˆØ§Ø­ÙØ¸ Ø§Ù„Ù…Ø³ØªÙ†Ø¯Ø§Øª Ø§Ù„Ù…ØªØ¹Ù„Ù‚Ø© Ø¨Ù‡Ø°Ø§ Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬ Ø§Ù„ØªØ¯Ø±ÙŠØ¨ÙŠ Ø§Ù„Ø¬Ø§Ø±ÙŠ Ù…Ø«Ù„ Ø§Ù„Ø­Ø¶ÙˆØ± ÙˆØ§Ù„ØªÙ‚Ø§Ø±ÙŠØ± ÙˆØ§Ù„Ø´Ù‡Ø§Ø¯Ø§Øª ÙˆØ§Ù„ØµÙˆØ±.",
+      documentType: "Ù†ÙˆØ¹ Ø§Ù„Ù…Ø³ØªÙ†Ø¯",
+      documentFile: "Ø§Ù„Ù…Ù„Ù",
+      documentNotes: "ÙˆØµÙ Ø£Ùˆ Ù…Ù„Ø§Ø­Ø¸Ø§Øª",
+      uploadDocument: "Ø±ÙØ¹ Ø§Ù„Ù…Ø³ØªÙ†Ø¯",
+      noDocuments: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø³ØªÙ†Ø¯Ø§Øª Ù…Ø±ÙÙˆØ¹Ø© Ù„Ù‡Ø°Ø§ Ø§Ù„ØªØ¯Ø±ÙŠØ¨ Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†",
+      download: "ØªØ­Ù…ÙŠÙ„",
+      fileSize: "Ø­Ø¬Ù… Ø§Ù„Ù…Ù„Ù",
+      version: "Ø§Ù„Ø¥ØµØ¯Ø§Ø±",
+      attendanceRequired: "ÙŠØªØ·Ù„Ø¨ Ø­Ø¶ÙˆØ±",
+      certificateRequired: "ÙŠØªØ·Ù„Ø¨ Ø´Ù‡Ø§Ø¯Ø©",
+      confirmedSeats: "Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„ÙØ¹Ù„ÙŠØ©",
+      vendor: "Ø§Ù„Ù…ÙˆØ±Ø¯",
+      city: "Ø§Ù„Ù…Ø¯ÙŠÙ†Ø©",
+      selectCity: "Ø§Ø®ØªØ± Ø§Ù„Ù…Ø¯ÙŠÙ†Ø©",
+      daysHeld: "Ø£ÙŠØ§Ù… Ø§Ù„ØªØ¹Ø§Ù‚Ø¯",
+      yes: "Ù†Ø¹Ù…",
+      no: "Ù„Ø§",
+      close: "Ø¥ØºÙ„Ø§Ù‚",
+      plannedSeats: "Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„ØªÙ‚Ø¯ÙŠØ±ÙŠØ©",
+      courseStatus: "Ø­Ø§Ù„Ø© Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
+      enrollmentDate: "ØªØ§Ø±ÙŠØ® Ø§Ù„ØªØ³Ø¬ÙŠÙ„",
+      notes: "Ù…Ù„Ø§Ø­Ø¸Ø§Øª",
+      filterAttendee: "ØªØµÙÙŠØ© Ø­Ø³Ø¨ Ø§Ù„Ø­Ø¶ÙˆØ±",
+      filterEnrollmentStatus: "ØªØµÙÙŠØ© Ø­Ø³Ø¨ Ø­Ø§Ù„Ø© Ø§Ù„ØªØ³Ø¬ÙŠÙ„",
+      allEnrollmentStatuses: "Ø¬Ù…ÙŠØ¹ Ø­Ø§Ù„Ø§Øª Ø§Ù„ØªØ³Ø¬ÙŠÙ„",
+      totalEnrollments: "Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„ØªØ³Ø¬ÙŠÙ„Ø§Øª",
+      confirmedEnrollments: "Ø§Ù„Ù…Ø¤ÙƒØ¯Ø©",
+      cancelledEnrollments: "Ø§Ù„Ù…Ù„ØºØ§Ø©",
+      completedEnrollments: "Ø§Ù„Ù…ÙƒØªÙ…Ù„Ø©",
+      completionRate: "Ù†Ø³Ø¨Ø© Ø§Ù„Ø¥ÙƒÙ…Ø§Ù„ %",
     };
   }
 
@@ -258,39 +271,83 @@ function detailText(locale: "en" | "ar") {
     close: "Close",
     plannedSeats: "Estimated Seats",
     courseStatus: "Training Status",
+    enrollmentDate: "Enrollment Date",
+    notes: "Notes",
+    filterAttendee: "Filter by attendee",
+    filterEnrollmentStatus: "Filter by enrollment status",
+    allEnrollmentStatuses: "All enrollment statuses",
+    totalEnrollments: "Total Enrollments",
+    confirmedEnrollments: "Confirmed",
+    cancelledEnrollments: "Cancelled",
+    completedEnrollments: "Completed",
+    completionRate: "Completion Rate %",
   };
 }
 
-function nominationStatusText(locale: "en" | "ar") {
+function enrollmentStatusText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      NOMINATED: "مرشح",
-      CONTACTED: "تم التواصل",
-      CONFIRMED: "مؤكد",
-      DECLINED: "معتذر",
-      REPLACED: "مستبدل",
-      WITHDRAWN: "منسحب",
+      NOMINATED: "Ù‚ÙŠØ¯ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø±",
+      CONFIRMED: "Ù…Ø¤ÙƒØ¯",
+      DECLINED: "Ù…Ù„ØºÙ‰",
+      WITHDRAWN: "Ù…ÙƒØªÙ…Ù„",
     } as const;
   }
 
   return {
-    NOMINATED: "Enrolled",
-    CONTACTED: "Contacted",
+    NOMINATED: "Pending",
     CONFIRMED: "Confirmed",
-    DECLINED: "Declined",
-    REPLACED: "Replaced",
-    WITHDRAWN: "Withdrawn",
+    DECLINED: "Cancelled",
+    WITHDRAWN: "Completed",
   } as const;
+}
+
+function getEnrollmentDisplayStatus(status: string) {
+  switch (status) {
+    case "CONFIRMED":
+      return "CONFIRMED";
+    case "DECLINED":
+    case "REPLACED":
+      return "CANCELLED";
+    case "WITHDRAWN":
+      return "COMPLETED";
+    default:
+      return "PENDING";
+  }
+}
+
+function getEnrollmentEditValue(status: string) {
+  switch (status) {
+    case "CONFIRMED":
+      return "CONFIRMED";
+    case "DECLINED":
+    case "REPLACED":
+      return "DECLINED";
+    case "WITHDRAWN":
+      return "WITHDRAWN";
+    default:
+      return "NOMINATED";
+  }
+}
+
+function getEnrollmentStatusLabel(locale: "en" | "ar", status: string) {
+  const labels = enrollmentStatusText(locale);
+  const displayStatus = getEnrollmentDisplayStatus(status);
+
+  if (displayStatus === "CONFIRMED") return labels.CONFIRMED;
+  if (displayStatus === "CANCELLED") return labels.DECLINED;
+  if (displayStatus === "COMPLETED") return labels.WITHDRAWN;
+  return labels.NOMINATED;
 }
 
 function participantTypeText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      STUDENT: "متدرب",
-      TEACHER: "مدرب",
-      OWNER: "مالك",
-      COORDINATOR: "منسق",
-      OBSERVER: "مراقب",
+      STUDENT: "Ù…ØªØ¯Ø±Ø¨",
+      TEACHER: "Ù…Ø¯Ø±Ø¨",
+      OWNER: "Ù…Ø§Ù„Ùƒ",
+      COORDINATOR: "Ù…Ù†Ø³Ù‚",
+      OBSERVER: "Ù…Ø±Ø§Ù‚Ø¨",
     } as const;
   }
 
@@ -306,11 +363,11 @@ function participantTypeText(locale: "en" | "ar") {
 function attendanceStatusText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      PRESENT: "حاضر",
-      ABSENT: "غائب",
-      LATE: "متأخر",
-      EXCUSED: "بعذر",
-      PARTIAL: "حضور جزئي",
+      PRESENT: "Ø­Ø§Ø¶Ø±",
+      ABSENT: "ØºØ§Ø¦Ø¨",
+      LATE: "Ù…ØªØ£Ø®Ø±",
+      EXCUSED: "Ø¨Ø¹Ø°Ø±",
+      PARTIAL: "Ø­Ø¶ÙˆØ± Ø¬Ø²Ø¦ÙŠ",
     } as const;
   }
 
@@ -326,15 +383,15 @@ function attendanceStatusText(locale: "en" | "ar") {
 function documentTypeText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      COURSE_CARD: "بطاقة الدورة",
-      PRESENTATION: "عرض تقديمي",
-      LEARNER_GUIDE: "دليل المتدرب",
-      ATTENDANCE_SHEET: "كشف الحضور",
-      CERTIFICATE_TEMPLATE: "نموذج الشهادة",
-      QUALITY_REPORT: "تقرير الجودة",
-      FINAL_REPORT: "التقرير النهائي",
-      PHOTOS_ARCHIVE: "أرشيف الصور",
-      OTHER: "أخرى",
+      COURSE_CARD: "Ø¨Ø·Ø§Ù‚Ø© Ø§Ù„Ø¯ÙˆØ±Ø©",
+      PRESENTATION: "Ø¹Ø±Ø¶ ØªÙ‚Ø¯ÙŠÙ…ÙŠ",
+      LEARNER_GUIDE: "Ø¯Ù„ÙŠÙ„ Ø§Ù„Ù…ØªØ¯Ø±Ø¨",
+      ATTENDANCE_SHEET: "ÙƒØ´Ù Ø§Ù„Ø­Ø¶ÙˆØ±",
+      CERTIFICATE_TEMPLATE: "Ù†Ù…ÙˆØ°Ø¬ Ø§Ù„Ø´Ù‡Ø§Ø¯Ø©",
+      QUALITY_REPORT: "ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø¬ÙˆØ¯Ø©",
+      FINAL_REPORT: "Ø§Ù„ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ",
+      PHOTOS_ARCHIVE: "Ø£Ø±Ø´ÙŠÙ Ø§Ù„ØµÙˆØ±",
+      OTHER: "Ø£Ø®Ø±Ù‰",
     } as Record<DocumentType, string>;
   }
 
@@ -373,6 +430,8 @@ export default async function CourseRunDetailPage({
 }: CourseRunDetailPageProps) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
+  const enrollmentSearch = (query.attendee ?? "").trim().toLowerCase();
+  const enrollmentStatusFilter = (query.status ?? "").trim();
   const openPanel =
     query.panel === "edit" ||
     query.panel === "instructor" ||
@@ -394,6 +453,7 @@ export default async function CourseRunDetailPage({
     trainers,
     participants,
     purchaseOrderCourseEntries,
+    enrollmentSummary,
   ] = await Promise.all([
     db.courseRun.findUnique({
       where: { id },
@@ -476,6 +536,7 @@ export default async function CourseRunDetailPage({
       include: { scope: true, course: true },
       orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
     }),
+    getTrainingEnrollmentSummary(id),
   ]);
 
   if (!run) notFound();
@@ -540,6 +601,35 @@ export default async function CourseRunDetailPage({
     .sort((left, right) => right.attendanceRate - left.attendanceRate);
 
   const eligibleCount = completionRows.filter((item) => item.completionEligible).length;
+  const latestAttendanceByParticipant = new Map<
+    string,
+    (typeof run.attendanceRecords)[number]
+  >();
+
+  for (const record of run.attendanceRecords) {
+    if (!latestAttendanceByParticipant.has(record.participantId)) {
+      latestAttendanceByParticipant.set(record.participantId, record);
+    }
+  }
+
+  const filteredEnrollments = run.nominations.filter((nomination) => {
+    const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
+    const participantSearch = [
+      nomination.participant.fullNameAr,
+      nomination.participant.fullNameEn,
+      nomination.participant.email,
+      nomination.participant.organizationName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    const attendeeMatches = !enrollmentSearch || participantSearch.includes(enrollmentSearch);
+    const statusMatches =
+      !enrollmentStatusFilter || enrollmentStatusFilter === status;
+
+    return attendeeMatches && statusMatches;
+  });
 
   return (
     <div className="space-y-6">
@@ -550,7 +640,7 @@ export default async function CourseRunDetailPage({
               href="/trainings"
               className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
-              <span aria-hidden="true">←</span>
+              <span aria-hidden="true">â†</span>
               <span>{details.back}</span>
             </Link>
             <p className="eyebrow">{details.title}</p>
@@ -649,50 +739,121 @@ export default async function CourseRunDetailPage({
                 <p className="eyebrow">{details.nominations}</p>
                 <h3 className="section-title">{details.currentNominations}</h3>
               </div>
+              <div className="flex flex-wrap gap-2">
+                <Link href={panelHref(run.id, "enrollment")} className="secondary-button">
+                  {details.addNominationButton}
+                </Link>
+              </div>
             </div>
 
+            <form className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr_auto]">
+              <label className="field-shell">
+                <span className="field-label">{details.filterAttendee}</span>
+                <input
+                  type="search"
+                  name="attendee"
+                  defaultValue={query.attendee ?? ""}
+                  className="field-input"
+                  placeholder={details.filterAttendee}
+                />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{details.filterEnrollmentStatus}</span>
+                <select name="status" defaultValue={enrollmentStatusFilter} className="field-input">
+                  <option value="">{details.allEnrollmentStatuses}</option>
+                  <option value="PENDING">{enrollmentStatusText(locale).NOMINATED}</option>
+                  <option value="CONFIRMED">{enrollmentStatusText(locale).CONFIRMED}</option>
+                  <option value="CANCELLED">{enrollmentStatusText(locale).DECLINED}</option>
+                  <option value="COMPLETED">{enrollmentStatusText(locale).WITHDRAWN}</option>
+                </select>
+              </label>
+              <div className="flex items-end gap-2">
+                <button type="submit" className="primary-button w-full sm:w-auto">
+                  {localeText.courseRuns.applyFilters}
+                </button>
+              </div>
+            </form>
+
             <div className="mt-5 space-y-3">
-              {run.nominations.length === 0 ? (
+              {filteredEnrollments.length === 0 ? (
                 <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noNominations}
                 </div>
               ) : (
-                run.nominations.map((nomination) => (
-                  <div
-                    key={nomination.id}
-                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--ink-strong)]">
-                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--ink-soft)]">
-                        {nomination.participant.email ||
-                          nomination.participant.organizationName ||
-                          participantTypeText(locale)[nomination.participant.participantType]}
-                      </p>
-                    </div>
+                filteredEnrollments.map((nomination) => {
+                  const latestAttendance = latestAttendanceByParticipant.get(nomination.participantId);
+                  const attendanceLabel = latestAttendance
+                    ? attendanceStatusText(locale)[latestAttendance.attendanceStatus]
+                    : details.noAttendance;
+                  const enrollmentDate = new Intl.DateTimeFormat(numberLocale, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  }).format(nomination.nominatedAt);
 
-                    <form action={updateEnrollmentStatus} className="w-full sm:w-auto">
-                      <input type="hidden" name="trainingId" value={run.id} />
-                      <input type="hidden" name="enrollmentId" value={nomination.id} />
-                      <select
-                        name="enrollmentStatus"
-                        defaultValue={nomination.nominationStatus}
-                        className="field-input min-w-[14rem]"
-                      >
-                        {Object.entries(nominationStatusText(locale)).map(([key, label]) => (
-                          <option key={key} value={key}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className="secondary-button mt-2 w-full sm:w-auto">
-                        {details.save}
-                      </button>
-                    </form>
-                  </div>
-                ))
+                  return (
+                    <div key={nomination.id} className="jawraa-subcard px-4 py-4">
+                      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.8fr_0.8fr]">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                            {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                            {nomination.participant.email ||
+                              nomination.participant.organizationName ||
+                              participantTypeText(locale)[nomination.participant.participantType]}
+                          </p>
+                          {nomination.notes ? (
+                            <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
+                              {nomination.notes}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-3">
+                          <InfoCard
+                            label={details.nominationStatus}
+                            value={getEnrollmentStatusLabel(locale, nomination.nominationStatus)}
+                          />
+                          <InfoCard label={details.enrollmentDate} value={enrollmentDate} />
+                        </div>
+
+                        <div className="space-y-3">
+                          <InfoCard label={details.attendanceStatus} value={attendanceLabel} />
+                          <form action={updateEnrollmentStatus} className="space-y-3">
+                            <input type="hidden" name="trainingId" value={run.id} />
+                            <input type="hidden" name="enrollmentId" value={nomination.id} />
+                            <label className="field-shell">
+                              <span className="field-label">{details.nominationStatus}</span>
+                              <select
+                                name="enrollmentStatus"
+                                defaultValue={getEnrollmentEditValue(nomination.nominationStatus)}
+                                className="field-input"
+                              >
+                                <option value="NOMINATED">{enrollmentStatusText(locale).NOMINATED}</option>
+                                <option value="CONFIRMED">{enrollmentStatusText(locale).CONFIRMED}</option>
+                                <option value="DECLINED">{enrollmentStatusText(locale).DECLINED}</option>
+                                <option value="WITHDRAWN">{enrollmentStatusText(locale).WITHDRAWN}</option>
+                              </select>
+                            </label>
+                            <label className="field-shell">
+                              <span className="field-label">{details.notes}</span>
+                              <textarea
+                                name="notes"
+                                rows={3}
+                                defaultValue={nomination.notes ?? ""}
+                                className="field-input min-h-[5rem] resize-y"
+                              />
+                            </label>
+                            <button type="submit" className="secondary-button w-full sm:w-auto">
+                              {details.saveNomination}
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -896,9 +1057,31 @@ export default async function CourseRunDetailPage({
                 tone="ink"
               />
               <ProgressCard
-                label={details.nominations}
-                value={formatNumber(run._count.nominations, numberLocale)}
+                label={details.totalEnrollments}
+                value={formatNumber(enrollmentSummary.totalEnrollments, numberLocale)}
                 tone="teal"
+              />
+              <ProgressCard
+                label={details.confirmedEnrollments}
+                value={formatNumber(enrollmentSummary.confirmedEnrollments, numberLocale)}
+                tone="sand"
+              />
+              <ProgressCard
+                label={details.cancelledEnrollments}
+                value={formatNumber(enrollmentSummary.cancelledEnrollments, numberLocale)}
+                tone="ink"
+              />
+              <ProgressCard
+                label={details.completedEnrollments}
+                value={formatNumber(enrollmentSummary.completedEnrollments, numberLocale)}
+                tone="teal"
+              />
+              <ProgressCard
+                label={details.completionRate}
+                value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                  enrollmentSummary.completionRate,
+                )}%`}
+                tone="sand"
               />
               <ProgressCard
                 label={details.documents}
@@ -1356,7 +1539,7 @@ export default async function CourseRunDetailPage({
                         className="field-input"
                         defaultValue="NOMINATED"
                       >
-                        {Object.entries(nominationStatusText(locale)).map(([key, label]) => (
+                        {Object.entries(enrollmentStatusText(locale)).map(([key, label]) => (
                           <option key={key} value={key}>
                             {label}
                           </option>
@@ -1412,7 +1595,7 @@ export default async function CourseRunDetailPage({
                         className="field-input"
                         defaultValue="NOMINATED"
                       >
-                        {Object.entries(nominationStatusText(locale)).map(([key, label]) => (
+                        {Object.entries(enrollmentStatusText(locale)).map(([key, label]) => (
                           <option key={key} value={key}>
                             {label}
                           </option>

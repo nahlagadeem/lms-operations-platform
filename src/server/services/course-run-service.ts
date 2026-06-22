@@ -61,6 +61,7 @@ type UpdateNominationStatusInput = {
   nominationId: string;
   courseRunId: string;
   nominationStatus: NominationStatus;
+  notes?: string;
 };
 
 type RecordAttendanceInput = {
@@ -312,6 +313,7 @@ export async function updateNominationStatus(input: UpdateNominationStatusInput)
     data: {
       nominationStatus: input.nominationStatus,
       ...nominationConfirmationData(input.nominationStatus),
+      notes: input.notes === undefined ? undefined : input.notes || null,
       declineReason:
         input.nominationStatus === NominationStatus.DECLINED
           ? "Declined by operations"
