@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { DocumentEntityType, DocumentType } from "@prisma/client";
+import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
 import {
   assignInstructorToTraining,
   createAttendeeAndEnroll,
@@ -15,6 +15,7 @@ import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import { getAttendanceRate, getTrainingCapacity } from "@/server/services/capacity-service";
+import { getTrainingFinancials } from "@/server/services/training-financial-service";
 
 type CourseRunDetailPageProps = {
   params: Promise<{
@@ -27,6 +28,22 @@ type CourseRunDetailPageProps = {
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
+}
+
+function formatCurrency(
+  value: Prisma.Decimal | number | null | undefined,
+  locale: string,
+  unavailableLabel = "-",
+) {
+  if (value === null || value === undefined) {
+    return unavailableLabel;
+  }
+
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "SAR",
+    maximumFractionDigits: 2,
+  }).format(Number(value));
 }
 
 function formatDateInput(value: Date | null) {
@@ -108,6 +125,12 @@ function detailText(locale: "en" | "ar") {
       remainingCapacity: "السعة المتبقية",
       fullyBooked: "محجوز بالكامل",
       overCapacityBy: "التجاوز بمقدار",
+      financialTitle: "المؤشرات المالية",
+      financialDescription: "الإيراد وتكلفة المورد وهامش الربح لهذا التدريب.",
+      vendorCost: "تكلفة المورد",
+      revenue: "الإيراد",
+      grossMargin: "هامش الربح",
+      marginPct: "هامش الربح %",
       documents: "المستندات",
       documentVault: "المستندات",
       documentVaultDescription: "ارفع واحفظ المستندات المتعلقة بهذا البرنامج التدريبي الجاري مثل الحضور والتقارير والشهادات والصور.",
@@ -195,14 +218,20 @@ function detailText(locale: "en" | "ar") {
     certificateEligible: "Ready to issue certificate",
     completionRule: "An attendee is ready to complete the training after attending at least 75% of its sessions.",
     eligibleCount: "Eligible attendees",
-    threshold: "Completion threshold",
-    capacityTitle: "Training Capacity",
-    capacityDescription: "Estimated seats versus actual confirmed seats for this training.",
-    utilizationPct: "Utilization %",
-    remainingCapacity: "Remaining Capacity",
-    fullyBooked: "Fully Booked",
-    overCapacityBy: "Over Capacity by",
-    documents: "Documents",
+      threshold: "Completion threshold",
+      capacityTitle: "Training Capacity",
+      capacityDescription: "Estimated seats versus actual confirmed seats for this training.",
+      utilizationPct: "Utilization %",
+      remainingCapacity: "Remaining Capacity",
+      fullyBooked: "Fully Booked",
+      overCapacityBy: "Over Capacity by",
+      financialTitle: "Financial Indicators",
+      financialDescription: "Revenue, vendor cost, and gross margin for this training.",
+      vendorCost: "Vendor Cost",
+      revenue: "Revenue",
+      grossMargin: "Gross Margin",
+      marginPct: "Margin %",
+      documents: "Documents",
     documentVault: "Documents",
     documentVaultDescription: "Upload training files such as attendance sheets, reports, certificates, and photos.",
     documentType: "Document type",
@@ -444,6 +473,7 @@ export default async function CourseRunDetailPage({
   if (!run) notFound();
 
   const training = getTrainingBusinessFields(run);
+  const trainingFinancials = await getTrainingFinancials(run.id);
   const trainingCapacity = getTrainingCapacity({
     plannedSeats: run.plannedSeats,
     confirmedSeats: run.confirmedSeats,
@@ -918,6 +948,38 @@ export default async function CourseRunDetailPage({
               />
             </div>
           </div>
+
+          {trainingFinancials ? (
+            <div className="panel-surface">
+              <p className="eyebrow">{details.financialTitle}</p>
+              <h3 className="section-title">{details.financialTitle}</h3>
+              <p className="section-copy">{details.financialDescription}</p>
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <ProgressCard
+                  label={details.vendorCost}
+                  value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
+                  tone="ink"
+                />
+                <ProgressCard
+                  label={details.revenue}
+                  value={formatCurrency(trainingFinancials.revenue, numberLocale)}
+                  tone="sand"
+                />
+                <ProgressCard
+                  label={details.grossMargin}
+                  value={formatCurrency(trainingFinancials.grossMargin, numberLocale)}
+                  tone="teal"
+                />
+                <ProgressCard
+                  label={details.marginPct}
+                  value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                    trainingFinancials.marginPct,
+                  )}%`}
+                  tone="ink"
+                />
+              </div>
+            </div>
+          ) : null}
 
           <div className="panel-surface">
             <div>

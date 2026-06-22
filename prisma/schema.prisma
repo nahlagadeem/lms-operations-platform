@@ -123,6 +123,22 @@ enum VerificationStatus {
   EXPIRED
 }
 
+enum TrainingCity {
+  RIYADH
+  JEDDAH
+  DAMMAM
+  KHOBAR
+  MAKKAH
+  MADINAH
+  TAIF
+  ABHA
+  TABUK
+  HAIL
+  JUBAIL
+  NAJRAN
+  YANBU
+}
+
 enum DocumentType {
   COURSE_CARD
   PRESENTATION
@@ -400,6 +416,9 @@ model CourseRun {
   projectScopeCourseId String?
   providerId           String?
   locationId           String?
+  vendorCost           Decimal?            @db.Decimal(18, 2)
+  daysHeld             Int?
+  city                 TrainingCity?
   runCode              String              @unique
   status               CourseRunStatus     @default(DRAFT)
   deliveryMode         DeliveryMode
@@ -428,7 +447,7 @@ model CourseRun {
   documents            CourseRunDocument[]
   nominations          Nomination[]
   attendanceRecords    AttendanceRecord[]
-  evaluations        Evaluation[]
+  evaluations          Evaluation[]
   qualityReports       QualityReport[]
 
   @@index([projectScopeId])
@@ -509,7 +528,7 @@ model Participant {
   updatedAt         DateTime           @updatedAt
   nominations       Nomination[]
   attendanceRecords AttendanceRecord[]
-  evaluations      Evaluation[]
+  evaluations       Evaluation[]
 
   @@unique([participantType, nationalIdOrIqama])
 }
@@ -554,19 +573,19 @@ model AttendanceRecord {
 }
 
 model Evaluation {
-  id              String      @id @default(cuid())
-  courseRunId     String
-  participantId   String
-  trainerScore    Int?
-  venueScore      Int?
-  contentScore    Int?
-  operationsScore Int?
-  overallScore    Decimal?    @db.Decimal(5, 2)
-  positiveNotes   String?
+  id               String      @id @default(cuid())
+  courseRunId      String
+  participantId    String
+  trainerScore     Int?
+  venueScore       Int?
+  contentScore     Int?
+  operationsScore  Int?
+  overallScore     Decimal?    @db.Decimal(5, 2)
+  positiveNotes    String?
   improvementNotes String?
-  submittedAt     DateTime    @default(now())
-  courseRun       CourseRun   @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
-  participant     Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  submittedAt      DateTime    @default(now())
+  courseRun        CourseRun   @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  participant      Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   @@unique([courseRunId, participantId])
 }
