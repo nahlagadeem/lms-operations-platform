@@ -18,6 +18,16 @@ const nextConfig: NextConfig = {
         destination: "/vendors",
         permanent: true,
       },
+      {
+        source: "/project-structure",
+        destination: "/pos",
+        permanent: true,
+      },
+      {
+        source: "/project-structure/scopes/:id",
+        destination: "/pos/:id",
+        permanent: true,
+      },
     ];
   },
   experimental: {

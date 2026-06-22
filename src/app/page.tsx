@@ -473,7 +473,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="eyebrow">{localeText.projectScopes.summaryTitle}</p>
             <h2 className="section-title">{localeText.projectScopes.summaryTitle}</h2>
           </div>
-          <Link href="/project-structure" className="primary-button">
+          <Link href="/pos" className="primary-button">
             {localeText.projectScopes.viewDetails}
           </Link>
         </div>
@@ -513,7 +513,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <td>{formatNumber(scope.participants, numberLocale)}</td>
                   <td>{formatNumber(scope.documents, numberLocale)}</td>
                   <td>
-                    <Link href={`/project-structure/scopes/${scope.id}`} className="secondary-button">
+                    <Link href={`/pos/${scope.id}`} className="secondary-button">
                       {localeText.projectScopes.viewDetails}
                     </Link>
                   </td>
@@ -599,7 +599,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-          <ChartPanel title="Course completion by purchase order">
+        <ChartPanel title="Course completion by PO">
           {scopeProgress.map((item) => (
             <ProgressRow
               key={item.code}

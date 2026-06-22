@@ -3,6 +3,7 @@
 import {
   AttendanceStatus,
   DeliveryMode,
+  TrainingCity,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -23,6 +24,24 @@ function parseOptionalDate(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function parseOptionalDecimal(value: string) {
+  if (!value) return null;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseOptionalInt(value: string) {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseTrainingCity(value: string) {
+  return Object.values(TrainingCity).includes(value as TrainingCity)
+    ? (value as TrainingCity)
+    : null;
+}
+
 export async function createTraining(formData: FormData) {
   await requireAuth();
 
@@ -30,6 +49,10 @@ export async function createTraining(formData: FormData) {
     formData.get("purchaseOrderCourseEntryId"),
   );
   const expectedCourseId = normalizeText(formData.get("courseId"));
+  const vendorId = normalizeText(formData.get("vendorId"));
+  const vendorCost = parseOptionalDecimal(normalizeText(formData.get("vendorCost")));
+  const city = parseTrainingCity(normalizeText(formData.get("city")));
+  const daysHeld = parseOptionalInt(normalizeText(formData.get("daysHeld")));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
   const status = normalizeText(formData.get("status")) as TrainingStatus;
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
@@ -37,12 +60,16 @@ export async function createTraining(formData: FormData) {
   const notes = normalizeText(formData.get("notes"));
 
   if (!purchaseOrderCourseEntryId || !deliveryMode || !status) {
-    throw new Error("Please choose a Purchase Order Course Entry and try again.");
+    throw new Error("Please choose a PO Course Entry and try again.");
   }
 
   const createdTraining = await trainingService.createTraining({
     purchaseOrderCourseEntryId,
     expectedCourseId: expectedCourseId || undefined,
+    vendorId: vendorId || undefined,
+    vendorCost,
+    city,
+    daysHeld,
     deliveryMode,
     status,
     startDate,
@@ -51,7 +78,7 @@ export async function createTraining(formData: FormData) {
   });
 
   revalidatePath(`/courses/${createdTraining.courseId}`);
-  revalidatePath("/project-structure");
+  revalidatePath("/pos");
   revalidatePath("/trainings");
   redirect(`/trainings/${createdTraining.id}`);
 }
@@ -64,6 +91,9 @@ export async function updateTraining(formData: FormData) {
     formData.get("purchaseOrderCourseEntryId"),
   );
   const vendorId = normalizeText(formData.get("vendorId"));
+  const vendorCost = parseOptionalDecimal(normalizeText(formData.get("vendorCost")));
+  const city = parseTrainingCity(normalizeText(formData.get("city")));
+  const daysHeld = parseOptionalInt(normalizeText(formData.get("daysHeld")));
   const locationId = normalizeText(formData.get("locationId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
   const status = normalizeText(formData.get("status")) as TrainingStatus;
@@ -80,6 +110,9 @@ export async function updateTraining(formData: FormData) {
     purchaseOrderCourseEntryId,
     vendorId,
     locationId,
+    vendorCost,
+    city,
+    daysHeld,
     deliveryMode,
     status,
     startDate,
@@ -87,7 +120,7 @@ export async function updateTraining(formData: FormData) {
     notes,
   });
 
-  revalidatePath("/project-structure");
+  revalidatePath("/pos");
   revalidatePath("/trainings");
   revalidatePath(`/trainings/${trainingId}`);
   redirect(`/trainings/${trainingId}`);

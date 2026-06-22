@@ -1,4 +1,4 @@
-import { AttendanceStatus, DeliveryMode } from "@prisma/client";
+import { AttendanceStatus, DeliveryMode, Prisma, TrainingCity } from "@prisma/client";
 import { db } from "@/lib/db";
 import type {
   AttendeeType,
@@ -10,6 +10,10 @@ import * as compatibilityService from "@/server/services/course-run-service";
 type CreateTrainingInput = {
   purchaseOrderCourseEntryId: string;
   expectedCourseId?: string;
+  vendorId?: string;
+  vendorCost?: number | null;
+  city?: TrainingCity | null;
+  daysHeld?: number | null;
   deliveryMode: DeliveryMode;
   status: TrainingStatus;
   startDate: Date | null;
@@ -22,6 +26,9 @@ type UpdateTrainingInput = {
   purchaseOrderCourseEntryId: string;
   vendorId: string;
   locationId: string;
+  vendorCost?: number | null;
+  city?: TrainingCity | null;
+  daysHeld?: number | null;
   deliveryMode: DeliveryMode;
   status: TrainingStatus;
   startDate: Date | null;
@@ -92,12 +99,19 @@ export async function createTraining(input: CreateTrainingInput) {
       courseId: purchaseOrderCourseEntry.courseId,
       projectScopeId: purchaseOrderCourseEntry.scopeId,
       projectScopeCourseId: purchaseOrderCourseEntry.id,
+      providerId: input.vendorId || null,
       runCode: trainingCode,
       deliveryMode: input.deliveryMode,
       status: input.status,
       startDate: input.startDate,
       endDate: input.endDate,
       plannedSeats: purchaseOrderCourseEntry.estimatedSeats,
+      vendorCost:
+        input.vendorCost === null || input.vendorCost === undefined
+          ? null
+          : new Prisma.Decimal(input.vendorCost),
+      city: input.city ?? null,
+      daysHeld: input.daysHeld ?? null,
       notes: input.notes || null,
       certificateRequired: course.requiresCertificate,
     },
@@ -118,6 +132,12 @@ export async function updateTraining(input: UpdateTrainingInput) {
       projectScopeCourseId: purchaseOrderCourseEntry.id,
       providerId: input.vendorId || null,
       locationId: input.locationId || null,
+      vendorCost:
+        input.vendorCost === null || input.vendorCost === undefined
+          ? null
+          : new Prisma.Decimal(input.vendorCost),
+      city: input.city ?? null,
+      daysHeld: input.daysHeld ?? null,
       deliveryMode: input.deliveryMode,
       status: input.status,
       startDate: input.startDate,

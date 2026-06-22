@@ -123,9 +123,9 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             <a href="#add-project-scope" className="primary-button">
               {localeText.projectScopes.addScope}
             </a>
-            <Link href="/trainings" className="secondary-button">
-              {localeText.projectScopes.activeRuns}
-            </Link>
+          <Link href="/trainings" className="secondary-button">
+            {localeText.projectScopes.activeRuns}
+          </Link>
           </div>
         </div>
       </section>
@@ -159,7 +159,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           <button type="submit" className="primary-button self-end">
             {localeText.projectScopes.applySearch}
           </button>
-          <Link href="/project-structure#add-project-scope" className="secondary-button self-end">
+          <Link href="/pos#add-project-scope" className="secondary-button self-end">
             {localeText.projectScopes.clearSearch}
           </Link>
         </form>
@@ -266,7 +266,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 </div>
                 <div className="flex flex-col items-start gap-2 sm:items-end">
                   <span className="status-pill">{scope.isActive ? localeText.projectScopes.active : localeText.projectScopes.inactive}</span>
-                  <Link href={`/project-structure/scopes/${scope.id}`} className="secondary-button">
+                  <Link href={`/pos/${scope.id}`} className="secondary-button">
                     {localeText.projectScopes.viewDetails}
                   </Link>
                 </div>

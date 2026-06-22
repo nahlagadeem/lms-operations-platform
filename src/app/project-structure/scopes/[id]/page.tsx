@@ -90,7 +90,7 @@ function buildScopeUrl(scopeId: string, page: number, assignQ?: string) {
   if (page > 1) search.set("coursePage", String(page));
   if (assignQ) search.set("assignQ", assignQ);
   const query = search.toString();
-  return query ? `/project-structure/scopes/${scopeId}?${query}` : `/project-structure/scopes/${scopeId}`;
+  return query ? `/pos/${scopeId}?${query}` : `/pos/${scopeId}`;
 }
 
 export default async function ScopeDetailPage({ params, searchParams }: ScopeDetailPageProps) {
@@ -194,7 +194,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Link
-              href="/project-structure"
+              href="/pos"
               className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
               <span aria-hidden="true">←</span>
@@ -242,6 +242,71 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 tracking.summary.fulfillmentPct,
               )}%`}
             />
+          </div>
+        </section>
+      ) : null}
+
+      {tracking?.rows.length ? (
+        <section className="panel-surface">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="eyebrow">{localeText.projectScopes.trackingTitle}</p>
+              <h3 className="section-title">{localeText.projectScopes.summaryTitle}</h3>
+            </div>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{localeText.projectScopes.scope}</th>
+                  <th>{localeText.courseRuns.course}</th>
+                  <th>{localeText.projectScopes.estimatedSeats}</th>
+                  <th>{localeText.projectScopes.actualSeats}</th>
+                  <th>{localeText.projectScopes.remainingSeats}</th>
+                  <th>{localeText.projectScopes.fulfillmentPct}</th>
+                  <th>{localeText.projectScopes.linkedTrainings}</th>
+                  <th>{localeText.projectScopes.status}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tracking.rows.map((row) => (
+                  <tr key={row.purchaseOrderCourseEntryId}>
+                    <td className="latin-cell">
+                      {formatPurchaseOrderCode(row.purchaseOrderCode, locale)} | {row.purchaseOrderName}
+                    </td>
+                    <td>
+                      {row.courseCode} | {row.courseName}
+                    </td>
+                    <td>{formatNumber(row.estimatedSeats, numberLocale)}</td>
+                    <td>{formatNumber(row.actualSeats, numberLocale)}</td>
+                    <td>{formatNumber(row.remainingSeats, numberLocale)}</td>
+                    <td>
+                      {new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                        row.fulfillmentPct,
+                      )}
+                      %
+                    </td>
+                    <td>{formatNumber(row.linkedTrainingsCount, numberLocale)}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-2">
+                        {row.overageFlag ? (
+                          <span className="status-pill">{localeText.projectScopes.overageFlag}</span>
+                        ) : null}
+                        {row.shortfallFlag ? (
+                          <span className="status-pill">{localeText.projectScopes.shortfallFlag}</span>
+                        ) : null}
+                        {row.zeroActualFlag ? (
+                          <span className="status-pill">{localeText.projectScopes.zeroActualFlag}</span>
+                        ) : null}
+                        {!row.overageFlag && !row.shortfallFlag && !row.zeroActualFlag ? (
+                          <span className="status-pill">{localeText.projectScopes.active}</span>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       ) : null}
@@ -428,7 +493,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
               <button type="submit" className="primary-button self-end">
                 {localeText.projectScopes.applySearch}
               </button>
-              <Link href={`/project-structure/scopes/${scope.id}`} className="secondary-button self-end">
+              <Link href={`/pos/${scope.id}`} className="secondary-button self-end">
                 {localeText.projectScopes.clearSearch}
               </Link>
             </form>
@@ -508,7 +573,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
           >
             <input type="hidden" name="entityType" value={DocumentEntityType.SCOPE} />
             <input type="hidden" name="entityId" value={scope.id} />
-            <input type="hidden" name="returnPath" value={`/project-structure/scopes/${scope.id}`} />
+            <input type="hidden" name="returnPath" value={`/pos/${scope.id}`} />
             <input type="hidden" name="contextLabel" value={`${scopeName} document`} />
 
             <label className="field-shell">
@@ -569,7 +634,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       <input
                         type="hidden"
                         name="returnPath"
-                        value={`/project-structure/scopes/${scope.id}`}
+                        value={`/pos/${scope.id}`}
                       />
                       <button type="submit" className="secondary-button w-full sm:w-auto">
                         {localeText.projectScopes.deleteFile}

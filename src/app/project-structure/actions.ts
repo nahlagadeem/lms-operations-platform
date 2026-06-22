@@ -62,8 +62,8 @@ export async function createProjectScope(formData: FormData) {
   const createdScope = await projectScopeService.createProjectScope(parseScopeForm(formData));
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  redirect(`/project-structure/scopes/${createdScope.id}`);
+  revalidatePath("/pos");
+  redirect(`/pos/${createdScope.id}`);
 }
 
 export async function updateProjectScope(formData: FormData) {
@@ -80,8 +80,8 @@ export async function updateProjectScope(formData: FormData) {
   });
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  revalidatePath(`/project-structure/scopes/${id}`);
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${id}`);
 }
 
 export async function deleteProjectScope(formData: FormData) {
@@ -95,7 +95,7 @@ export async function deleteProjectScope(formData: FormData) {
   await projectScopeService.deleteProjectScope(id);
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
+  revalidatePath("/pos");
 }
 
 export async function assignProjectScopeCourses(formData: FormData) {
@@ -114,8 +114,8 @@ export async function assignProjectScopeCourses(formData: FormData) {
   await projectScopeService.replaceProjectScopeCourses(scopeId, courseIds);
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  revalidatePath(`/project-structure/scopes/${scopeId}`);
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${scopeId}`);
 }
 
 export async function removeProjectScopeCourse(formData: FormData) {
@@ -130,8 +130,8 @@ export async function removeProjectScopeCourse(formData: FormData) {
   await projectScopeService.removeProjectScopeCourse(scopeId, courseId);
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  revalidatePath(`/project-structure/scopes/${scopeId}`);
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${scopeId}`);
 }
 
 export async function updatePurchaseOrderCourseEntryEstimatedSeats(formData: FormData) {
@@ -143,7 +143,7 @@ export async function updatePurchaseOrderCourseEntryEstimatedSeats(formData: For
   );
   const estimatedSeats = parseOptionalInt(normalizeText(formData.get("estimatedSeats")));
   if (!purchaseOrderId || !purchaseOrderCourseEntryId) {
-    throw new Error("Purchase Order and Course Entry are required.");
+    throw new Error("PO and Course Entry are required.");
   }
 
   await projectScopeService.updatePurchaseOrderCourseEntryEstimatedSeats(
@@ -153,7 +153,7 @@ export async function updatePurchaseOrderCourseEntryEstimatedSeats(formData: For
   );
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  revalidatePath(`/project-structure/scopes/${purchaseOrderId}`);
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${purchaseOrderId}`);
   revalidatePath("/trainings");
 }

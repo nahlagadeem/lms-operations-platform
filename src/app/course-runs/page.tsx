@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
+import { CourseRunStatus, DeliveryMode, Prisma, TrainingCity } from "@prisma/client";
 import { createTraining } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
@@ -109,6 +109,8 @@ export default async function CourseRunsPage({
           { runCode: { contains: searchTerm, mode: "insensitive" } },
           { course: { nameAr: { contains: searchTerm, mode: "insensitive" } } },
           { course: { nameEn: { contains: searchTerm, mode: "insensitive" } } },
+          { provider: { nameAr: { contains: searchTerm, mode: "insensitive" } } },
+          { provider: { nameEn: { contains: searchTerm, mode: "insensitive" } } },
         ]
       : undefined,
   };
@@ -120,6 +122,7 @@ export default async function CourseRunsPage({
     completedRuns,
     packages,
     purchaseOrderCourseEntries,
+    vendors,
     courseRuns,
   ] = await Promise.all([
     db.courseRun.count(),
@@ -162,6 +165,10 @@ export default async function CourseRunsPage({
         },
       },
       orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
+    }),
+    db.provider.findMany({
+      select: { id: true, nameAr: true, nameEn: true },
+      orderBy: { nameAr: "asc" },
     }),
     db.courseRun.findMany({
       where: whereClause,
@@ -413,6 +420,60 @@ export default async function CourseRunsPage({
                   ))}
                 </select>
               </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.vendor}</span>
+                  <select name="vendorId" className="field-input" defaultValue="">
+                    <option value="">{localeText.courseRuns.chooseVendor}</option>
+                    {vendors.map((vendor) => (
+                      <option key={vendor.id} value={vendor.id}>
+                        {vendor.nameEn || vendor.nameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.vendorCost}</span>
+                  <input
+                    type="number"
+                    name="vendorCost"
+                    step="0.01"
+                    min="0"
+                    className="field-input"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.city}</span>
+                  <select name="city" className="field-input" defaultValue="">
+                    <option value="">{localeText.courseRuns.selectCity}</option>
+                    {Object.values(TrainingCity).map((city) => (
+                      <option key={city} value={city}>
+                        {
+                          localeText.courseRuns.trainingCities[
+                            city as keyof typeof localeText.courseRuns.trainingCities
+                          ]
+                        }
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.daysHeld}</span>
+                  <input
+                    type="number"
+                    name="daysHeld"
+                    min="0"
+                    step="1"
+                    className="field-input"
+                  />
+                </label>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="field-shell">

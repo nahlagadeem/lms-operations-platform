@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
+import { DocumentEntityType, DocumentType, Prisma, TrainingCity } from "@prisma/client";
 import {
   assignInstructorToTraining,
   createAttendeeAndEnroll,
@@ -145,6 +145,10 @@ function detailText(locale: "en" | "ar") {
       attendanceRequired: "يتطلب حضور",
       certificateRequired: "يتطلب شهادة",
       confirmedSeats: "المقاعد الفعلية",
+      vendor: "المورد",
+      city: "المدينة",
+      selectCity: "اختر المدينة",
+      daysHeld: "أيام التعاقد",
       yes: "نعم",
       no: "لا",
       close: "إغلاق",
@@ -245,6 +249,10 @@ function detailText(locale: "en" | "ar") {
     attendanceRequired: "Attendance required",
     certificateRequired: "Issue certificate",
     confirmedSeats: "Actual Seats",
+    vendor: "Vendor",
+    city: "City",
+    selectCity: "Select a city",
+    daysHeld: "Days Held",
     yes: "Yes",
     no: "No",
     close: "Close",
@@ -1212,6 +1220,54 @@ export default async function CourseRunDetailPage({
                       {locations.map((location) => (
                         <option key={location.id} value={location.id}>
                           {location.nameEn || location.nameAr}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="field-shell">
+                    <span className="field-label">{details.vendorCost}</span>
+                    <input
+                      type="number"
+                      name="vendorCost"
+                      step="0.01"
+                      min="0"
+                      className="field-input"
+                      defaultValue={
+                        run.vendorCost !== null && run.vendorCost !== undefined
+                          ? Number(run.vendorCost)
+                          : ""
+                      }
+                    />
+                  </label>
+
+                  <label className="field-shell">
+                    <span className="field-label">{details.daysHeld}</span>
+                    <input
+                      type="number"
+                      name="daysHeld"
+                      min="0"
+                      step="1"
+                      className="field-input"
+                      defaultValue={run.daysHeld ?? ""}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="field-shell">
+                    <span className="field-label">{details.city}</span>
+                    <select name="city" className="field-input" defaultValue={run.city || ""}>
+                      <option value="">{details.selectCity}</option>
+                      {Object.values(TrainingCity).map((city) => (
+                        <option key={city} value={city}>
+                          {
+                            localeText.courseRuns.trainingCities[
+                              city as keyof typeof localeText.courseRuns.trainingCities
+                            ]
+                          }
                         </option>
                       ))}
                     </select>
