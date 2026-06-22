@@ -7,6 +7,9 @@ import {
   enrollExistingAttendee,
   recordAttendance,
   removeInstructorFromTraining,
+  upsertAttendeeEvaluation,
+  upsertCourseEvaluation,
+  upsertInstructorEvaluation,
   updateEnrollmentStatus,
   updateTraining,
 } from "@/app/course-runs/actions";
@@ -16,6 +19,10 @@ import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import { getAttendanceRate, getTrainingCapacity } from "@/server/services/capacity-service";
 import { getTrainingEnrollmentSummary } from "@/server/services/enrollment-service";
+import {
+  getAverageCourseRating,
+  getAverageInstructorRating,
+} from "@/server/services/training-evaluation-service";
 import { getTrainingFinancials } from "@/server/services/training-financial-service";
 
 type CourseRunDetailPageProps = {
@@ -47,6 +54,16 @@ function formatCurrency(
     currency: "SAR",
     maximumFractionDigits: 2,
   }).format(Number(value));
+}
+
+function formatAverageRating(value: number | null, locale: string) {
+  if (value === null) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function formatDateInput(value: Date | null) {
@@ -167,6 +184,15 @@ function detailText(locale: "en" | "ar") {
       cancelledEnrollments: "Ø§Ù„Ù…Ù„ØºØ§Ø©",
       completedEnrollments: "Ø§Ù„Ù…ÙƒØªÙ…Ù„Ø©",
       completionRate: "Ù†Ø³Ø¨Ø© Ø§Ù„Ø¥ÙƒÙ…Ø§Ù„ %",
+      evaluationTitle: "ØªÙ‚ÙŠÙŠÙ…Ø§Øª Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
+      evaluationDescription: "Ù‚Ù… Ø¨ØªØ³Ø¬ÙŠÙ„ ØªÙ‚ÙŠÙŠÙ… Ù„Ù„Ø¯ÙˆØ±Ø© Ø£Ùˆ Ø§Ù„Ù…Ø¯Ø±Ø¨ Ø£Ùˆ Ø§Ù„Ù…ØªØ¯Ø±Ø¨.",
+      courseEvaluation: "ØªÙ‚ÙŠÙŠÙ… Ø§Ù„Ø¯ÙˆØ±Ø©",
+      instructorEvaluation: "ØªÙ‚ÙŠÙŠÙ… Ø§Ù„Ù…Ø¯Ø±Ø¨",
+      attendeeEvaluation: "ØªÙ‚ÙŠÙŠÙ… Ø§Ù„Ù…ØªØ¯Ø±Ø¨",
+      rating: "Ø§Ù„ØªÙ‚ÙŠÙŠÙ…",
+      comments: "Ø§Ù„ØªØ¹Ù„ÙŠÙ‚Ø§Øª",
+      averageCourseRating: "Ù…ØªÙˆØ³Ø· ØªÙ‚ÙŠÙŠÙ… Ø§Ù„Ø¯ÙˆØ±Ø©",
+      averageInstructorRating: "Ù…ØªÙˆØ³Ø· ØªÙ‚ÙŠÙŠÙ… Ø§Ù„Ù…Ø¯Ø±Ø¨",
     };
   }
 
@@ -225,6 +251,15 @@ function detailText(locale: "en" | "ar") {
     chooseAttendee: "Choose an enrolled attendee",
     saveAttendance: "Save attendance",
     recordedAttendance: "Attendance entries",
+    evaluationTitle: "Training evaluations",
+    evaluationDescription: "Record internal course, instructor, and attendee evaluations.",
+    courseEvaluation: "Course evaluation",
+    instructorEvaluation: "Instructor evaluation",
+    attendeeEvaluation: "Attendee evaluation",
+    rating: "Rating",
+    comments: "Comments",
+    averageCourseRating: "Average Course Rating",
+    averageInstructorRating: "Average Instructor Rating",
     completion: "Completion and eligibility",
     completionSummary: "Completion summary",
     noCompletionData: "There is not enough attendance data to calculate completion yet",
@@ -542,7 +577,11 @@ export default async function CourseRunDetailPage({
   if (!run) notFound();
 
   const training = getTrainingBusinessFields(run);
-  const trainingFinancials = await getTrainingFinancials(run.id);
+  const [trainingFinancials, averageCourseRating, averageInstructorRating] = await Promise.all([
+    getTrainingFinancials(run.id),
+    getAverageCourseRating(run.id),
+    getAverageInstructorRating(run.id),
+  ]);
   const trainingCapacity = getTrainingCapacity({
     plannedSeats: run.plannedSeats,
     confirmedSeats: run.confirmedSeats,
@@ -1171,6 +1210,191 @@ export default async function CourseRunDetailPage({
               </div>
             </div>
           ) : null}
+
+          <div className="panel-surface">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="eyebrow">{details.evaluationTitle}</p>
+                <h3 className="section-title">{details.evaluationTitle}</h3>
+                <p className="section-copy">{details.evaluationDescription}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <ProgressCard
+                label={details.averageCourseRating}
+                value={formatAverageRating(averageCourseRating, numberLocale)}
+                tone="teal"
+              />
+              <ProgressCard
+                label={details.averageInstructorRating}
+                value={formatAverageRating(averageInstructorRating, numberLocale)}
+                tone="sand"
+              />
+            </div>
+
+            <div className="mt-6 grid gap-6 xl:grid-cols-3">
+              <form action={upsertCourseEvaluation} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <div>
+                  <p className="eyebrow">{details.courseEvaluation}</p>
+                </div>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseAttendee}</span>
+                  <select name="attendeeId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseAttendee}
+                    </option>
+                    {run.nominations.map((nomination) => (
+                      <option key={nomination.participantId} value={nomination.participantId}>
+                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.rating}</span>
+                  <select name="rating" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.rating}
+                    </option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.comments}</span>
+                  <textarea name="comments" rows={4} className="field-input min-h-[7rem] resize-y" />
+                </label>
+
+                <button type="submit" className="secondary-button w-full sm:w-auto">
+                  {details.courseEvaluation}
+                </button>
+              </form>
+
+              <form action={upsertInstructorEvaluation} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <div>
+                  <p className="eyebrow">{details.instructorEvaluation}</p>
+                </div>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseAttendee}</span>
+                  <select name="attendeeId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseAttendee}
+                    </option>
+                    {run.nominations.map((nomination) => (
+                      <option key={nomination.participantId} value={nomination.participantId}>
+                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseTrainer}</span>
+                  <select name="subjectInstructorId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseTrainer}
+                    </option>
+                    {run.trainers.map((assignment) => (
+                      <option key={assignment.trainerId} value={assignment.trainerId}>
+                        {assignment.trainer.fullNameEn || assignment.trainer.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.rating}</span>
+                  <select name="rating" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.rating}
+                    </option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.comments}</span>
+                  <textarea name="comments" rows={4} className="field-input min-h-[7rem] resize-y" />
+                </label>
+
+                <button type="submit" className="secondary-button w-full sm:w-auto">
+                  {details.instructorEvaluation}
+                </button>
+              </form>
+
+              <form action={upsertAttendeeEvaluation} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <div>
+                  <p className="eyebrow">{details.attendeeEvaluation}</p>
+                </div>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseTrainer}</span>
+                  <select name="evaluatorInstructorId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseTrainer}
+                    </option>
+                    {run.trainers.map((assignment) => (
+                      <option key={assignment.trainerId} value={assignment.trainerId}>
+                        {assignment.trainer.fullNameEn || assignment.trainer.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseAttendee}</span>
+                  <select name="attendeeId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseAttendee}
+                    </option>
+                    {run.nominations.map((nomination) => (
+                      <option key={nomination.participantId} value={nomination.participantId}>
+                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.rating}</span>
+                  <select name="rating" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.rating}
+                    </option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.comments}</span>
+                  <textarea name="comments" rows={4} className="field-input min-h-[7rem] resize-y" />
+                </label>
+
+                <button type="submit" className="secondary-button w-full sm:w-auto">
+                  {details.attendeeEvaluation}
+                </button>
+              </form>
+            </div>
+          </div>
 
           <div className="panel-surface">
             <div>

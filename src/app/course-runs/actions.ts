@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { AttendeeType, EnrollmentStatus, TrainingStatus } from "@/lib/brd-terminology";
+import * as trainingEvaluationService from "@/server/services/training-evaluation-service";
 import * as trainingService from "@/server/services/training-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -34,6 +35,14 @@ function parseOptionalInt(value: string) {
   if (!value) return null;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseRating(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+    throw new Error("Rating must be between 1 and 5.");
+  }
+  return parsed;
 }
 
 function parseTrainingCity(value: string) {
@@ -288,6 +297,82 @@ export async function recordAttendance(formData: FormData) {
     attendanceDate,
     attendanceStatus,
     notes,
+  });
+
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
+}
+
+export async function upsertCourseEvaluation(formData: FormData) {
+  await requireAuth();
+
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const attendeeId = normalizeText(formData.get("attendeeId"));
+  const rating = parseRating(normalizeText(formData.get("rating")));
+  const comments = normalizeText(formData.get("comments"));
+
+  if (!trainingId || !attendeeId) {
+    throw new Error("Missing course evaluation fields.");
+  }
+
+  await trainingEvaluationService.upsertCourseEvaluation({
+    courseRunId: trainingId,
+    participantId: attendeeId,
+    rating,
+    comments,
+  });
+
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
+}
+
+export async function upsertInstructorEvaluation(formData: FormData) {
+  await requireAuth();
+
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const attendeeId = normalizeText(formData.get("attendeeId"));
+  const subjectInstructorId = normalizeText(formData.get("subjectInstructorId"));
+  const rating = parseRating(normalizeText(formData.get("rating")));
+  const comments = normalizeText(formData.get("comments"));
+
+  if (!trainingId || !attendeeId || !subjectInstructorId) {
+    throw new Error("Missing instructor evaluation fields.");
+  }
+
+  await trainingEvaluationService.upsertInstructorEvaluation({
+    courseRunId: trainingId,
+    participantId: attendeeId,
+    subjectInstructorId,
+    rating,
+    comments,
+  });
+
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
+}
+
+export async function upsertAttendeeEvaluation(formData: FormData) {
+  await requireAuth();
+
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const attendeeId = normalizeText(formData.get("attendeeId"));
+  const evaluatorInstructorId = normalizeText(formData.get("evaluatorInstructorId"));
+  const rating = parseRating(normalizeText(formData.get("rating")));
+  const comments = normalizeText(formData.get("comments"));
+
+  if (!trainingId || !attendeeId || !evaluatorInstructorId) {
+    throw new Error("Missing attendee evaluation fields.");
+  }
+
+  await trainingEvaluationService.upsertAttendeeEvaluation({
+    courseRunId: trainingId,
+    participantId: attendeeId,
+    evaluatorInstructorId,
+    rating,
+    comments,
   });
 
   revalidatePath("/trainings");

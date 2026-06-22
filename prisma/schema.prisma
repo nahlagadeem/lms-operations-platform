@@ -139,6 +139,12 @@ enum TrainingCity {
   YANBU
 }
 
+enum TrainingEvaluationType {
+  COURSE
+  INSTRUCTOR
+  ATTENDEE
+}
+
 enum DocumentType {
   COURSE_CARD
   PRESENTATION
@@ -355,23 +361,25 @@ model Provider {
 }
 
 model Trainer {
-  id                String              @id @default(cuid())
-  providerId        String?
-  fullNameAr        String
-  fullNameEn        String?
-  email             String?
-  phone             String?
-  nationality       String?
-  yearsOfExperience Int?
-  isApproved        Boolean             @default(false)
-  approvalDate      DateTime?
-  bio               String?
-  specialization    String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  provider          Provider?           @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  credentials       TrainerCredential[]
-  courseAssignments CourseRunTrainer[]
+  id                           String               @id @default(cuid())
+  providerId                   String?
+  fullNameAr                   String
+  fullNameEn                   String?
+  email                        String?
+  phone                        String?
+  nationality                  String?
+  yearsOfExperience            Int?
+  isApproved                   Boolean              @default(false)
+  approvalDate                 DateTime?
+  bio                          String?
+  specialization               String?
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
+  provider                     Provider?            @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  credentials                  TrainerCredential[]
+  courseAssignments            CourseRunTrainer[]
+  subjectTrainingEvaluations   TrainingEvaluation[] @relation("TrainingEvaluationSubjectInstructor")
+  evaluatorTrainingEvaluations TrainingEvaluation[] @relation("TrainingEvaluationEvaluatorInstructor")
 }
 
 model TrainerCredential {
@@ -410,44 +418,45 @@ model Location {
 }
 
 model CourseRun {
-  id                   String              @id @default(cuid())
+  id                   String               @id @default(cuid())
   courseId             String
   projectScopeId       String?
   projectScopeCourseId String?
   providerId           String?
   locationId           String?
-  vendorCost           Decimal?            @db.Decimal(18, 2)
+  vendorCost           Decimal?             @db.Decimal(18, 2)
   daysHeld             Int?
   city                 TrainingCity?
-  runCode              String              @unique
-  status               CourseRunStatus     @default(DRAFT)
+  runCode              String               @unique
+  status               CourseRunStatus      @default(DRAFT)
   deliveryMode         DeliveryMode
   startDate            DateTime?
   endDate              DateTime?
   startTime            String?
   endTime              String?
   plannedSeats         Int?
-  confirmedSeats       Int                 @default(0)
-  attendanceRequired   Boolean             @default(true)
-  certificateRequired  Boolean             @default(false)
-  courseCardStatus     CourseCardStatus    @default(NOT_STARTED)
-  approvalStatus       ApprovalStatus      @default(PENDING)
-  rescheduleCount      Int                 @default(0)
+  confirmedSeats       Int                  @default(0)
+  attendanceRequired   Boolean              @default(true)
+  certificateRequired  Boolean              @default(false)
+  courseCardStatus     CourseCardStatus     @default(NOT_STARTED)
+  approvalStatus       ApprovalStatus       @default(PENDING)
+  rescheduleCount      Int                  @default(0)
   ownerUserId          String?
   notes                String?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  course               Course              @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  projectScope         ProjectScope?       @relation(fields: [projectScopeId], references: [id], onDelete: SetNull)
-  projectScopeCourse   ProjectScopeCourse? @relation(fields: [projectScopeCourseId], references: [id], onDelete: SetNull)
-  provider             Provider?           @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  location             Location?           @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  ownerUser            AppUser?            @relation("OwnedCourseRuns", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  course               Course               @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  projectScope         ProjectScope?        @relation(fields: [projectScopeId], references: [id], onDelete: SetNull)
+  projectScopeCourse   ProjectScopeCourse?  @relation(fields: [projectScopeCourseId], references: [id], onDelete: SetNull)
+  provider             Provider?            @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  location             Location?            @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  ownerUser            AppUser?             @relation("OwnedCourseRuns", fields: [ownerUserId], references: [id], onDelete: SetNull)
   trainers             CourseRunTrainer[]
   documents            CourseRunDocument[]
   nominations          Nomination[]
   attendanceRecords    AttendanceRecord[]
   evaluations          Evaluation[]
+  trainingEvaluations  TrainingEvaluation[]
   qualityReports       QualityReport[]
 
   @@index([projectScopeId])
@@ -511,24 +520,25 @@ model Document {
 }
 
 model Participant {
-  id                String             @id @default(cuid())
-  participantType   ParticipantType
-  nationalIdOrIqama String?
-  employeeNumber    String?
-  fullNameAr        String
-  fullNameEn        String?
-  email             String?
-  phone             String?
-  organizationName  String?
-  jobTitle          String?
-  department        String?
-  city              String?
-  isActive          Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  nominations       Nomination[]
-  attendanceRecords AttendanceRecord[]
-  evaluations       Evaluation[]
+  id                  String               @id @default(cuid())
+  participantType     ParticipantType
+  nationalIdOrIqama   String?
+  employeeNumber      String?
+  fullNameAr          String
+  fullNameEn          String?
+  email               String?
+  phone               String?
+  organizationName    String?
+  jobTitle            String?
+  department          String?
+  city                String?
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  nominations         Nomination[]
+  attendanceRecords   AttendanceRecord[]
+  evaluations         Evaluation[]
+  trainingEvaluations TrainingEvaluation[]
 
   @@unique([participantType, nationalIdOrIqama])
 }
@@ -588,6 +598,28 @@ model Evaluation {
   participant      Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   @@unique([courseRunId, participantId])
+}
+
+model TrainingEvaluation {
+  id                    String                 @id @default(cuid())
+  courseRunId           String
+  participantId         String
+  evaluationType        TrainingEvaluationType
+  rating                Int
+  comments              String?
+  subjectInstructorId   String?
+  evaluatorInstructorId String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  courseRun             CourseRun              @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  participant           Participant            @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  subjectInstructor     Trainer?               @relation("TrainingEvaluationSubjectInstructor", fields: [subjectInstructorId], references: [id], onDelete: SetNull)
+  evaluatorInstructor   Trainer?               @relation("TrainingEvaluationEvaluatorInstructor", fields: [evaluatorInstructorId], references: [id], onDelete: SetNull)
+
+  @@index([courseRunId, evaluationType])
+  @@index([participantId, evaluationType])
+  @@index([subjectInstructorId])
+  @@index([evaluatorInstructorId])
 }
 
 model QualityReport {

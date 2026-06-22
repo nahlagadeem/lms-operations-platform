@@ -3,6 +3,7 @@ import {
   NominationStatus,
   ParticipantType,
   ProviderType,
+  TrainingEvaluationType as PrismaTrainingEvaluationType,
 } from "@prisma/client";
 import type {
   AttendanceRecord,
@@ -14,6 +15,7 @@ import type {
   ProjectScope,
   ProjectScopeCourse,
   Provider,
+  TrainingEvaluation,
   Trainer,
 } from "@prisma/client";
 
@@ -29,6 +31,7 @@ export type Vendor = Provider;
 export type Instructor = Trainer;
 export type TrainingInstructor = CourseRunTrainer;
 export type TrainingDocument = CourseRunDocument;
+export type TrainingEvaluationRecord = TrainingEvaluation;
 
 export const TrainingStatus = CourseRunStatus;
 export type TrainingStatus = CourseRunStatus;
@@ -38,6 +41,8 @@ export const AttendeeType = ParticipantType;
 export type AttendeeType = ParticipantType;
 export const VendorType = ProviderType;
 export type VendorType = ProviderType;
+export const TrainingEvaluationType = PrismaTrainingEvaluationType;
+export type TrainingEvaluationType = PrismaTrainingEvaluationType;
 
 export function getTrainingBusinessFields(
   training: Pick<CourseRun, "runCode" | "plannedSeats" | "confirmedSeats">,
