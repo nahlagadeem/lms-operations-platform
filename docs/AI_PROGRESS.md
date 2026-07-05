@@ -1,116 +1,81 @@
-# AI Progress
+# LMS Operations Platform - AI Development Handoff
 
-## Current State
+## Repository
+- Current branch: `feature/project-scope-to-purchase-order`
+- Current HEAD commit: `d5c3d19904422fefc85559a8de58514933079f38`
+- Current status (working tree clean/dirty): clean after the handoff docs commit
 
-- Branch: `feature/project-scope-to-purchase-order`
-- HEAD: `577871f7a091d0761852fca9792379f507746984` (`Add training evaluation workflow`)
-- Remote sync: `git pull --ff-only` reported `Already up to date.`
-- Working tree: intentionally dirty with PTSP-16 RBAC / platform role work in progress.
-- Do not reset, discard, overwrite, or restart this work.
+## Overall Project Status
+- Overall completion estimate: about 1 of 14 PTSP stories is complete, or roughly 7%; PTSP-16 is complete and verified, and the remaining PTSP stories are still open.
+- PTSP stories completed: `PTSP-16`
+- PTSP stories in progress: none
+- PTSP stories not started: `PTSP-17`, `PTSP-19`, `PTSP-20`, `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
-## Intentional Uncommitted Work
+## Completed PTSP Stories
+### PTSP-16
+- Summary: Established platform-role-based RBAC across auth, navigation, dashboard, project details, project structure, trainings, courses, packages, providers, locations, API exports, demo data, and demo login helpers.
+- Commits related: `e4243b3`, `ad3302a`, `e106547`, `9d16eda`, `714ff3e`, `2afe4e8`, `1f628a7`, `2ab8138`, `8e4d32f`, `3f7d466`, `d5c3d19`
+- Main files modified: `prisma/schema.prisma`, `prisma/migrations/20260622160000_platform_role/migration.sql`, `src/lib/auth.ts`, `src/lib/permissions.ts`, `src/proxy.ts`, `src/app/login/page.tsx`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/api/dashboard-report/route.ts`, `src/app/project-details/page.tsx`, `src/app/project-overview-actions.ts`, `src/app/project-structure/actions.ts`, `src/app/project-structure/page.tsx`, `src/app/project-structure/scopes/[id]/page.tsx`, `src/app/course-runs/actions.ts`, `src/app/course-runs/page.tsx`, `src/app/course-runs/[id]/page.tsx`, `src/app/providers/actions.ts`, `src/app/providers/page.tsx`, `src/app/locations/actions.ts`, `src/app/locations/page.tsx`, `src/app/courses/page.tsx`, `src/app/courses/[id]/page.tsx`, `src/app/packages/[id]/page.tsx`, `src/app/api/course-run-documents/route.ts`, `src/app/api/project-documents/route.ts`, `src/app/api/project-documents/delete/route.ts`, `src/app/api/project-report/export/route.ts`, `scripts/seed-realistic-demo.ts`
+- Notes: demo/staging ready; production still needs opaque session hardening.
 
-The current uncommitted changes are centered on platform roles and permission enforcement:
+## PTSP-16 Summary
+- Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
+- Auth changes: `admin/admin` still works and resolves to `admin@jawraa.demo`; auth now resolves role from `AppUser`; raw role-cookie authentication is rejected in proxy; login is still email-based for the demo session cookie.
+- Permission helpers: `getCurrentPlatformRole`, `canViewFinancials`, `canEditOperationalData`, `canCreateOperationalData`, `canManageFinancialFields`, `isCustomerCapacityOnly`, `assertPermission`.
+- Dashboard RBAC: removed query-string role behavior; dashboard now uses resolved platform role; financial summary and reporting output are hidden for non-financial roles; dashboard report export returns `403` for non-financial roles.
+- Financial visibility: financial data is visible only to `PROJECT_MANAGER` and `KEY_STAKEHOLDER`.
+- Training RBAC: training list create controls are operational-role only; training detail create/edit surfaces are role-gated; `vendorCost` is protected on both create and update paths; non-financial edits preserve existing `vendorCost`.
+- Project RBAC: project details hide financial sections for non-financial roles; project edit controls are role-gated; customer users are redirected away.
+- PO RBAC: project structure and scope pages gate create/edit/delete and financial fields; customer users are redirected away.
+- Provider/location RBAC: provider and location create actions require operational create permission; create controls are hidden from read-only roles; customer users are redirected away from management pages.
+- API 403 handling: document upload/delete and report export routes now return explicit `403` responses when the role lacks permission.
+- Demo role login: login page has an environment-gated demo selector for role-based testing; selector is enabled with `ENABLE_DEMO_ROLE_LOGIN=true`.
+- Demo seed users: `admin@jawraa.demo` (`PROJECT_MANAGER`), `stakeholder@jawraa.demo` (`KEY_STAKEHOLDER`), `dataentry@jawraa.demo` (`DATA_ENTRY`), `customer@jawraa.demo` (`CUSTOMER`).
 
-- Adds `PlatformRole` to Prisma with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`.
-- Adds `AppUser.platformRole`.
-- Adds a permission helper module for current-role lookup and role capability checks.
-- Changes login/session handling to use `admin@jawraa.demo` and resolve the current user's platform role.
-- Updates layout navigation so customer users see a reduced navigation set.
-- Hides or disables create/edit controls for users without operational edit permissions.
-- Hides financial fields and export access from users without financial permissions.
-- Restricts server actions and document/report API routes with permission checks.
-- Gives customer users a capacity-focused training detail view.
+## Remaining PTSP-16 Limitations
+- Plain email session cookie: the session is still a plain email identity, not a signed opaque token.
+- Production security improvements: the demo login flow is intentionally simple and should not be treated as production-grade authentication.
+- Intentional demo-only behavior: the role selector is gated behind `ENABLE_DEMO_ROLE_LOGIN=true`.
 
-## Already Implemented For PTSP-16
+## Git History
+- `e4243b3` - Protect training `vendorCost` on non-financial edits.
+- `ad3302a` - Resolve platform roles from `AppUser` only and reject raw role cookies.
+- `e106547` - Add the platform-role foundation in Prisma, auth, login, and layout.
+- `9d16eda` - Return explicit `403` responses for protected API routes.
+- `714ff3e` - Gate project details and PO/project structure financial access.
+- `2afe4e8` - Gate trainings list access by platform role.
+- `1f628a7` - Align dashboard access with platform roles.
+- `2ab8138` - Guard provider, vendor, and location mutations.
+- `8e4d32f` - Gate course and package pricing views.
+- `3f7d466` - Seed demo users for all platform roles.
+- `d5c3d19` - Add the demo-only role login selector.
 
-- Schema-level platform role enum and optional AppUser role field.
-- Migration folder for the platform role enum and AppUser column.
-- Centralized permission helpers in `src/lib/permissions.ts`.
-- Auth flow now delegates authenticated state to platform role resolution.
-- Root navigation varies for customer users.
-- PO/project structure create, edit, delete, course assignment, estimated-seat editing, and document mutation controls are gated in UI and server actions.
-- Training create/edit/enrollment/instructor/attendance/evaluation actions are gated.
-- Training list create panel is gated.
-- Training detail edit panels, document upload, evaluation forms, instructor removal, and enrollment edits are gated.
-- Project details financial display/export are gated, and customer users are redirected away from project details.
-- Project overview edits are split between operational fields and financial fields.
-- Document upload/delete routes and project report export route now include permission checks.
+## Architecture Decisions
+- `PlatformRole` is the source of truth for RBAC.
+- Financial visibility must use permission helpers, not ad hoc checks.
+- Raw role cookies are forbidden as authentication.
+- Dashboard access no longer uses query-string roles.
+- `vendorCost` protection must remain server-side and UI-side.
+- The demo login selector must stay environment-gated.
+- Customer users are capacity/read-only users, not partial admins.
 
-## Completed
+## Testing
+- Seed users: `admin@jawraa.demo`, `stakeholder@jawraa.demo`, `dataentry@jawraa.demo`, `customer@jawraa.demo`.
+- Demo login: set `ENABLE_DEMO_ROLE_LOGIN=true` to show the role selector on the login page.
+- Manual role-testing checklist: log in as each seeded role; verify nav visibility; verify dashboard financial visibility; verify training list/detail access; verify `vendorCost` visibility and editing; verify course and package pricing visibility; verify Add Training visibility; verify project details access; verify PO/project structure access; verify provider/location access; verify document upload/delete permissions; verify report export permissions.
+- Expected role matrix: `PROJECT_MANAGER` sees full access and financials; `KEY_STAKEHOLDER` sees financials but is view-only; `DATA_ENTRY` can manage operational records but sees no financial output; `CUSTOMER` sees read-only capacity information only.
 
-- PTSP-16: Fixed training vendorCost RBAC protection.
-  - `vendorCost` input only renders for `PROJECT_MANAGER`.
-  - Non-financial roles cannot mutate `vendorCost`, even by forged form submission.
-  - Existing `vendorCost` is preserved during non-financial training edits.
-  - `npx prisma generate` passed.
-  - `npm run build` passed.
-- PTSP-16: Removed raw role-cookie authentication.
-  - Raw role-cookie authentication removed.
-  - Platform role now resolves from `AppUser`.
-  - `admin/admin` demo login still resolves to `admin@jawraa.demo` as `PROJECT_MANAGER`.
-  - `npm run build` passed.
-- PTSP-16: Added platform role foundation.
-  - Schema and migration add nullable `AppUser.platformRole`.
-  - Demo login writes `admin@jawraa.demo`.
-  - Auth uses the shared `AppUser` platform-role resolution flow.
-  - Layout uses resolved auth/role state for route protection and customer navigation.
-  - `npm run build` passed.
-- PTSP-16: Protected API routes now return explicit forbidden responses.
-  - Document upload/delete APIs return HTTP 403 for failed operational edit permission checks.
-  - Project report export returns HTTP 403 for failed financial view permission checks.
-  - `npm run build` passed.
-- PTSP-16: Finalized project details and PO/project structure RBAC.
-  - Project details financial outputs render only for financial-view roles.
-  - Project details and PO mutation controls are hidden for non-operational editors.
-  - PO budget, invoiced, collected, and remaining amounts render only for financial-view roles.
-  - Customer users are redirected away from project details and PO pages.
-  - Project and PO server actions enforce operational or financial permissions.
-  - `npm run build` passed.
-- PTSP-16: Finalized trainings list RBAC.
-  - Create controls render only for operational editor roles.
-  - Read-only roles cannot open the create panel.
-  - Training list financial fields render only for `PROJECT_MANAGER`.
-  - DATA_ENTRY and CUSTOMER users do not see financial outputs on the trainings list.
-  - `npm run build` passed.
-- PTSP-16: Aligned dashboard access with platform roles.
-  - Dashboard/home uses the resolved `AppUser` platform role instead of the old query-string role model.
-  - Project financial summary values render only for financial-view roles.
-  - Dashboard reporting table and CSV export render only for financial-view roles.
-  - Dashboard report export API returns HTTP 403 for non-financial roles.
-  - `npm run build` passed.
-- PTSP-16: Guarded provider, vendor, and location mutation surfaces.
-  - Provider/vendor and location create actions require operational create permission.
-  - Create controls and panels render only for `PROJECT_MANAGER` and `DATA_ENTRY`.
-  - Customer users are redirected away from provider/vendor and location management pages.
-  - `npm run build` passed.
-- PTSP-16: Gated course and package pricing views.
-  - Course list and package detail final-price columns render only for financial-view roles.
-  - Course detail pricing metrics and pricing snapshot render only for financial-view roles.
-  - Package discounted value renders only for financial-view roles.
-  - Course detail Add Training controls render only for operational editor roles.
-  - Customer users no longer see provider/location management links from the courses page.
-  - `npm run build` passed.
-- PTSP-16: Seeded demo users for platform-role testing.
-  - `admin@jawraa.demo` is seeded as `PROJECT_MANAGER`.
-  - `stakeholder@jawraa.demo` is seeded as `KEY_STAKEHOLDER`.
-  - `dataentry@jawraa.demo` is seeded as `DATA_ENTRY`.
-  - `customer@jawraa.demo` is seeded as `CUSTOMER`.
-  - `admin/admin` demo login remains compatible with `admin@jawraa.demo`.
-  - `npm run build` passed.
-- PTSP-16: Added demo-only role login selector.
-  - `ENABLE_DEMO_ROLE_LOGIN=true` reveals seeded role login buttons on the login page.
-  - Demo role buttons set the same `lms_ops_auth` cookie to the selected seeded email.
-  - `admin/admin` login remains unchanged.
-  - `npm run build` passed.
+## Next Story Recommendation
+- Recommend `PTSP-17`.
+- Why: PTSP-16 is complete, validated, and demo/staging ready; the remaining PTSP stories are still open, so the next dependency-safe step is the next unstarted story in sequence.
 
-## Known Missing Or Incomplete For PTSP-16
+## Coding Rules
+- Never rebuild existing features.
+- Modify existing implementation only.
+- One atomic task per commit.
+- Keep commits focused.
+- Run `npm run build` before committing.
+- Update `AI_PROGRESS.md` after every completed task.
 
-- Remaining known limitation: session cookie is still a plain email identity, not an opaque signed token.
-
-## Recommended Next Step
-
-Continue with the next smallest PTSP-16 correctness gap:
-
-1. Manually verify the PTSP-16 role matrix using the seeded demo users.
-2. Replace the demo plain-email session cookie with an opaque signed token before production.
+## Current TODO
+- First action for the next Codex session: open the PTSP-17 story definition, inspect the current repository state, and identify the smallest scoped task before editing anything.
