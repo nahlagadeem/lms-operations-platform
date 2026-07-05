@@ -9,6 +9,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { AttendeeType, EnrollmentStatus, TrainingStatus } from "@/lib/brd-terminology";
+import { db } from "@/lib/db";
+import {
+  assertPermission,
+  canCreateOperationalData,
+  canEditOperationalData,
+  canManageFinancialFields,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 import * as trainingEvaluationService from "@/server/services/training-evaluation-service";
 import * as trainingService from "@/server/services/training-service";
 
@@ -45,6 +53,18 @@ function parseRating(value: string) {
   return parsed;
 }
 
+async function requireOperationalAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canEditOperationalData);
+  return role;
+}
+
+async function requireOperationalCreationAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canCreateOperationalData);
+  return role;
+}
+
 function parseTrainingCity(value: string) {
   return Object.values(TrainingCity).includes(value as TrainingCity)
     ? (value as TrainingCity)
@@ -53,6 +73,7 @@ function parseTrainingCity(value: string) {
 
 export async function createTraining(formData: FormData) {
   await requireAuth();
+  const role = await requireOperationalCreationAccess();
 
   const purchaseOrderCourseEntryId = normalizeText(
     formData.get("purchaseOrderCourseEntryId"),
@@ -62,6 +83,7 @@ export async function createTraining(formData: FormData) {
   const vendorCost = parseOptionalDecimal(normalizeText(formData.get("vendorCost")));
   const city = parseTrainingCity(normalizeText(formData.get("city")));
   const daysHeld = parseOptionalInt(normalizeText(formData.get("daysHeld")));
+  const vendorCostValue = normalizeText(formData.get("vendorCost"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
   const status = normalizeText(formData.get("status")) as TrainingStatus;
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
@@ -72,11 +94,15 @@ export async function createTraining(formData: FormData) {
     throw new Error("Please choose a PO Course Entry and try again.");
   }
 
+  if (vendorCostValue && !canManageFinancialFields(role)) {
+    throw new Error("You are not allowed to modify financial fields.");
+  }
+
   const createdTraining = await trainingService.createTraining({
     purchaseOrderCourseEntryId,
     expectedCourseId: expectedCourseId || undefined,
     vendorId: vendorId || undefined,
-    vendorCost,
+      vendorCost: vendorCostValue && canManageFinancialFields(role) ? vendorCost : null,
     city,
     daysHeld,
     deliveryMode,
@@ -94,13 +120,16 @@ export async function createTraining(formData: FormData) {
 
 export async function updateTraining(formData: FormData) {
   await requireAuth();
+  const role = await requireOperationalAccess();
+  const canManageFinancials = canManageFinancialFields(role);
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const purchaseOrderCourseEntryId = normalizeText(
     formData.get("purchaseOrderCourseEntryId"),
   );
   const vendorId = normalizeText(formData.get("vendorId"));
-  const vendorCost = parseOptionalDecimal(normalizeText(formData.get("vendorCost")));
+  const submittedVendorCostValue = normalizeText(formData.get("vendorCost"));
+  const submittedVendorCost = parseOptionalDecimal(submittedVendorCostValue);
   const city = parseTrainingCity(normalizeText(formData.get("city")));
   const daysHeld = parseOptionalInt(normalizeText(formData.get("daysHeld")));
   const locationId = normalizeText(formData.get("locationId"));
@@ -113,6 +142,21 @@ export async function updateTraining(formData: FormData) {
   if (!trainingId || !purchaseOrderCourseEntryId || !deliveryMode || !status) {
     throw new Error("Please complete the required training details.");
   }
+
+  const existingTraining = await db.courseRun.findUnique({
+    where: { id: trainingId },
+    select: { vendorCost: true },
+  });
+
+  if (!existingTraining) {
+    throw new Error("Training was not found.");
+  }
+
+  const vendorCost = canManageFinancials
+    ? submittedVendorCost
+    : existingTraining.vendorCost === null
+      ? null
+      : Number(existingTraining.vendorCost);
 
   await trainingService.updateTraining({
     trainingId,
@@ -137,6 +181,7 @@ export async function updateTraining(formData: FormData) {
 
 export async function assignInstructorToTraining(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const instructorId = normalizeText(formData.get("instructorId"));
@@ -161,6 +206,7 @@ export async function assignInstructorToTraining(formData: FormData) {
 
 export async function removeInstructorFromTraining(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const instructorId = normalizeText(formData.get("instructorId"));
@@ -178,6 +224,7 @@ export async function removeInstructorFromTraining(formData: FormData) {
 
 export async function enrollExistingAttendee(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const attendeeId = normalizeText(formData.get("attendeeId"));
@@ -204,6 +251,7 @@ export async function enrollExistingAttendee(formData: FormData) {
 
 export async function createAttendeeAndEnroll(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const attendeeType = normalizeText(
@@ -246,6 +294,7 @@ export async function createAttendeeAndEnroll(formData: FormData) {
 
 export async function updateEnrollmentStatus(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const enrollmentId = normalizeText(formData.get("enrollmentId"));
   const trainingId = normalizeText(formData.get("trainingId"));
@@ -272,6 +321,7 @@ export async function updateEnrollmentStatus(formData: FormData) {
 
 export async function recordAttendance(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const attendeeId = normalizeText(formData.get("attendeeId"));
@@ -306,6 +356,7 @@ export async function recordAttendance(formData: FormData) {
 
 export async function upsertCourseEvaluation(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const attendeeId = normalizeText(formData.get("attendeeId"));
@@ -330,6 +381,7 @@ export async function upsertCourseEvaluation(formData: FormData) {
 
 export async function upsertInstructorEvaluation(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const attendeeId = normalizeText(formData.get("attendeeId"));
@@ -356,6 +408,7 @@ export async function upsertInstructorEvaluation(formData: FormData) {
 
 export async function upsertAttendeeEvaluation(formData: FormData) {
   await requireAuth();
+  await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
   const attendeeId = normalizeText(formData.get("attendeeId"));

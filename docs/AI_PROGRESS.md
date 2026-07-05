@@ -1,0 +1,62 @@
+# AI Progress
+
+## Current State
+
+- Branch: `feature/project-scope-to-purchase-order`
+- HEAD: `577871f7a091d0761852fca9792379f507746984` (`Add training evaluation workflow`)
+- Remote sync: `git pull --ff-only` reported `Already up to date.`
+- Working tree: intentionally dirty with PTSP-16 RBAC / platform role work in progress.
+- Do not reset, discard, overwrite, or restart this work.
+
+## Intentional Uncommitted Work
+
+The current uncommitted changes are centered on platform roles and permission enforcement:
+
+- Adds `PlatformRole` to Prisma with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`.
+- Adds `AppUser.platformRole`.
+- Adds a permission helper module for current-role lookup and role capability checks.
+- Changes login/session handling to use `admin@jawraa.demo` and resolve the current user's platform role.
+- Updates layout navigation so customer users see a reduced navigation set.
+- Hides or disables create/edit controls for users without operational edit permissions.
+- Hides financial fields and export access from users without financial permissions.
+- Restricts server actions and document/report API routes with permission checks.
+- Gives customer users a capacity-focused training detail view.
+
+## Already Implemented For PTSP-16
+
+- Schema-level platform role enum and optional AppUser role field.
+- Migration folder for the platform role enum and AppUser column.
+- Centralized permission helpers in `src/lib/permissions.ts`.
+- Auth flow now delegates authenticated state to platform role resolution.
+- Root navigation varies for customer users.
+- PO/project structure create, edit, delete, course assignment, estimated-seat editing, and document mutation controls are gated in UI and server actions.
+- Training create/edit/enrollment/instructor/attendance/evaluation actions are gated.
+- Training list create panel is gated.
+- Training detail edit panels, document upload, evaluation forms, instructor removal, and enrollment edits are gated.
+- Project details financial display/export are gated, and customer users are redirected away from project details.
+- Project overview edits are split between operational fields and financial fields.
+- Document upload/delete routes and project report export route now include permission checks.
+
+## Completed
+
+- PTSP-16: Fixed training vendorCost RBAC protection.
+  - `vendorCost` input only renders for `PROJECT_MANAGER`.
+  - Non-financial roles cannot mutate `vendorCost`, even by forged form submission.
+  - Existing `vendorCost` is preserved during non-financial training edits.
+  - `npx prisma generate` passed.
+  - `npm run build` passed.
+
+## Known Missing Or Incomplete For PTSP-16
+
+- Permission errors in API routes currently throw from `assertPermission`, likely returning 500 instead of explicit 403 responses.
+- The dashboard/home page still uses its older query-string role filter model and has not been aligned to the current platform role helper.
+- Other CRUD surfaces outside the touched PTSP-16 files, such as providers, vendors, locations, packages, and course pages/actions, still need review for RBAC coverage if they are in PTSP-16 scope.
+- The seed data creates only the legacy `SUPER_ADMIN` user; it does not seed representative users for all platform roles.
+
+## Recommended Next Step
+
+Continue with the next smallest PTSP-16 correctness gap:
+
+1. Convert route-level forbidden permission failures to explicit `403` responses.
+2. Align dashboard/home role behavior with the current platform role helper.
+3. Review remaining CRUD surfaces for RBAC coverage.

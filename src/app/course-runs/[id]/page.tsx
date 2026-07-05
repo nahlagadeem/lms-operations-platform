@@ -17,6 +17,13 @@ import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import {
+  canEditOperationalData,
+  canManageFinancialFields,
+  canViewFinancials,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 import { getAttendanceRate, getTrainingCapacity } from "@/server/services/capacity-service";
 import { getTrainingEnrollmentSummary } from "@/server/services/enrollment-service";
 import {
@@ -479,6 +486,11 @@ export default async function CourseRunDetailPage({
   const details = detailText(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const completionThreshold = 0.75;
+  const platformRole = await getCurrentPlatformRole();
+  const canEditOps = canEditOperationalData(platformRole);
+  const canManageFinancials = canManageFinancialFields(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
+  const customerOnly = isCustomerCapacityOnly(platformRole);
 
   const [
     run,
@@ -689,29 +701,31 @@ export default async function CourseRunDetailPage({
             <p className="section-copy">{details.description}</p>
           </div>
 
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-            <Link href={panelHref(run.id, "edit")} className="primary-button min-w-fit whitespace-nowrap px-4 text-center text-sm">
-              {details.edit}
-            </Link>
-            <Link
-              href={panelHref(run.id, "instructor")}
-              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
-            >
-              {details.addTrainer}
-            </Link>
-            <Link
-              href={panelHref(run.id, "enrollment")}
-              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
-            >
-              {details.addNomination}
-            </Link>
-            <Link
-              href={panelHref(run.id, "attendance")}
-              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
-            >
-              {details.addAttendance}
-            </Link>
-          </div>
+          {canEditOps ? (
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+              <Link href={panelHref(run.id, "edit")} className="primary-button min-w-fit whitespace-nowrap px-4 text-center text-sm">
+                {details.edit}
+              </Link>
+              <Link
+                href={panelHref(run.id, "instructor")}
+                className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
+              >
+                {details.addTrainer}
+              </Link>
+              <Link
+                href={panelHref(run.id, "enrollment")}
+                className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
+              >
+                {details.addNomination}
+              </Link>
+              <Link
+                href={panelHref(run.id, "attendance")}
+                className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
+              >
+                {details.addAttendance}
+              </Link>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -772,7 +786,8 @@ export default async function CourseRunDetailPage({
             </div>
           </div>
 
-          <div className="panel-surface">
+          {!customerOnly ? (
+            <div className="panel-surface">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="eyebrow">{details.nominations}</p>
@@ -859,35 +874,37 @@ export default async function CourseRunDetailPage({
 
                         <div className="space-y-3">
                           <InfoCard label={details.attendanceStatus} value={attendanceLabel} />
-                          <form action={updateEnrollmentStatus} className="space-y-3">
-                            <input type="hidden" name="trainingId" value={run.id} />
-                            <input type="hidden" name="enrollmentId" value={nomination.id} />
-                            <label className="field-shell">
-                              <span className="field-label">{details.nominationStatus}</span>
-                              <select
-                                name="enrollmentStatus"
-                                defaultValue={getEnrollmentEditValue(nomination.nominationStatus)}
-                                className="field-input"
-                              >
-                                <option value="NOMINATED">{enrollmentStatusText(locale).NOMINATED}</option>
-                                <option value="CONFIRMED">{enrollmentStatusText(locale).CONFIRMED}</option>
-                                <option value="DECLINED">{enrollmentStatusText(locale).DECLINED}</option>
-                                <option value="WITHDRAWN">{enrollmentStatusText(locale).WITHDRAWN}</option>
-                              </select>
-                            </label>
-                            <label className="field-shell">
-                              <span className="field-label">{details.notes}</span>
-                              <textarea
-                                name="notes"
-                                rows={3}
-                                defaultValue={nomination.notes ?? ""}
-                                className="field-input min-h-[5rem] resize-y"
-                              />
-                            </label>
-                            <button type="submit" className="secondary-button w-full sm:w-auto">
-                              {details.saveNomination}
-                            </button>
-                          </form>
+                          {canEditOps ? (
+                            <form action={updateEnrollmentStatus} className="space-y-3">
+                              <input type="hidden" name="trainingId" value={run.id} />
+                              <input type="hidden" name="enrollmentId" value={nomination.id} />
+                              <label className="field-shell">
+                                <span className="field-label">{details.nominationStatus}</span>
+                                <select
+                                  name="enrollmentStatus"
+                                  defaultValue={getEnrollmentEditValue(nomination.nominationStatus)}
+                                  className="field-input"
+                                >
+                                  <option value="NOMINATED">{enrollmentStatusText(locale).NOMINATED}</option>
+                                  <option value="CONFIRMED">{enrollmentStatusText(locale).CONFIRMED}</option>
+                                  <option value="DECLINED">{enrollmentStatusText(locale).DECLINED}</option>
+                                  <option value="WITHDRAWN">{enrollmentStatusText(locale).WITHDRAWN}</option>
+                                </select>
+                              </label>
+                              <label className="field-shell">
+                                <span className="field-label">{details.notes}</span>
+                                <textarea
+                                  name="notes"
+                                  rows={3}
+                                  defaultValue={nomination.notes ?? ""}
+                                  className="field-input min-h-[5rem] resize-y"
+                                />
+                              </label>
+                              <button type="submit" className="secondary-button w-full sm:w-auto">
+                                {details.saveNomination}
+                              </button>
+                            </form>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -895,7 +912,8 @@ export default async function CourseRunDetailPage({
                 })
               )}
             </div>
-          </div>
+            </div>
+          ) : null}
 
           <div className="panel-surface">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1062,13 +1080,15 @@ export default async function CourseRunDetailPage({
                       ) : null}
                     </div>
 
-                    <form action={removeInstructorFromTraining}>
-                      <input type="hidden" name="trainingId" value={run.id} />
-                      <input type="hidden" name="instructorId" value={assignment.trainerId} />
-                      <button type="submit" className="secondary-button w-full sm:w-auto">
-                        {details.remove}
-                      </button>
-                    </form>
+                    {canEditOps ? (
+                      <form action={removeInstructorFromTraining}>
+                        <input type="hidden" name="trainingId" value={run.id} />
+                        <input type="hidden" name="instructorId" value={assignment.trainerId} />
+                        <button type="submit" className="secondary-button w-full sm:w-auto">
+                          {details.remove}
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 ))
               )}
@@ -1080,116 +1100,157 @@ export default async function CourseRunDetailPage({
           <div className="panel-surface">
             <p className="eyebrow">{details.progress}</p>
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              <ProgressCard
-                label={details.attendanceRequired}
-                value={run.attendanceRequired ? details.yes : details.no}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.certificateRequired}
-                value={run.certificateRequired ? details.yes : details.no}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.trainerAssignments}
-                value={formatNumber(run.trainers.length, numberLocale)}
-                tone="ink"
-              />
-              <ProgressCard
-                label={details.totalEnrollments}
-                value={formatNumber(enrollmentSummary.totalEnrollments, numberLocale)}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.confirmedEnrollments}
-                value={formatNumber(enrollmentSummary.confirmedEnrollments, numberLocale)}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.cancelledEnrollments}
-                value={formatNumber(enrollmentSummary.cancelledEnrollments, numberLocale)}
-                tone="ink"
-              />
-              <ProgressCard
-                label={details.completedEnrollments}
-                value={formatNumber(enrollmentSummary.completedEnrollments, numberLocale)}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.completionRate}
-                value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
-                  enrollmentSummary.completionRate,
-                )}%`}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.documents}
-                value={formatNumber(documents.length, numberLocale)}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.recordedAttendance}
-                value={formatNumber(run._count.attendanceRecords, numberLocale)}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.plannedSeats}
-                value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
-                tone="ink"
-              />
-              <ProgressCard
-                label={details.confirmedSeats}
-                value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.utilizationPct}
-                value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
-                  trainingCapacity.utilizationPct,
-                )}%`}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.remainingCapacity}
-                value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
-                tone="ink"
-              />
-              <ProgressCard
-                label={details.fullyBooked}
-                value={trainingCapacity.fullyBooked ? details.yes : details.no}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.overCapacityBy}
-                value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.attendanceRate}
-                value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
-                  attendanceSummary.attendanceRate,
-                )}%`}
-                tone="ink"
-              />
-              <ProgressCard
-                label={details.courseStatus}
-                value={localeText.courseRunStatuses[run.status]}
-                tone="teal"
-              />
+              {customerOnly ? (
+                <>
+                  <ProgressCard
+                    label={details.plannedSeats}
+                    value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.confirmedSeats}
+                    value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.utilizationPct}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      trainingCapacity.utilizationPct,
+                    )}%`}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.remainingCapacity}
+                    value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.fullyBooked}
+                    value={trainingCapacity.fullyBooked ? details.yes : details.no}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.overCapacityBy}
+                    value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
+                    tone="teal"
+                  />
+                </>
+              ) : (
+                <>
+                  <ProgressCard
+                    label={details.attendanceRequired}
+                    value={run.attendanceRequired ? details.yes : details.no}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.certificateRequired}
+                    value={run.certificateRequired ? details.yes : details.no}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.trainerAssignments}
+                    value={formatNumber(run.trainers.length, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.totalEnrollments}
+                    value={formatNumber(enrollmentSummary.totalEnrollments, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.confirmedEnrollments}
+                    value={formatNumber(enrollmentSummary.confirmedEnrollments, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.cancelledEnrollments}
+                    value={formatNumber(enrollmentSummary.cancelledEnrollments, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.completedEnrollments}
+                    value={formatNumber(enrollmentSummary.completedEnrollments, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.completionRate}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      enrollmentSummary.completionRate,
+                    )}%`}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.documents}
+                    value={formatNumber(documents.length, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.recordedAttendance}
+                    value={formatNumber(run._count.attendanceRecords, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.plannedSeats}
+                    value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.confirmedSeats}
+                    value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.utilizationPct}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      trainingCapacity.utilizationPct,
+                    )}%`}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.remainingCapacity}
+                    value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.fullyBooked}
+                    value={trainingCapacity.fullyBooked ? details.yes : details.no}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.overCapacityBy}
+                    value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.attendanceRate}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      attendanceSummary.attendanceRate,
+                    )}%`}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.courseStatus}
+                    value={localeText.courseRunStatuses[run.status]}
+                    tone="teal"
+                  />
+                </>
+              )}
             </div>
           </div>
 
-          {trainingFinancials ? (
+          {canSeeFinancials && trainingFinancials ? (
             <div className="panel-surface">
               <p className="eyebrow">{details.financialTitle}</p>
               <h3 className="section-title">{details.financialTitle}</h3>
               <p className="section-copy">{details.financialDescription}</p>
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <ProgressCard
-                  label={details.vendorCost}
-                  value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
-                  tone="ink"
-                />
+                {canManageFinancials ? (
+                  <ProgressCard
+                    label={details.vendorCost}
+                    value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
+                    tone="ink"
+                  />
+                ) : null}
                 <ProgressCard
                   label={details.revenue}
                   value={formatCurrency(trainingFinancials.revenue, numberLocale)}
@@ -1211,14 +1272,15 @@ export default async function CourseRunDetailPage({
             </div>
           ) : null}
 
-          <div className="panel-surface">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="eyebrow">{details.evaluationTitle}</p>
-                <h3 className="section-title">{details.evaluationTitle}</h3>
-                <p className="section-copy">{details.evaluationDescription}</p>
+          {canEditOps ? (
+            <div className="panel-surface">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="eyebrow">{details.evaluationTitle}</p>
+                  <h3 className="section-title">{details.evaluationTitle}</h3>
+                  <p className="section-copy">{details.evaluationDescription}</p>
+                </div>
               </div>
-            </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <ProgressCard
@@ -1394,9 +1456,11 @@ export default async function CourseRunDetailPage({
                 </button>
               </form>
             </div>
-          </div>
+            </div>
+          ) : null}
 
-          <div className="panel-surface">
+          {canEditOps ? (
+            <div className="panel-surface">
             <div>
               <p className="eyebrow">{details.documentVault}</p>
               <h3 className="section-title">{details.documents}</h3>
@@ -1490,11 +1554,12 @@ export default async function CourseRunDetailPage({
                 ))
               )}
             </div>
-          </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
-      {openPanel ? (
+      {openPanel && canEditOps ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/70 bg-white p-5 shadow-[0_30px_70px_rgba(10,25,35,0.35)] sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -1634,21 +1699,23 @@ export default async function CourseRunDetailPage({
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="field-shell">
-                    <span className="field-label">{details.vendorCost}</span>
-                    <input
-                      type="number"
-                      name="vendorCost"
-                      step="0.01"
-                      min="0"
-                      className="field-input"
-                      defaultValue={
-                        run.vendorCost !== null && run.vendorCost !== undefined
-                          ? Number(run.vendorCost)
-                          : ""
-                      }
-                    />
-                  </label>
+                  {canManageFinancials ? (
+                    <label className="field-shell">
+                      <span className="field-label">{details.vendorCost}</span>
+                      <input
+                        type="number"
+                        name="vendorCost"
+                        step="0.01"
+                        min="0"
+                        className="field-input"
+                        defaultValue={
+                          run.vendorCost !== null && run.vendorCost !== undefined
+                            ? Number(run.vendorCost)
+                            : ""
+                        }
+                      />
+                    </label>
+                  ) : null}
 
                   <label className="field-shell">
                     <span className="field-label">{details.daysHeld}</span>
