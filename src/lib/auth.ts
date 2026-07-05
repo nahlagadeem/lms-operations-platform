@@ -1,13 +1,10 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const AUTH_COOKIE_NAME = "lms_ops_auth";
+import { getCurrentPlatformRole } from "@/lib/permissions";
 
 export async function isAuthenticated() {
-  const cookieStore = await cookies();
-  return cookieStore.get(AUTH_COOKIE_NAME)?.value === "admin";
+  return (await getCurrentPlatformRole()) !== null;
 }
 
 export async function requireAuth() {

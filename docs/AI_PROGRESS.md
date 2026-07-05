@@ -50,6 +50,12 @@ The current uncommitted changes are centered on platform roles and permission en
   - Platform role now resolves from `AppUser`.
   - `admin/admin` demo login still resolves to `admin@jawraa.demo` as `PROJECT_MANAGER`.
   - `npm run build` passed.
+- PTSP-16: Added platform role foundation.
+  - Schema and migration add nullable `AppUser.platformRole`.
+  - Demo login writes `admin@jawraa.demo`.
+  - Auth uses the shared `AppUser` platform-role resolution flow.
+  - Layout uses resolved auth/role state for route protection and customer navigation.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 

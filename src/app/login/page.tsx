@@ -23,7 +23,7 @@ async function login(formData: FormData) {
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(AUTH_COOKIE_NAME, "admin", {
+  cookieStore.set(AUTH_COOKIE_NAME, "admin@jawraa.demo", {
     httpOnly: true,
     sameSite: "lax",
     path: "/",

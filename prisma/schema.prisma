@@ -116,6 +116,13 @@ enum UserRole {
   VIEWER
 }
 
+enum PlatformRole {
+  PROJECT_MANAGER
+  KEY_STAKEHOLDER
+  DATA_ENTRY
+  CUSTOMER
+}
+
 enum VerificationStatus {
   PENDING
   VERIFIED
@@ -656,6 +663,7 @@ model AppUser {
   fullName                String
   email                   String               @unique
   role                    UserRole
+  platformRole            PlatformRole?
   department              String?
   isActive                Boolean              @default(true)
   lastLoginAt             DateTime?

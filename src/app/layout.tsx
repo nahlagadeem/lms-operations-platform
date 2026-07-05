@@ -6,7 +6,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HeaderNavLink } from "@/components/header-nav-link";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { isAuthenticated } from "@/lib/auth";
 import { getDirection, getLocale, t } from "@/lib/locale";
+import { getCurrentPlatformRole, isCustomerCapacityOnly } from "@/lib/permissions";
 import "./globals.css";
 
 const AUTH_COOKIE_NAME = "lms_ops_auth";
@@ -59,25 +61,33 @@ export default async function RootLayout({
   const direction = getDirection(locale);
   const localeText = t(locale);
   const isLoginPage = currentPath === "/login";
-  const cookieStore = await cookies();
-  const isAuthenticated = cookieStore.get(AUTH_COOKIE_NAME)?.value === "admin";
+  const authenticated = await isAuthenticated();
+  const platformRole = await getCurrentPlatformRole();
+  const customerOnly = isCustomerCapacityOnly(platformRole);
 
-  if (currentPath && !isAuthenticated && !isLoginPage) {
+  if (currentPath && !authenticated && !isLoginPage) {
     redirect("/login");
   }
 
-  if (currentPath && isAuthenticated && isLoginPage) {
+  if (currentPath && authenticated && isLoginPage) {
     redirect("/");
   }
 
-  const navigationItems = [
-    { href: "/", label: localeText.nav.home },
-    { href: "/pos", label: localeText.nav.projectScope },
-    { href: "/trainings", label: localeText.nav.courseRuns },
-    { href: "/project-details", label: localeText.nav.projectDetails },
-    { href: "/packages", label: localeText.nav.packages },
-    { href: "/courses", label: localeText.nav.courses },
-  ];
+  const navigationItems = customerOnly
+    ? [
+        { href: "/", label: localeText.nav.home },
+        { href: "/trainings", label: localeText.nav.courseRuns },
+        { href: "/packages", label: localeText.nav.packages },
+        { href: "/courses", label: localeText.nav.courses },
+      ]
+    : [
+        { href: "/", label: localeText.nav.home },
+        { href: "/pos", label: localeText.nav.projectScope },
+        { href: "/trainings", label: localeText.nav.courseRuns },
+        { href: "/project-details", label: localeText.nav.projectDetails },
+        { href: "/packages", label: localeText.nav.packages },
+        { href: "/courses", label: localeText.nav.courses },
+      ];
 
   return (
     <html
