@@ -98,6 +98,11 @@ The current uncommitted changes are centered on platform roles and permission en
   - `customer@jawraa.demo` is seeded as `CUSTOMER`.
   - `admin/admin` demo login remains compatible with `admin@jawraa.demo`.
   - `npm run build` passed.
+- PTSP-16: Added demo-only role login selector.
+  - `ENABLE_DEMO_ROLE_LOGIN=true` reveals seeded role login buttons on the login page.
+  - Demo role buttons set the same `lms_ops_auth` cookie to the selected seeded email.
+  - `admin/admin` login remains unchanged.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 

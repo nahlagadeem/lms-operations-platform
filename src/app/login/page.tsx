@@ -5,6 +5,26 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { getLocale, t } from "@/lib/locale";
 
 const AUTH_COOKIE_NAME = "lms_ops_auth";
+const DEMO_ROLE_LOGIN_ENABLED = process.env.ENABLE_DEMO_ROLE_LOGIN === "true";
+
+const DEMO_ROLE_LOGINS = [
+  {
+    label: "PROJECT_MANAGER",
+    email: "admin@jawraa.demo",
+  },
+  {
+    label: "KEY_STAKEHOLDER",
+    email: "stakeholder@jawraa.demo",
+  },
+  {
+    label: "DATA_ENTRY",
+    email: "dataentry@jawraa.demo",
+  },
+  {
+    label: "CUSTOMER",
+    email: "customer@jawraa.demo",
+  },
+] as const;
 
 type LoginPageProps = {
   searchParams?: Promise<{
@@ -24,6 +44,31 @@ async function login(formData: FormData) {
 
   const cookieStore = await cookies();
   cookieStore.set(AUTH_COOKIE_NAME, "admin@jawraa.demo", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+
+  redirect("/");
+}
+
+async function loginAsDemoRole(formData: FormData) {
+  "use server";
+
+  if (!DEMO_ROLE_LOGIN_ENABLED) {
+    redirect("/login?error=1");
+  }
+
+  const email = String(formData.get("email") || "").trim();
+  const role = DEMO_ROLE_LOGINS.find((item) => item.email === email);
+
+  if (!role) {
+    redirect("/login?error=1");
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(AUTH_COOKIE_NAME, role.email, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
@@ -92,6 +137,27 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             Login
           </button>
         </form>
+
+        {DEMO_ROLE_LOGIN_ENABLED ? (
+          <section className="mt-6 border-t border-[rgba(17,17,17,0.08)] pt-5">
+            <p className="text-sm font-semibold text-[var(--ink-strong)]">
+              Demo role login
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[var(--ink-soft)]">
+              Use the seeded demo accounts to test role-specific access.
+            </p>
+            <div className="mt-4 grid gap-2">
+              {DEMO_ROLE_LOGINS.map((item) => (
+                <form key={item.email} action={loginAsDemoRole}>
+                  <input type="hidden" name="email" value={item.email} />
+                  <button type="submit" className="secondary-button w-full justify-start">
+                    {item.label} ({item.email})
+                  </button>
+                </form>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </section>
     </main>
   );
