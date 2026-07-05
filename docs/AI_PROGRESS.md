@@ -45,9 +45,15 @@ The current uncommitted changes are centered on platform roles and permission en
   - Existing `vendorCost` is preserved during non-financial training edits.
   - `npx prisma generate` passed.
   - `npm run build` passed.
+- PTSP-16: Removed raw role-cookie authentication.
+  - Raw role-cookie authentication removed.
+  - Platform role now resolves from `AppUser`.
+  - `admin/admin` demo login still resolves to `admin@jawraa.demo` as `PROJECT_MANAGER`.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 
+- Remaining known limitation: session cookie is still a plain email identity, not an opaque signed token.
 - Permission errors in API routes currently throw from `assertPermission`, likely returning 500 instead of explicit 403 responses.
 - The dashboard/home page still uses its older query-string role filter model and has not been aligned to the current platform role helper.
 - Other CRUD surfaces outside the touched PTSP-16 files, such as providers, vendors, locations, packages, and course pages/actions, still need review for RBAC coverage if they are in PTSP-16 scope.
