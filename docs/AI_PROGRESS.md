@@ -67,6 +67,12 @@ The current uncommitted changes are centered on platform roles and permission en
   - Customer users are redirected away from project details and PO pages.
   - Project and PO server actions enforce operational or financial permissions.
   - `npm run build` passed.
+- PTSP-16: Finalized trainings list RBAC.
+  - Create controls render only for operational editor roles.
+  - Read-only roles cannot open the create panel.
+  - Training list financial fields render only for `PROJECT_MANAGER`.
+  - DATA_ENTRY and CUSTOMER users do not see financial outputs on the trainings list.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 

@@ -5,6 +5,11 @@ import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import {
+  canCreateOperationalData,
+  canManageFinancialFields,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 
 type CourseRunsPageProps = {
   searchParams?: Promise<{
@@ -94,6 +99,9 @@ export default async function CourseRunsPage({
   const searchTerm = normalizeSingleValue(params.q);
   const packageCode = normalizeSingleValue(params.package);
   const statusFilter = normalizeSingleValue(params.status) as CourseRunStatus | "";
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+  const canManageFinancials = canManageFinancialFields(platformRole);
 
   const whereClause: Prisma.CourseRunWhereInput = {
     status: statusFilter || undefined,
@@ -207,12 +215,14 @@ export default async function CourseRunsPage({
             <h2 className="section-title">{localeText.courseRuns.title}</h2>
             <p className="section-copy">{localeText.courseRuns.description}</p>
           </div>
-          <Link
-            href="/trainings?panel=create"
-            className="primary-button w-full sm:w-auto"
-          >
-            {uiText.addButton}
-          </Link>
+          {canCreate ? (
+            <Link
+              href="/trainings?panel=create"
+              className="primary-button w-full sm:w-auto"
+            >
+              {uiText.addButton}
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -383,7 +393,7 @@ export default async function CourseRunsPage({
         )}
       </section>
 
-      {openPanel ? (
+      {openPanel && canCreate ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="jawraa-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -434,16 +444,18 @@ export default async function CourseRunsPage({
                   </select>
                 </label>
 
-                <label className="field-shell">
-                  <span className="field-label">{localeText.courseRuns.vendorCost}</span>
-                  <input
-                    type="number"
-                    name="vendorCost"
-                    step="0.01"
-                    min="0"
-                    className="field-input"
-                  />
-                </label>
+                {canManageFinancials ? (
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.courseRuns.vendorCost}</span>
+                    <input
+                      type="number"
+                      name="vendorCost"
+                      step="0.01"
+                      min="0"
+                      className="field-input"
+                    />
+                  </label>
+                ) : null}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
