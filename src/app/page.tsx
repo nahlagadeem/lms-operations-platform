@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import { getProjectSummary } from "@/server/services/project-overview-service";
 import {
@@ -17,7 +18,6 @@ import {
 
 type HomePageProps = {
   searchParams?: Promise<{
-    role?: string;
     q?: string;
     category?: string;
     page?: string;
@@ -66,15 +66,6 @@ function normalizePage(value?: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function dashboardRole(value?: string) {
-  const role = normalize(value).toUpperCase();
-  if (role === "TRAINER") return "TRAINER";
-  if (role === "FINANCE" || role === "FINANCE_OFFICER") return "FINANCE_OFFICER";
-  if (role === "OPERATIONS_COORDINATOR") return "OPERATIONS_COORDINATOR";
-  if (role === "REPORTING_ANALYST") return "REPORTING_ANALYST";
-  return "GOVERNMENT_PROJECT_MANAGER";
-}
-
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
 }
@@ -110,14 +101,8 @@ function ratio(numerator: number, denominator: number) {
   return denominator > 0 ? (numerator / denominator) * 100 : 0;
 }
 
-function buildDashboardUrl(params: {
-  role: string;
-  q?: string;
-  category?: string;
-  page?: number;
-}) {
+function buildDashboardUrl(params: { q?: string; category?: string; page?: number }) {
   const search = new URLSearchParams();
-  if (params.role !== "GOVERNMENT_PROJECT_MANAGER") search.set("role", params.role);
   if (params.q) search.set("q", params.q);
   if (params.category) search.set("category", params.category);
   if (params.page && params.page > 1) search.set("page", String(params.page));
@@ -147,7 +132,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const localeText = t(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
-  const role = dashboardRole(params.role);
+  const platformRole = await getCurrentPlatformRole();
+  const canSeeFinancials = canViewFinancials(platformRole);
   const searchTerm = normalize(params.q);
   const categoryFilter = normalize(params.category);
   const reportingPage = normalizePage(params.page);
@@ -305,10 +291,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       orderBy: { endDate: "desc" },
       take: 8,
     }),
-    getProjectReportingRows(locale, {
-      q: searchTerm,
-      category: categoryFilter,
-    }),
+    canSeeFinancials
+      ? getProjectReportingRows(locale, {
+          q: searchTerm,
+          category: categoryFilter,
+        })
+      : Promise.resolve([]),
     getProjectSummary(),
     db.projectScope.findMany({
       include: {
@@ -406,7 +394,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     .map(([month, count]) => ({ label: month, value: count }));
 
   const reportExportUrl = `/api/dashboard-report?${new URLSearchParams({
-    role,
     ...(searchTerm ? { q: searchTerm } : {}),
     ...(categoryFilter ? { category: categoryFilter } : {}),
   }).toString()}`;
@@ -455,7 +442,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <h1 className="section-title">{localeText.home.projectIndicatorsTitle}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={buildDashboardUrl({ role })} className="primary-button">
+          <Link href={buildDashboardUrl({})} className="primary-button">
             Refresh
           </Link>
         </div>
@@ -465,6 +452,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         localeText={localeText}
         numberLocale={numberLocale}
         projectSummary={projectSummary}
+        canSeeFinancials={canSeeFinancials}
       />
 
       <section className="panel-surface">
@@ -614,6 +602,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </ChartPanel>
       </section>
 
+      {canSeeFinancials ? (
       <section className="panel-surface">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -626,7 +615,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
 
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_0.8fr_auto]">
-          <input type="hidden" name="role" value={role} />
           <label className="field-shell">
             <span className="field-label">{localeText.reporting.search}</span>
             <input
@@ -648,7 +636,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </label>
           <div className="flex flex-col gap-2 sm:flex-row xl:items-end">
             <button type="submit" className="primary-button">{localeText.reporting.apply}</button>
-            <Link href={buildDashboardUrl({ role })} className="secondary-button">{localeText.reporting.reset}</Link>
+            <Link href={buildDashboardUrl({})} className="secondary-button">{localeText.reporting.reset}</Link>
           </div>
         </form>
 
@@ -699,7 +687,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: 1,
@@ -711,7 +698,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </Link>
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: Math.max(1, safeReportingPage - 1),
@@ -730,7 +716,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <Link
                     key={page}
                     href={buildDashboardUrl({
-                      role,
                       q: searchTerm,
                       category: categoryFilter,
                       page,
@@ -744,7 +729,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               )}
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: Math.min(totalReportingPages, safeReportingPage + 1),
@@ -756,7 +740,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </Link>
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: totalReportingPages,
@@ -770,6 +753,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         ) : null}
       </section>
+      ) : null}
     </div>
   );
 }
@@ -807,9 +791,11 @@ function ProjectSummarySection({
   localeText,
   numberLocale,
   projectSummary,
+  canSeeFinancials,
 }: {
   localeText: ReturnType<typeof t>;
   numberLocale: string;
+  canSeeFinancials: boolean;
   projectSummary: {
     startDate: Date | null;
     expectedEndDate: Date | null;
@@ -851,22 +837,26 @@ function ProjectSummarySection({
           value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
           percent={decimalToNumber(projectSummary.actualProgress)}
         />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.totalProjectValue}
-          value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
-        />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.totalProjectInvoices}
-          value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
-        />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.totalCollectedValue}
-          value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
-        />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.remainingUnbilledValue}
-          value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
-        />
+        {canSeeFinancials ? (
+          <>
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.totalProjectValue}
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.totalProjectInvoices}
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.totalCollectedValue}
+              value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.remainingUnbilledValue}
+              value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
+            />
+          </>
+        ) : null}
       </div>
     </section>
   );

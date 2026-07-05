@@ -73,11 +73,16 @@ The current uncommitted changes are centered on platform roles and permission en
   - Training list financial fields render only for `PROJECT_MANAGER`.
   - DATA_ENTRY and CUSTOMER users do not see financial outputs on the trainings list.
   - `npm run build` passed.
+- PTSP-16: Aligned dashboard access with platform roles.
+  - Dashboard/home uses the resolved `AppUser` platform role instead of the old query-string role model.
+  - Project financial summary values render only for financial-view roles.
+  - Dashboard reporting table and CSV export render only for financial-view roles.
+  - Dashboard report export API returns HTTP 403 for non-financial roles.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 
 - Remaining known limitation: session cookie is still a plain email identity, not an opaque signed token.
-- The dashboard/home page still uses its older query-string role filter model and has not been aligned to the current platform role helper.
 - Other CRUD surfaces outside the touched PTSP-16 files, such as providers, vendors, locations, packages, and course pages/actions, still need review for RBAC coverage if they are in PTSP-16 scope.
 - The seed data creates only the legacy `SUPER_ADMIN` user; it does not seed representative users for all platform roles.
 
@@ -85,6 +90,6 @@ The current uncommitted changes are centered on platform roles and permission en
 
 Continue with the next smallest PTSP-16 correctness gap:
 
-1. Convert route-level forbidden permission failures to explicit `403` responses.
-2. Align dashboard/home role behavior with the current platform role helper.
-3. Review remaining CRUD surfaces for RBAC coverage.
+1. Review remaining CRUD surfaces for RBAC coverage.
+2. Add role gates to providers, vendors, locations, packages, and course pages/actions if they are in PTSP-16 scope.
+3. Add representative seed users for all platform roles if needed for manual verification.
