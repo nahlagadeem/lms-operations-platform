@@ -1,5 +1,12 @@
 import { Prisma, ProjectActivityType } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { getLocale, t } from "@/lib/locale";
+import {
+  canEditOperationalData,
+  canViewFinancials,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 import {
   createActivity,
   createIssue,
@@ -52,6 +59,15 @@ export default async function ProjectDetailsPage() {
   const locale = await getLocale();
   const localeText = t(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const platformRole = await getCurrentPlatformRole();
+  const canEditOps = canEditOperationalData(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
+  const customerOnly = isCustomerCapacityOnly(platformRole);
+
+  if (customerOnly) {
+    redirect("/");
+  }
+
   const { summary, activities, risks, issues } = await getProjectDetails();
 
   const activityGroups = [
@@ -81,9 +97,11 @@ export default async function ProjectDetailsPage() {
             <h1 className="section-title">{localeText.projectDetails.title}</h1>
             <p className="section-copy">{localeText.projectDetails.description}</p>
           </div>
-          <a href="/api/project-report/export" className="primary-button">
-            {localeText.buttons.exportExcel}
-          </a>
+          {canSeeFinancials ? (
+            <a href="/api/project-report/export" className="primary-button">
+              {localeText.buttons.exportExcel}
+            </a>
+          ) : null}
         </div>
       </section>
 
@@ -91,6 +109,8 @@ export default async function ProjectDetailsPage() {
         summary={summary}
         localeText={localeText}
         numberLocale={numberLocale}
+        canEditOps={canEditOps}
+        canSeeFinancials={canSeeFinancials}
       />
 
       <section className="grid gap-6 xl:grid-cols-3">
@@ -100,6 +120,7 @@ export default async function ProjectDetailsPage() {
             title={group.title}
             type={group.type}
             activities={group.rows}
+            canEdit={canEditOps}
             labels={{
               add: localeText.buttons.add,
               edit: localeText.buttons.edit,
@@ -139,7 +160,7 @@ export default async function ProjectDetailsPage() {
                   <th>{localeText.projectDetails.responsePlan}</th>
                   <th>{localeText.projectDetails.status}</th>
                   <th>{localeText.projectDetails.closureDate}</th>
-                  <th>{localeText.projectDetails.actions}</th>
+                  {canEditOps ? <th>{localeText.projectDetails.actions}</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -153,23 +174,26 @@ export default async function ProjectDetailsPage() {
                     <td>{risk.responsePlan}</td>
                     <td><span className="status-pill">{risk.status}</span></td>
                     <td>{formatDate(risk.closureDate, numberLocale)}</td>
-                    <td>
-                      <RowActions
-                        editAriaLabel={localeText.aria.edit}
-                        deleteAriaLabel={localeText.aria.delete}
-                        cancelLabel={localeText.buttons.cancel}
-                        deleteAction={deleteRisk}
-                        id={risk.id}
-                      >
-                        <RiskForm
+                    {canEditOps ? (
+                      <td>
+                        <RowActions
+                          editAriaLabel={localeText.aria.edit}
+                          deleteAriaLabel={localeText.aria.delete}
+                          cancelLabel={localeText.buttons.cancel}
+                          deleteAction={deleteRisk}
                           id={risk.id}
-                          risk={risk}
-                          labels={localeText.projectDetails}
-                          buttons={localeText.buttons}
-                          requiredText={localeText.validation.requiredText}
-                        />
-                      </RowActions>
-                    </td>
+                        >
+                          <RiskForm
+                            id={risk.id}
+                            risk={risk}
+                            labels={localeText.projectDetails}
+                            buttons={localeText.buttons}
+                            requiredText={localeText.validation.requiredText}
+                            canEdit={canEditOps}
+                          />
+                        </RowActions>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -181,6 +205,7 @@ export default async function ProjectDetailsPage() {
             labels={localeText.projectDetails}
             buttons={localeText.buttons}
             requiredText={localeText.validation.requiredText}
+            canEdit={canEditOps}
           />
         </div>
       </section>
@@ -204,7 +229,7 @@ export default async function ProjectDetailsPage() {
                   <th>{localeText.projectDetails.responsePlan}</th>
                   <th>{localeText.projectDetails.status}</th>
                   <th>{localeText.projectDetails.closureDate}</th>
-                  <th>{localeText.projectDetails.actions}</th>
+                  {canEditOps ? <th>{localeText.projectDetails.actions}</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -216,23 +241,26 @@ export default async function ProjectDetailsPage() {
                     <td>{issue.responsePlan}</td>
                     <td><span className="status-pill">{issue.status}</span></td>
                     <td>{formatDate(issue.closureDate, numberLocale)}</td>
-                    <td>
-                      <RowActions
-                        editAriaLabel={localeText.aria.edit}
-                        deleteAriaLabel={localeText.aria.delete}
-                        cancelLabel={localeText.buttons.cancel}
-                        deleteAction={deleteIssue}
-                        id={issue.id}
-                      >
-                        <IssueForm
+                    {canEditOps ? (
+                      <td>
+                        <RowActions
+                          editAriaLabel={localeText.aria.edit}
+                          deleteAriaLabel={localeText.aria.delete}
+                          cancelLabel={localeText.buttons.cancel}
+                          deleteAction={deleteIssue}
                           id={issue.id}
-                          issue={issue}
-                          labels={localeText.projectDetails}
-                          buttons={localeText.buttons}
-                          requiredText={localeText.validation.requiredText}
-                        />
-                      </RowActions>
-                    </td>
+                        >
+                          <IssueForm
+                            id={issue.id}
+                            issue={issue}
+                            labels={localeText.projectDetails}
+                            buttons={localeText.buttons}
+                            requiredText={localeText.validation.requiredText}
+                            canEdit={canEditOps}
+                          />
+                        </RowActions>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -244,6 +272,7 @@ export default async function ProjectDetailsPage() {
             labels={localeText.projectDetails}
             buttons={localeText.buttons}
             requiredText={localeText.validation.requiredText}
+            canEdit={canEditOps}
           />
         </div>
       </section>
@@ -255,6 +284,8 @@ function ProjectSummaryEditSection({
   summary,
   localeText,
   numberLocale,
+  canEditOps,
+  canSeeFinancials,
 }: {
   summary: {
     startDate: Date | null;
@@ -268,6 +299,8 @@ function ProjectSummaryEditSection({
   };
   localeText: ReturnType<typeof t>;
   numberLocale: string;
+  canEditOps: boolean;
+  canSeeFinancials: boolean;
 }) {
   return (
     <section className="panel-surface">
@@ -283,6 +316,7 @@ function ProjectSummaryEditSection({
           inputValue={formatDateInput(summary.startDate)}
           displayValue={formatDate(summary.startDate, numberLocale)}
           localeText={localeText}
+          editable={canEditOps}
         />
         <ProjectSummaryField
           label={localeText.projectOverview.expectedEndDate}
@@ -291,6 +325,7 @@ function ProjectSummaryEditSection({
           inputValue={formatDateInput(summary.expectedEndDate)}
           displayValue={formatDate(summary.expectedEndDate, numberLocale)}
           localeText={localeText}
+          editable={canEditOps}
         />
         <ProjectSummaryField
           label={localeText.projectOverview.baselineProgress}
@@ -299,6 +334,7 @@ function ProjectSummaryEditSection({
           inputValue={String(decimalToNumber(summary.baselineProgress))}
           displayValue={formatPercent(summary.baselineProgress, numberLocale)}
           localeText={localeText}
+          editable={canEditOps}
           min={0}
           max={100}
           step="0.01"
@@ -310,50 +346,59 @@ function ProjectSummaryEditSection({
           inputValue={String(decimalToNumber(summary.actualProgress))}
           displayValue={formatPercent(summary.actualProgress, numberLocale)}
           localeText={localeText}
+          editable={canEditOps}
           min={0}
           max={100}
           step="0.01"
         />
-        <ProjectSummaryField
-          label={localeText.projectOverview.totalProjectValue}
-          field="totalProjectValue"
-          inputType="number"
-          inputValue={String(decimalToNumber(summary.totalProjectValue))}
-          displayValue={formatCurrency(summary.totalProjectValue, numberLocale)}
-          localeText={localeText}
-          min={0}
-          step="0.01"
-        />
-        <ProjectSummaryField
-          label={localeText.projectOverview.totalProjectInvoices}
-          field="totalProjectInvoices"
-          inputType="number"
-          inputValue={String(decimalToNumber(summary.totalProjectInvoices))}
-          displayValue={formatCurrency(summary.totalProjectInvoices, numberLocale)}
-          localeText={localeText}
-          min={0}
-          step="0.01"
-        />
-        <ProjectSummaryField
-          label={localeText.projectOverview.totalCollectedValue}
-          field="totalCollectedValue"
-          inputType="number"
-          inputValue={String(decimalToNumber(summary.totalCollectedValue))}
-          displayValue={formatCurrency(summary.totalCollectedValue, numberLocale)}
-          localeText={localeText}
-          min={0}
-          step="0.01"
-        />
-        <ProjectSummaryField
-          label={localeText.projectOverview.remainingUnbilledValue}
-          field="remainingUnbilledValue"
-          inputType="number"
-          inputValue={String(decimalToNumber(summary.remainingUnbilledValue))}
-          displayValue={formatCurrency(summary.remainingUnbilledValue, numberLocale)}
-          localeText={localeText}
-          min={0}
-          step="0.01"
-        />
+        {canSeeFinancials ? (
+          <>
+            <ProjectSummaryField
+              label={localeText.projectOverview.totalProjectValue}
+              field="totalProjectValue"
+              inputType="number"
+              inputValue={String(decimalToNumber(summary.totalProjectValue))}
+              displayValue={formatCurrency(summary.totalProjectValue, numberLocale)}
+              localeText={localeText}
+              editable={canEditOps}
+              min={0}
+              step="0.01"
+            />
+            <ProjectSummaryField
+              label={localeText.projectOverview.totalProjectInvoices}
+              field="totalProjectInvoices"
+              inputType="number"
+              inputValue={String(decimalToNumber(summary.totalProjectInvoices))}
+              displayValue={formatCurrency(summary.totalProjectInvoices, numberLocale)}
+              localeText={localeText}
+              editable={canEditOps}
+              min={0}
+              step="0.01"
+            />
+            <ProjectSummaryField
+              label={localeText.projectOverview.totalCollectedValue}
+              field="totalCollectedValue"
+              inputType="number"
+              inputValue={String(decimalToNumber(summary.totalCollectedValue))}
+              displayValue={formatCurrency(summary.totalCollectedValue, numberLocale)}
+              localeText={localeText}
+              editable={canEditOps}
+              min={0}
+              step="0.01"
+            />
+            <ProjectSummaryField
+              label={localeText.projectOverview.remainingUnbilledValue}
+              field="remainingUnbilledValue"
+              inputType="number"
+              inputValue={String(decimalToNumber(summary.remainingUnbilledValue))}
+              displayValue={formatCurrency(summary.remainingUnbilledValue, numberLocale)}
+              localeText={localeText}
+              editable={canEditOps}
+              min={0}
+              step="0.01"
+            />
+          </>
+        ) : null}
       </div>
     </section>
   );
@@ -366,6 +411,7 @@ function ProjectSummaryField({
   inputValue,
   displayValue,
   localeText,
+  editable,
   min,
   max,
   step,
@@ -376,6 +422,7 @@ function ProjectSummaryField({
   inputValue: string;
   displayValue: string;
   localeText: ReturnType<typeof t>;
+  editable: boolean;
   min?: number;
   max?: number;
   step?: string;
@@ -384,36 +431,38 @@ function ProjectSummaryField({
     <div className="jawraa-subcard p-4">
       <p className="text-sm font-semibold text-[var(--ink-soft)]">{label}</p>
       <p className="mt-2 text-xl font-bold text-[var(--ink-strong)]">{displayValue}</p>
-      <details className="mt-3">
-        <summary
-          aria-label={localeText.aria.edit}
-          title={localeText.aria.edit}
-          className="icon-button cursor-pointer"
-        >
-          <EditIcon />
-        </summary>
-        <form action={updateProjectSummaryField} className="mt-3 space-y-3">
-          <input type="hidden" name="field" value={field} />
-          <input
-            name="value"
-            type={inputType}
-            defaultValue={inputValue}
-            min={min}
-            max={max}
-            step={step}
-            required
-            className="field-input min-h-[2.75rem]"
-          />
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className="primary-button min-h-[2.5rem] px-3 text-sm">
-              {localeText.buttons.save}
-            </button>
-            <a href="/project-details" className="secondary-button min-h-[2.5rem] px-3 text-sm">
-              {localeText.buttons.cancel}
-            </a>
-          </div>
-        </form>
-      </details>
+      {editable ? (
+        <details className="mt-3">
+          <summary
+            aria-label={localeText.aria.edit}
+            title={localeText.aria.edit}
+            className="icon-button cursor-pointer"
+          >
+            <EditIcon />
+          </summary>
+          <form action={updateProjectSummaryField} className="mt-3 space-y-3">
+            <input type="hidden" name="field" value={field} />
+            <input
+              name="value"
+              type={inputType}
+              defaultValue={inputValue}
+              min={min}
+              max={max}
+              step={step}
+              required
+              className="field-input min-h-[2.75rem]"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="primary-button min-h-[2.5rem] px-3 text-sm">
+                {localeText.buttons.save}
+              </button>
+              <a href="/project-details" className="secondary-button min-h-[2.5rem] px-3 text-sm">
+                {localeText.buttons.cancel}
+              </a>
+            </div>
+          </form>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -422,11 +471,13 @@ function ActivitySection({
   title,
   type,
   activities,
+  canEdit,
   labels,
 }: {
   title: string;
   type: ProjectActivityType;
   activities: Array<{ id: string; text: string }>;
+  canEdit: boolean;
   labels: {
     add: string;
     edit: string;
@@ -452,66 +503,70 @@ function ActivitySection({
           activities.map((activity) => (
             <div key={activity.id} className="jawraa-subcard p-4">
               <p className="leading-7 text-[var(--ink-strong)]">{activity.text}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <details>
-                  <summary
-                    aria-label={labels.editAria}
-                    title={labels.editAria}
-                    className="icon-button cursor-pointer"
-                  >
-                    <EditIcon />
-                  </summary>
-                  <form action={updateActivity} className="mt-3 space-y-3">
+              {canEdit ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <details>
+                    <summary
+                      aria-label={labels.editAria}
+                      title={labels.editAria}
+                      className="icon-button cursor-pointer"
+                    >
+                      <EditIcon />
+                    </summary>
+                    <form action={updateActivity} className="mt-3 space-y-3">
+                      <input type="hidden" name="id" value={activity.id} />
+                      <input type="hidden" name="type" value={type} />
+                      <textarea
+                        name="text"
+                        defaultValue={activity.text}
+                        required
+                        title={labels.requiredText}
+                        className="field-input min-h-[5.5rem]"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button type="submit" className="primary-button min-h-[2.5rem] px-3 text-sm">
+                          {labels.save}
+                        </button>
+                        <a href="/project-details" className="secondary-button min-h-[2.5rem] px-3 text-sm">
+                          {labels.cancel}
+                        </a>
+                      </div>
+                    </form>
+                  </details>
+                  <form action={deleteActivity}>
                     <input type="hidden" name="id" value={activity.id} />
-                    <input type="hidden" name="type" value={type} />
-                    <textarea
-                      name="text"
-                      defaultValue={activity.text}
-                      required
-                      title={labels.requiredText}
-                      className="field-input min-h-[5.5rem]"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <button type="submit" className="primary-button min-h-[2.5rem] px-3 text-sm">
-                        {labels.save}
-                      </button>
-                      <a href="/project-details" className="secondary-button min-h-[2.5rem] px-3 text-sm">
-                        {labels.cancel}
-                      </a>
-                    </div>
+                    <button
+                      type="submit"
+                      aria-label={labels.deleteAria}
+                      title={labels.deleteAria}
+                      className="icon-button"
+                    >
+                      <TrashIcon />
+                    </button>
                   </form>
-                </details>
-                <form action={deleteActivity}>
-                  <input type="hidden" name="id" value={activity.id} />
-                  <button
-                    type="submit"
-                    aria-label={labels.deleteAria}
-                    title={labels.deleteAria}
-                    className="icon-button"
-                  >
-                    <TrashIcon />
-                  </button>
-                </form>
-              </div>
+                </div>
+              ) : null}
             </div>
           ))
         )}
       </div>
-      <form action={createActivity} className="mt-5 space-y-3 border-t border-[rgba(17,17,17,0.08)] pt-4">
-        <input type="hidden" name="type" value={type} />
-        <label className="field-shell">
-          <span className="field-label">{labels.activityText}</span>
-          <textarea
-            name="text"
-            required
-            title={labels.requiredText}
-            className="field-input min-h-[5.5rem]"
-          />
-        </label>
-        <button type="submit" className="primary-button">
-          {labels.add}
-        </button>
-      </form>
+      {canEdit ? (
+        <form action={createActivity} className="mt-5 space-y-3 border-t border-[rgba(17,17,17,0.08)] pt-4">
+          <input type="hidden" name="type" value={type} />
+          <label className="field-shell">
+            <span className="field-label">{labels.activityText}</span>
+            <textarea
+              name="text"
+              required
+              title={labels.requiredText}
+              className="field-input min-h-[5.5rem]"
+            />
+          </label>
+          <button type="submit" className="primary-button">
+            {labels.add}
+          </button>
+        </form>
+      ) : null}
     </section>
   );
 }
@@ -522,6 +577,7 @@ function RiskForm({
   labels,
   buttons,
   requiredText,
+  canEdit,
 }: {
   id?: string;
   risk?: {
@@ -548,7 +604,12 @@ function RiskForm({
   };
   buttons: { add: string; save: string };
   requiredText: string;
+  canEdit: boolean;
 }) {
+  if (!canEdit) {
+    return null;
+  }
+
   return (
     <form action={id ? updateRisk : createRisk} className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
       {id ? <input type="hidden" name="id" value={id} /> : null}
@@ -575,6 +636,7 @@ function IssueForm({
   labels,
   buttons,
   requiredText,
+  canEdit,
 }: {
   id?: string;
   issue?: {
@@ -597,7 +659,12 @@ function IssueForm({
   };
   buttons: { add: string; save: string };
   requiredText: string;
+  canEdit: boolean;
 }) {
+  if (!canEdit) {
+    return null;
+  }
+
   return (
     <form action={id ? updateIssue : createIssue} className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
       {id ? <input type="hidden" name="id" value={id} /> : null}

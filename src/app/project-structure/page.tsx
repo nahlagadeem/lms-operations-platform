@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
@@ -8,6 +9,13 @@ import {
   deleteProjectScope,
   updateProjectScope,
 } from "@/app/project-structure/actions";
+import {
+  canCreateOperationalData,
+  canEditOperationalData,
+  canViewFinancials,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 
 type ProjectStructurePageProps = {
   searchParams?: Promise<{
@@ -48,6 +56,14 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
   const courseSearch = normalizeSearch(params.courseQ);
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+  const canEdit = canEditOperationalData(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
+
+  if (isCustomerCapacityOnly(platformRole)) {
+    redirect("/");
+  }
 
   const scopes = await db.projectScope.findMany({
     orderBy: { code: "asc" },
@@ -120,9 +136,11 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <a href="#add-project-scope" className="primary-button">
-              {localeText.projectScopes.addScope}
-            </a>
+            {canCreate ? (
+              <a href="#add-project-scope" className="primary-button">
+                {localeText.projectScopes.addScope}
+              </a>
+            ) : null}
           <Link href="/trainings" className="secondary-button">
             {localeText.projectScopes.activeRuns}
           </Link>
@@ -134,13 +152,16 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
         <MetricCard title={localeText.projectScopes.totalProjectScopes} value={formatNumber(scopes.length, numberLocale)} />
         <MetricCard title={localeText.projectScopes.packages} value={formatNumber(totals.packages, numberLocale)} />
         <MetricCard title={localeText.projectScopes.courses} value={formatNumber(totals.courses, numberLocale)} />
-        <MetricCard
-          title={localeText.projectScopes.budget}
-          value={formatCurrency(new Prisma.Decimal(totals.budget), numberLocale)}
-        />
+        {canSeeFinancials ? (
+          <MetricCard
+            title={localeText.projectScopes.budget}
+            value={formatCurrency(new Prisma.Decimal(totals.budget), numberLocale)}
+          />
+        ) : null}
       </section>
 
-      <section id="add-project-scope" className="panel-surface">
+      {canCreate ? (
+        <section id="add-project-scope" className="panel-surface">
         <div className="mb-5">
           <p className="eyebrow">{localeText.projectScopes.addScope}</p>
           <h2 className="section-title">{localeText.projectScopes.addScope}</h2>
@@ -242,7 +263,8 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </button>
           </div>
         </form>
-      </section>
+        </section>
+      ) : null}
 
       <section className="grid gap-4">
         {scopes.map((scope) => {
@@ -275,7 +297,9 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <InfoBox label={localeText.projectScopes.packages} value={formatNumber(scope.packages.length, numberLocale)} />
                 <InfoBox label={localeText.projectScopes.courses} value={formatNumber(courseCount, numberLocale)} />
-                <InfoBox label={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
+                {canSeeFinancials ? (
+                  <InfoBox label={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
+                ) : null}
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -304,111 +328,113 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                   />
                 </div>
               </div>
-              <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
-                <details className="jawraa-subcard p-4">
-                  <summary className="cursor-pointer text-sm font-bold text-[var(--ink-strong)]">
-                    {localeText.projectScopes.editScope}
-                  </summary>
-                  <form action={updateProjectScope} className="mt-4 grid gap-4 lg:grid-cols-2">
+              {canEdit ? (
+                <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
+                  <details className="jawraa-subcard p-4">
+                    <summary className="cursor-pointer text-sm font-bold text-[var(--ink-strong)]">
+                      {localeText.projectScopes.editScope}
+                    </summary>
+                    <form action={updateProjectScope} className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <input type="hidden" name="id" value={scope.id} />
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.code}</span>
+                        <input name="code" className="field-input" required defaultValue={scope.code} />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.status}</span>
+                        <select
+                          name="status"
+                          className="field-input"
+                          defaultValue={scope.isActive ? "ACTIVE" : "INACTIVE"}
+                        >
+                          <option value="ACTIVE">{localeText.projectScopes.active}</option>
+                          <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
+                        </select>
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.nameAr}</span>
+                        <input
+                          name="nameAr"
+                          className="field-input"
+                          required
+                          dir="rtl"
+                          defaultValue={formatPurchaseOrderTitle(scope, "ar")}
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.nameEn}</span>
+                        <input
+                          name="nameEn"
+                          className="field-input"
+                          required
+                          dir="ltr"
+                          defaultValue={formatPurchaseOrderTitle(scope, "en")}
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.region}</span>
+                        <input name="region" className="field-input" defaultValue={scope.region || ""} />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.file}</span>
+                        <input
+                          name="file"
+                          type="file"
+                          className="field-input"
+                          accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.startDate}</span>
+                        <input
+                          name="startDate"
+                          type="date"
+                          className="field-input"
+                          defaultValue={formatInputDate(scope.startDate)}
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
+                        <input
+                          name="expectedEndDate"
+                          type="date"
+                          className="field-input"
+                          defaultValue={formatInputDate(scope.expectedEndDate)}
+                        />
+                      </label>
+                      <label className="field-shell lg:col-span-2">
+                        <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
+                        <textarea
+                          name="description"
+                          rows={3}
+                          className="field-input min-h-[6rem] resize-y"
+                          defaultValue={scope.description || ""}
+                        />
+                      </label>
+                      <label className="field-shell lg:col-span-2">
+                        <span className="field-label">{localeText.projectScopes.notes}</span>
+                        <textarea
+                          name="notes"
+                          rows={3}
+                          className="field-input min-h-[6rem] resize-y"
+                          defaultValue={scope.notes || ""}
+                        />
+                      </label>
+                      <div className="lg:col-span-2">
+                        <button type="submit" className="primary-button">
+                          {localeText.projectScopes.saveScope}
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+                  <form action={deleteProjectScope} className="self-start">
                     <input type="hidden" name="id" value={scope.id} />
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.code}</span>
-                      <input name="code" className="field-input" required defaultValue={scope.code} />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.status}</span>
-                      <select
-                        name="status"
-                        className="field-input"
-                        defaultValue={scope.isActive ? "ACTIVE" : "INACTIVE"}
-                      >
-                        <option value="ACTIVE">{localeText.projectScopes.active}</option>
-                        <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
-                      </select>
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.nameAr}</span>
-                      <input
-                        name="nameAr"
-                        className="field-input"
-                        required
-                        dir="rtl"
-                        defaultValue={formatPurchaseOrderTitle(scope, "ar")}
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.nameEn}</span>
-                      <input
-                        name="nameEn"
-                        className="field-input"
-                        required
-                        dir="ltr"
-                        defaultValue={formatPurchaseOrderTitle(scope, "en")}
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.region}</span>
-                      <input name="region" className="field-input" defaultValue={scope.region || ""} />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.file}</span>
-                      <input
-                        name="file"
-                        type="file"
-                        className="field-input"
-                        accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.startDate}</span>
-                      <input
-                        name="startDate"
-                        type="date"
-                        className="field-input"
-                        defaultValue={formatInputDate(scope.startDate)}
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
-                      <input
-                        name="expectedEndDate"
-                        type="date"
-                        className="field-input"
-                        defaultValue={formatInputDate(scope.expectedEndDate)}
-                      />
-                    </label>
-                    <label className="field-shell lg:col-span-2">
-                      <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
-                      <textarea
-                        name="description"
-                        rows={3}
-                        className="field-input min-h-[6rem] resize-y"
-                        defaultValue={scope.description || ""}
-                      />
-                    </label>
-                    <label className="field-shell lg:col-span-2">
-                      <span className="field-label">{localeText.projectScopes.notes}</span>
-                      <textarea
-                        name="notes"
-                        rows={3}
-                        className="field-input min-h-[6rem] resize-y"
-                        defaultValue={scope.notes || ""}
-                      />
-                    </label>
-                    <div className="lg:col-span-2">
-                      <button type="submit" className="primary-button">
-                        {localeText.projectScopes.saveScope}
-                      </button>
-                    </div>
+                    <button type="submit" className="secondary-button">
+                      {localeText.projectScopes.deleteScope}
+                    </button>
                   </form>
-                </details>
-                <form action={deleteProjectScope} className="self-start">
-                  <input type="hidden" name="id" value={scope.id} />
-                  <button type="submit" className="secondary-button">
-                    {localeText.projectScopes.deleteScope}
-                  </button>
-                </form>
-              </div>
+                </div>
+              ) : null}
             </div>
           );
         })}

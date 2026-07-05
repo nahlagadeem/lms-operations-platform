@@ -60,6 +60,13 @@ The current uncommitted changes are centered on platform roles and permission en
   - Document upload/delete APIs return HTTP 403 for failed operational edit permission checks.
   - Project report export returns HTTP 403 for failed financial view permission checks.
   - `npm run build` passed.
+- PTSP-16: Finalized project details and PO/project structure RBAC.
+  - Project details financial outputs render only for financial-view roles.
+  - Project details and PO mutation controls are hidden for non-operational editors.
+  - PO budget, invoiced, collected, and remaining amounts render only for financial-view roles.
+  - Customer users are redirected away from project details and PO pages.
+  - Project and PO server actions enforce operational or financial permissions.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 

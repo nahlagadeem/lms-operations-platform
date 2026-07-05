@@ -3,6 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertPermission,
+  canCreateOperationalData,
+  canEditOperationalData,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 import * as projectScopeService from "@/server/services/project-scope-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -56,8 +62,21 @@ function parseScopeForm(formData: FormData) {
   };
 }
 
+async function requireOperationalCreationAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canCreateOperationalData);
+  return role;
+}
+
+async function requireOperationalEditAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canEditOperationalData);
+  return role;
+}
+
 export async function createProjectScope(formData: FormData) {
   await requireAuth();
+  await requireOperationalCreationAccess();
 
   const createdScope = await projectScopeService.createProjectScope(parseScopeForm(formData));
 
@@ -68,6 +87,7 @@ export async function createProjectScope(formData: FormData) {
 
 export async function updateProjectScope(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = normalizeText(formData.get("id"));
   if (!id) {
@@ -86,6 +106,7 @@ export async function updateProjectScope(formData: FormData) {
 
 export async function deleteProjectScope(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = normalizeText(formData.get("id"));
   if (!id) {
@@ -100,6 +121,7 @@ export async function deleteProjectScope(formData: FormData) {
 
 export async function assignProjectScopeCourses(formData: FormData) {
   await requireAuth();
+  await requireOperationalCreationAccess();
 
   const scopeId = normalizeText(formData.get("scopeId"));
   if (!scopeId) {
@@ -120,6 +142,7 @@ export async function assignProjectScopeCourses(formData: FormData) {
 
 export async function removeProjectScopeCourse(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const scopeId = normalizeText(formData.get("scopeId"));
   const courseId = normalizeText(formData.get("courseId"));
@@ -136,6 +159,7 @@ export async function removeProjectScopeCourse(formData: FormData) {
 
 export async function updatePurchaseOrderCourseEntryEstimatedSeats(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const purchaseOrderId = normalizeText(formData.get("purchaseOrderId"));
   const purchaseOrderCourseEntryId = normalizeText(

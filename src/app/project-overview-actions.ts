@@ -3,6 +3,12 @@
 import { ProjectActivityType, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertPermission,
+  canEditOperationalData,
+  canManageFinancialFields,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 import * as projectOverviewService from "@/server/services/project-overview-service";
 import type { ProjectSummaryField } from "@/server/services/project-overview-service";
 
@@ -11,6 +17,13 @@ const summaryFields = new Set<ProjectSummaryField>([
   "expectedEndDate",
   "baselineProgress",
   "actualProgress",
+  "totalProjectValue",
+  "totalProjectInvoices",
+  "totalCollectedValue",
+  "remainingUnbilledValue",
+]);
+
+const financialSummaryFields = new Set<ProjectSummaryField>([
   "totalProjectValue",
   "totalProjectInvoices",
   "totalCollectedValue",
@@ -71,6 +84,16 @@ function requireValue(value: string, message: string) {
   return value;
 }
 
+async function requireOperationalEditAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canEditOperationalData);
+}
+
+async function requireFinancialEditAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canManageFinancialFields);
+}
+
 export async function updateProjectSummaryField(formData: FormData) {
   await requireAuth();
 
@@ -79,6 +102,12 @@ export async function updateProjectSummaryField(formData: FormData) {
 
   if (!summaryFields.has(field)) {
     throw new Error("Project summary field is invalid.");
+  }
+
+  if (financialSummaryFields.has(field)) {
+    await requireFinancialEditAccess();
+  } else {
+    await requireOperationalEditAccess();
   }
 
   let parsedValue: string | Date | Prisma.Decimal;
@@ -102,6 +131,7 @@ export async function updateProjectSummaryField(formData: FormData) {
 
 export async function createActivity(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const type = parseActivityType(normalizeText(formData.get("type")));
   const text = requireValue(
@@ -115,6 +145,7 @@ export async function createActivity(formData: FormData) {
 
 export async function updateActivity(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = requireValue(normalizeText(formData.get("id")), "Missing activity.");
   const type = parseActivityType(normalizeText(formData.get("type")));
@@ -129,6 +160,7 @@ export async function updateActivity(formData: FormData) {
 
 export async function deleteActivity(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = requireValue(normalizeText(formData.get("id")), "Missing activity.");
   await projectOverviewService.deleteActivity(id);
@@ -159,6 +191,7 @@ function parseRisk(formData: FormData) {
 
 export async function createRisk(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   await projectOverviewService.createRisk(parseRisk(formData));
   revalidatePath("/project-details");
@@ -166,6 +199,7 @@ export async function createRisk(formData: FormData) {
 
 export async function updateRisk(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = requireValue(normalizeText(formData.get("id")), "Missing risk.");
   await projectOverviewService.updateRisk(id, parseRisk(formData));
@@ -174,6 +208,7 @@ export async function updateRisk(formData: FormData) {
 
 export async function deleteRisk(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = requireValue(normalizeText(formData.get("id")), "Missing risk.");
   await projectOverviewService.deleteRisk(id);
@@ -199,6 +234,7 @@ function parseIssue(formData: FormData) {
 
 export async function createIssue(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   await projectOverviewService.createIssue(parseIssue(formData));
   revalidatePath("/project-details");
@@ -206,6 +242,7 @@ export async function createIssue(formData: FormData) {
 
 export async function updateIssue(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = requireValue(normalizeText(formData.get("id")), "Missing issue.");
   await projectOverviewService.updateIssue(id, parseIssue(formData));
@@ -214,6 +251,7 @@ export async function updateIssue(formData: FormData) {
 
 export async function deleteIssue(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = requireValue(normalizeText(formData.get("id")), "Missing issue.");
   await projectOverviewService.deleteIssue(id);

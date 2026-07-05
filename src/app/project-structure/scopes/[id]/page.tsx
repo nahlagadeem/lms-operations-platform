@@ -1,9 +1,16 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import {
+  canCreateOperationalData,
+  canEditOperationalData,
+  canViewFinancials,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 import { getPoCourseTracking } from "@/server/services/purchase-order-service";
 import {
   assignProjectScopeCourses,
@@ -101,6 +108,14 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const requestedCoursePage = normalizePage(queryParams.coursePage);
   const assignSearch = normalizeSearch(queryParams.assignQ);
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+  const canEdit = canEditOperationalData(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
+
+  if (isCustomerCapacityOnly(platformRole)) {
+    redirect("/");
+  }
 
   const [scope, documents, allCourses, tracking] = await Promise.all([
     db.projectScope.findUnique({
@@ -214,8 +229,12 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title={localeText.projectScopes.packages} value={formatNumber(scope.packages.length, numberLocale)} />
         <MetricCard title={localeText.projectScopes.courses} value={formatNumber(courseCount, numberLocale)} />
-        <MetricCard title={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
-        <MetricCard title={localeText.projectScopes.remaining} value={formatCurrency(new Prisma.Decimal(remaining), numberLocale)} />
+        {canSeeFinancials ? (
+          <>
+            <MetricCard title={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
+            <MetricCard title={localeText.projectScopes.remaining} value={formatCurrency(new Prisma.Decimal(remaining), numberLocale)} />
+          </>
+        ) : null}
       </section>
 
       {tracking ? (
@@ -385,31 +404,35 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       ) : null}
                     </div>
                   ) : null}
-                  <form action={updatePurchaseOrderCourseEntryEstimatedSeats} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <input type="hidden" name="purchaseOrderId" value={scope.id} />
-                    <input type="hidden" name="purchaseOrderCourseEntryId" value={entry.id} />
-                    <label className="field-shell flex-1">
-                      <span className="field-label">{localeText.projectScopes.estimatedSeats}</span>
-                      <input
-                        type="number"
-                        name="estimatedSeats"
-                        min="0"
-                        step="1"
-                        className="field-input"
-                        defaultValue={entry.estimatedSeats ?? ""}
-                      />
-                    </label>
-                    <button type="submit" className="primary-button">
-                      {localeText.buttons.save}
-                    </button>
-                  </form>
-                  <form action={removeProjectScopeCourse} className="mt-4">
-                    <input type="hidden" name="scopeId" value={scope.id} />
-                    <input type="hidden" name="courseId" value={course.id} />
-                    <button type="submit" className="secondary-button">
-                      {localeText.projectScopes.unassignCourse}
-                    </button>
-                  </form>
+                  {canEdit ? (
+                    <>
+                      <form action={updatePurchaseOrderCourseEntryEstimatedSeats} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <input type="hidden" name="purchaseOrderId" value={scope.id} />
+                        <input type="hidden" name="purchaseOrderCourseEntryId" value={entry.id} />
+                        <label className="field-shell flex-1">
+                          <span className="field-label">{localeText.projectScopes.estimatedSeats}</span>
+                          <input
+                            type="number"
+                            name="estimatedSeats"
+                            min="0"
+                            step="1"
+                            className="field-input"
+                            defaultValue={entry.estimatedSeats ?? ""}
+                          />
+                        </label>
+                        <button type="submit" className="primary-button">
+                          {localeText.buttons.save}
+                        </button>
+                      </form>
+                      <form action={removeProjectScopeCourse} className="mt-4">
+                        <input type="hidden" name="scopeId" value={scope.id} />
+                        <input type="hidden" name="courseId" value={course.id} />
+                        <button type="submit" className="secondary-button">
+                          {localeText.projectScopes.unassignCourse}
+                        </button>
+                      </form>
+                    </>
+                  ) : null}
                 </div>
                 );
               })}
@@ -476,74 +499,78 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
             ) : null}
           </div>
 
-          <div className="panel-surface">
-            <p className="eyebrow">{localeText.projectScopes.bulkCourses}</p>
-            <h3 className="section-title">{localeText.projectScopes.assignCourses}</h3>
-            <form className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-              <label className="field-shell">
-                <span className="field-label">{localeText.projectScopes.searchCourses}</span>
-                <input
-                  name="assignQ"
-                  type="search"
-                  className="field-input"
-                  defaultValue={assignSearch}
-                  placeholder={localeText.projectScopes.searchCoursesPlaceholder}
-                />
-              </label>
-              <button type="submit" className="primary-button self-end">
-                {localeText.projectScopes.applySearch}
-              </button>
-              <Link href={`/pos/${scope.id}`} className="secondary-button self-end">
-                {localeText.projectScopes.clearSearch}
-              </Link>
-            </form>
-            <form action={assignProjectScopeCourses} className="mt-5 space-y-4">
-              <input type="hidden" name="scopeId" value={scope.id} />
-              {hiddenSelectedCourseIds.map((courseId) => (
-                <input key={courseId} type="hidden" name="courseIds" value={courseId} />
-              ))}
-              <div className="grid max-h-[28rem] gap-3 overflow-y-auto rounded-[8px] border border-[rgba(17,17,17,0.1)] bg-white p-3 md:grid-cols-2">
-                {allCourses.map((course) => (
-                  <label key={course.id} className="flex items-start gap-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] p-3 text-sm">
-                    <input
-                      type="checkbox"
-                      name="courseIds"
-                      value={course.id}
-                      defaultChecked={selectedCourseIds.has(course.id)}
-                      className="mt-1"
-                    />
-                    <span>
-                      <span className="block font-bold text-[var(--ink-strong)]">
-                        {course.courseCode}
-                      </span>
-                      <span className="block leading-6 text-[var(--ink-soft)]">
-                        {locale === "ar" ? course.nameAr : course.nameEn || course.nameAr}
-                      </span>
-                      <span className="latin-chip mt-2">{course.package.code}</span>
-                    </span>
-                  </label>
+          {canCreate ? (
+            <div className="panel-surface">
+              <p className="eyebrow">{localeText.projectScopes.bulkCourses}</p>
+              <h3 className="section-title">{localeText.projectScopes.assignCourses}</h3>
+              <form className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+                <label className="field-shell">
+                  <span className="field-label">{localeText.projectScopes.searchCourses}</span>
+                  <input
+                    name="assignQ"
+                    type="search"
+                    className="field-input"
+                    defaultValue={assignSearch}
+                    placeholder={localeText.projectScopes.searchCoursesPlaceholder}
+                  />
+                </label>
+                <button type="submit" className="primary-button self-end">
+                  {localeText.projectScopes.applySearch}
+                </button>
+                <Link href={`/pos/${scope.id}`} className="secondary-button self-end">
+                  {localeText.projectScopes.clearSearch}
+                </Link>
+              </form>
+              <form action={assignProjectScopeCourses} className="mt-5 space-y-4">
+                <input type="hidden" name="scopeId" value={scope.id} />
+                {hiddenSelectedCourseIds.map((courseId) => (
+                  <input key={courseId} type="hidden" name="courseIds" value={courseId} />
                 ))}
-                {allCourses.length === 0 ? (
-                  <p className="text-sm text-[var(--ink-soft)]">
-                    {localeText.projectScopes.noCoursesAvailable}
-                  </p>
-                ) : null}
-              </div>
-              <button type="submit" className="primary-button">
-                {localeText.projectScopes.saveCourses}
-              </button>
-            </form>
-          </div>
+                <div className="grid max-h-[28rem] gap-3 overflow-y-auto rounded-[8px] border border-[rgba(17,17,17,0.1)] bg-white p-3 md:grid-cols-2">
+                  {allCourses.map((course) => (
+                    <label key={course.id} className="flex items-start gap-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] p-3 text-sm">
+                      <input
+                        type="checkbox"
+                        name="courseIds"
+                        value={course.id}
+                        defaultChecked={selectedCourseIds.has(course.id)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block font-bold text-[var(--ink-strong)]">
+                          {course.courseCode}
+                        </span>
+                        <span className="block leading-6 text-[var(--ink-soft)]">
+                          {locale === "ar" ? course.nameAr : course.nameEn || course.nameAr}
+                        </span>
+                        <span className="latin-chip mt-2">{course.package.code}</span>
+                      </span>
+                    </label>
+                  ))}
+                  {allCourses.length === 0 ? (
+                    <p className="text-sm text-[var(--ink-soft)]">
+                      {localeText.projectScopes.noCoursesAvailable}
+                    </p>
+                  ) : null}
+                </div>
+                <button type="submit" className="primary-button">
+                  {localeText.projectScopes.saveCourses}
+                </button>
+              </form>
+            </div>
+          ) : null}
 
           <div className="panel-surface">
             <p className="eyebrow">{localeText.projectScopes.budgetProgress}</p>
             <h3 className="section-title">{localeText.projectScopes.budgetProgress}</h3>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              <InfoBox title={localeText.projectScopes.budget} label={localeText.projectScopes.total} value={formatCurrency(scope.budgetAmount, numberLocale)} />
-              <InfoBox title={localeText.projectScopes.invoiced} label={localeText.projectScopes.submitted} value={formatCurrency(scope.invoicedAmount, numberLocale)} />
-              <InfoBox title={localeText.projectScopes.collected} label={localeText.projectScopes.received} value={formatCurrency(scope.collectedAmount, numberLocale)} />
-            </div>
+            {canSeeFinancials ? (
+              <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                <InfoBox title={localeText.projectScopes.budget} label={localeText.projectScopes.total} value={formatCurrency(scope.budgetAmount, numberLocale)} />
+                <InfoBox title={localeText.projectScopes.invoiced} label={localeText.projectScopes.submitted} value={formatCurrency(scope.invoicedAmount, numberLocale)} />
+                <InfoBox title={localeText.projectScopes.collected} label={localeText.projectScopes.received} value={formatCurrency(scope.collectedAmount, numberLocale)} />
+              </div>
+            ) : null}
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <ProgressBox label={localeText.projectOverview.baselineProgress} value={plannedCompletion} locale={numberLocale} />
@@ -558,54 +585,56 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
           </div>
         </div>
 
-        <div className="panel-surface">
-          <p className="eyebrow">{localeText.projectScopes.documents}</p>
-          <h3 className="section-title">{localeText.projectScopes.documents}</h3>
-          <p className="section-copy">
-            {localeText.projectScopes.uploadDescription}
-          </p>
+          <div className="panel-surface">
+            <p className="eyebrow">{localeText.projectScopes.documents}</p>
+            <h3 className="section-title">{localeText.projectScopes.documents}</h3>
+            <p className="section-copy">
+              {localeText.projectScopes.uploadDescription}
+            </p>
 
-          <form
-            action="/api/project-documents"
-            method="post"
-            encType="multipart/form-data"
-            className="mt-5 space-y-4"
-          >
-            <input type="hidden" name="entityType" value={DocumentEntityType.SCOPE} />
-            <input type="hidden" name="entityId" value={scope.id} />
-            <input type="hidden" name="returnPath" value={`/pos/${scope.id}`} />
-            <input type="hidden" name="contextLabel" value={`${scopeName} document`} />
+            {canEdit ? (
+              <form
+                action="/api/project-documents"
+                method="post"
+                encType="multipart/form-data"
+                className="mt-5 space-y-4"
+              >
+                <input type="hidden" name="entityType" value={DocumentEntityType.SCOPE} />
+                <input type="hidden" name="entityId" value={scope.id} />
+                <input type="hidden" name="returnPath" value={`/pos/${scope.id}`} />
+                <input type="hidden" name="contextLabel" value={`${scopeName} document`} />
 
-            <label className="field-shell">
-              <span className="field-label">{localeText.projectScopes.fileType}</span>
-              <select name="documentType" className="field-input" defaultValue={DocumentType.OTHER}>
-                {Object.entries(documentTypeText()).map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <label className="field-shell">
+                  <span className="field-label">{localeText.projectScopes.fileType}</span>
+                  <select name="documentType" className="field-input" defaultValue={DocumentType.OTHER}>
+                    {Object.entries(documentTypeText()).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <label className="field-shell">
-              <span className="field-label">{localeText.projectScopes.uploadFile}</span>
-              <input
-                type="file"
-                name="file"
-                className="field-input"
-                accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
-              />
-            </label>
+                <label className="field-shell">
+                  <span className="field-label">{localeText.projectScopes.uploadFile}</span>
+                  <input
+                    type="file"
+                    name="file"
+                    className="field-input"
+                    accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
+                  />
+                </label>
 
-            <label className="field-shell">
-              <span className="field-label">{localeText.projectScopes.descriptionNotes}</span>
-              <textarea name="notes" rows={3} className="field-input min-h-[6rem] resize-y" />
-            </label>
+                <label className="field-shell">
+                  <span className="field-label">{localeText.projectScopes.descriptionNotes}</span>
+                  <textarea name="notes" rows={3} className="field-input min-h-[6rem] resize-y" />
+                </label>
 
-            <button type="submit" className="primary-button w-full sm:w-auto">
-              {localeText.projectScopes.uploadFile}
-            </button>
-          </form>
+                <button type="submit" className="primary-button w-full sm:w-auto">
+                  {localeText.projectScopes.uploadFile}
+                </button>
+              </form>
+            ) : null}
 
           <div className="mt-6 space-y-3">
             {documents.length === 0 ? (
@@ -629,17 +658,19 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     <Link href={document.fileUrl} className="secondary-button w-full sm:w-auto">
                       {localeText.projectScopes.download}
                     </Link>
-                    <form action="/api/project-documents/delete" method="post">
-                      <input type="hidden" name="documentId" value={document.id} />
-                      <input
-                        type="hidden"
-                        name="returnPath"
-                        value={`/pos/${scope.id}`}
-                      />
-                      <button type="submit" className="secondary-button w-full sm:w-auto">
-                        {localeText.projectScopes.deleteFile}
-                      </button>
-                    </form>
+                    {canEdit ? (
+                      <form action="/api/project-documents/delete" method="post">
+                        <input type="hidden" name="documentId" value={document.id} />
+                        <input
+                          type="hidden"
+                          name="returnPath"
+                          value={`/pos/${scope.id}`}
+                        />
+                        <button type="submit" className="secondary-button w-full sm:w-auto">
+                          {localeText.projectScopes.deleteFile}
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 </div>
               ))
