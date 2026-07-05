@@ -56,11 +56,14 @@ The current uncommitted changes are centered on platform roles and permission en
   - Auth uses the shared `AppUser` platform-role resolution flow.
   - Layout uses resolved auth/role state for route protection and customer navigation.
   - `npm run build` passed.
+- PTSP-16: Protected API routes now return explicit forbidden responses.
+  - Document upload/delete APIs return HTTP 403 for failed operational edit permission checks.
+  - Project report export returns HTTP 403 for failed financial view permission checks.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 
 - Remaining known limitation: session cookie is still a plain email identity, not an opaque signed token.
-- Permission errors in API routes currently throw from `assertPermission`, likely returning 500 instead of explicit 403 responses.
 - The dashboard/home page still uses its older query-string role filter model and has not been aligned to the current platform role helper.
 - Other CRUD surfaces outside the touched PTSP-16 files, such as providers, vendors, locations, packages, and course pages/actions, still need review for RBAC coverage if they are in PTSP-16 scope.
 - The seed data creates only the legacy `SUPER_ADMIN` user; it does not seed representative users for all platform roles.

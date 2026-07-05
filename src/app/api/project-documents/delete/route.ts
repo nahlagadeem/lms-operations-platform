@@ -5,6 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentEntityType } from "@prisma/client";
 import { isAuthenticated } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  canEditOperationalData,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 
 const projectDocumentTypes = new Set<DocumentEntityType>([
   DocumentEntityType.SCOPE,
@@ -22,6 +26,9 @@ function safeReturnPath(value: string) {
 export async function POST(request: NextRequest) {
   if (!(await isAuthenticated())) {
     return NextResponse.redirect(new URL("/login", request.url), 303);
+  }
+  if (!canEditOperationalData(await getCurrentPlatformRole())) {
+    return NextResponse.json({ message: "Forbidden." }, { status: 403 });
   }
 
   let formData: FormData;
