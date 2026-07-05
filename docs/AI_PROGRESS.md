@@ -91,15 +91,21 @@ The current uncommitted changes are centered on platform roles and permission en
   - Course detail Add Training controls render only for operational editor roles.
   - Customer users no longer see provider/location management links from the courses page.
   - `npm run build` passed.
+- PTSP-16: Seeded demo users for platform-role testing.
+  - `admin@jawraa.demo` is seeded as `PROJECT_MANAGER`.
+  - `stakeholder@jawraa.demo` is seeded as `KEY_STAKEHOLDER`.
+  - `dataentry@jawraa.demo` is seeded as `DATA_ENTRY`.
+  - `customer@jawraa.demo` is seeded as `CUSTOMER`.
+  - `admin/admin` demo login remains compatible with `admin@jawraa.demo`.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 
 - Remaining known limitation: session cookie is still a plain email identity, not an opaque signed token.
-- The seed data creates only the legacy `SUPER_ADMIN` user; it does not seed representative users for all platform roles.
 
 ## Recommended Next Step
 
 Continue with the next smallest PTSP-16 correctness gap:
 
-1. Add representative seed users for all platform roles if needed for manual verification.
+1. Manually verify the PTSP-16 role matrix using the seeded demo users.
 2. Replace the demo plain-email session cookie with an opaque signed token before production.

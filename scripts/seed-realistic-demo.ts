@@ -9,6 +9,7 @@ import {
   LocationType,
   NominationStatus,
   ParticipantType,
+  PlatformRole,
   Prisma,
   ProviderType,
   ReportStatus,
@@ -223,15 +224,47 @@ async function main() {
   }
   const packagesWithCourses = packages.filter((pkg) => pkg.courses.length > 0);
 
-  const admin = await db.appUser.create({
-    data: {
-      fullName: "JAWRAA Demo Admin",
-      email: "admin@jawraa.demo",
-      role: UserRole.SUPER_ADMIN,
-      department: "Project Office",
-      lastLoginAt: new Date(),
-    },
+  const demoUsers = await db.appUser.createManyAndReturn({
+    data: [
+      {
+        fullName: "JAWRAA Demo Admin",
+        email: "admin@jawraa.demo",
+        role: UserRole.SUPER_ADMIN,
+        platformRole: PlatformRole.PROJECT_MANAGER,
+        department: "Project Office",
+        lastLoginAt: new Date(),
+      },
+      {
+        fullName: "Demo Key Stakeholder",
+        email: "stakeholder@jawraa.demo",
+        role: UserRole.REPORTING_ANALYST,
+        platformRole: PlatformRole.KEY_STAKEHOLDER,
+        department: "Leadership Office",
+        lastLoginAt: new Date(),
+      },
+      {
+        fullName: "Demo Data Entry",
+        email: "dataentry@jawraa.demo",
+        role: UserRole.OPERATIONS_COORDINATOR,
+        platformRole: PlatformRole.DATA_ENTRY,
+        department: "Operations",
+        lastLoginAt: new Date(),
+      },
+      {
+        fullName: "Demo Customer",
+        email: "customer@jawraa.demo",
+        role: UserRole.VIEWER,
+        platformRole: PlatformRole.CUSTOMER,
+        department: "Customer",
+        lastLoginAt: new Date(),
+      },
+    ],
   });
+  const admin = demoUsers.find((user) => user.email === "admin@jawraa.demo");
+
+  if (!admin) {
+    throw new Error("Demo admin user was not seeded.");
+  }
 
   const scopeIds = new Map<string, string>();
   for (const scope of projectScopes) {
