@@ -4,6 +4,11 @@ import { ActiveStatus, CourseRunStatus, DeliveryMode, Prisma } from "@prisma/cli
 import { createTraining } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import {
+  canCreateOperationalData,
+  canViewFinancials,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 
 type CourseDetailPageProps = {
   params: Promise<{
@@ -221,6 +226,9 @@ export default async function CourseDetailPage({
   const localeText = t(locale);
   const details = detailText(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const platformRole = await getCurrentPlatformRole();
+  const canCreateTraining = canCreateOperationalData(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
 
   const course = await db.course.findUnique({
     where: { id },
@@ -295,9 +303,11 @@ export default async function CourseDetailPage({
             <p className="section-copy">{details.description}</p>
           </div>
 
-          <Link href={panelHref(course.id)} className="primary-button w-full sm:w-auto">
-            {details.createRun}
-          </Link>
+          {canCreateTraining ? (
+            <Link href={panelHref(course.id)} className="primary-button w-full sm:w-auto">
+              {details.createRun}
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -314,15 +324,17 @@ export default async function CourseDetailPage({
           title={details.countCompleted}
           value={formatNumber(completedRuns, numberLocale)}
         />
-        <MetricCard
-          title={details.latestPrice}
-          value={formatCurrency(
-            latestPricing?.finalUnitPriceWithoutTax,
-            latestPricing?.currencyCode || "SAR",
-            numberLocale,
-            details.unavailable,
-          )}
-        />
+        {canSeeFinancials ? (
+          <MetricCard
+            title={details.latestPrice}
+            value={formatCurrency(
+              latestPricing?.finalUnitPriceWithoutTax,
+              latestPricing?.currencyCode || "SAR",
+              numberLocale,
+              details.unavailable,
+            )}
+          />
+        ) : null}
       </section>
 
       <section className="grid gap-6 2xl:grid-cols-[1.05fr_0.95fr]">
@@ -428,50 +440,52 @@ export default async function CourseDetailPage({
             </div>
           </div>
 
-          <div className="panel-surface">
-            <p className="eyebrow">{details.pricing}</p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <InfoCard
-                label={details.latestPrice}
-                value={formatCurrency(
-                  latestPricing?.finalUnitPriceWithoutTax,
-                  latestPricing?.currencyCode || "SAR",
-                  numberLocale,
-                  details.unavailable,
-                )}
-              />
-              <InfoCard
-                label={details.originalPrice}
-                value={formatCurrency(
-                  latestPricing?.originalUnitPriceWithoutTax,
-                  latestPricing?.currencyCode || "SAR",
-                  numberLocale,
-                  details.unavailable,
-                )}
-              />
-              <InfoCard
-                label={details.discountAmount}
-                value={formatCurrency(
-                  latestPricing?.discountAmount,
-                  latestPricing?.currencyCode || "SAR",
-                  numberLocale,
-                  details.unavailable,
-                )}
-              />
-              <InfoCard
-                label={details.discountPercentage}
-                value={
-                  latestPricing?.discountPercentage
-                    ? `${Number(latestPricing.discountPercentage) * 100}%`
-                    : details.unavailable
-                }
-              />
+          {canSeeFinancials ? (
+            <div className="panel-surface">
+              <p className="eyebrow">{details.pricing}</p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <InfoCard
+                  label={details.latestPrice}
+                  value={formatCurrency(
+                    latestPricing?.finalUnitPriceWithoutTax,
+                    latestPricing?.currencyCode || "SAR",
+                    numberLocale,
+                    details.unavailable,
+                  )}
+                />
+                <InfoCard
+                  label={details.originalPrice}
+                  value={formatCurrency(
+                    latestPricing?.originalUnitPriceWithoutTax,
+                    latestPricing?.currencyCode || "SAR",
+                    numberLocale,
+                    details.unavailable,
+                  )}
+                />
+                <InfoCard
+                  label={details.discountAmount}
+                  value={formatCurrency(
+                    latestPricing?.discountAmount,
+                    latestPricing?.currencyCode || "SAR",
+                    numberLocale,
+                    details.unavailable,
+                  )}
+                />
+                <InfoCard
+                  label={details.discountPercentage}
+                  value={
+                    latestPricing?.discountPercentage
+                      ? `${Number(latestPricing.discountPercentage) * 100}%`
+                      : details.unavailable
+                  }
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
-      {openPanel ? (
+      {openPanel && canCreateTraining ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/70 bg-white p-5 shadow-[0_30px_70px_rgba(10,25,35,0.35)] sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">

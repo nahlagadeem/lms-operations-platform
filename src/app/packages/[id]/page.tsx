@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ActiveStatus, DeliveryType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
 
 const PAGE_SIZE = 25;
 
@@ -172,6 +173,8 @@ export default async function PackageDetailPage({
   const localeText = t(locale);
   const details = detailText(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const platformRole = await getCurrentPlatformRole();
+  const canSeeFinancials = canViewFinancials(platformRole);
   const searchTerm = normalizeSingleValue(query.q);
   const deliveryType = normalizeSingleValue(query.type) as DeliveryType | "";
   const currentPage = normalizePage(query.page);
@@ -276,10 +279,12 @@ export default async function PackageDetailPage({
           title={details.target}
           value={formatNumber(pkg.expectedTraineeCount ?? 0, numberLocale)}
         />
-        <MetricCard
-          title={details.discountedValue}
-          value={formatCurrency(pkg.discountedTotalAmount, numberLocale, details.unavailable)}
-        />
+        {canSeeFinancials ? (
+          <MetricCard
+            title={details.discountedValue}
+            value={formatCurrency(pkg.discountedTotalAmount, numberLocale, details.unavailable)}
+          />
+        ) : null}
       </section>
 
       <section className="panel-surface">
@@ -356,7 +361,7 @@ export default async function PackageDetailPage({
                 <th>{details.category}</th>
                 <th>{details.type}</th>
                 <th>{details.duration}</th>
-                <th>{details.finalPrice}</th>
+                {canSeeFinancials ? <th>{details.finalPrice}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -401,15 +406,17 @@ export default async function PackageDetailPage({
                         })}
                       </Link>
                     </td>
-                    <td>
-                      <Link href={`/courses/${course.id}`} className="block w-full no-underline">
-                        {formatCurrency(
-                          latestPricing?.finalUnitPriceWithoutTax,
-                          numberLocale,
-                          details.unavailable,
-                        )}
-                      </Link>
-                    </td>
+                    {canSeeFinancials ? (
+                      <td>
+                        <Link href={`/courses/${course.id}`} className="block w-full no-underline">
+                          {formatCurrency(
+                            latestPricing?.finalUnitPriceWithoutTax,
+                            numberLocale,
+                            details.unavailable,
+                          )}
+                        </Link>
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}

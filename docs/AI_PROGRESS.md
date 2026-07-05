@@ -84,17 +84,22 @@ The current uncommitted changes are centered on platform roles and permission en
   - Create controls and panels render only for `PROJECT_MANAGER` and `DATA_ENTRY`.
   - Customer users are redirected away from provider/vendor and location management pages.
   - `npm run build` passed.
+- PTSP-16: Gated course and package pricing views.
+  - Course list and package detail final-price columns render only for financial-view roles.
+  - Course detail pricing metrics and pricing snapshot render only for financial-view roles.
+  - Package discounted value renders only for financial-view roles.
+  - Course detail Add Training controls render only for operational editor roles.
+  - Customer users no longer see provider/location management links from the courses page.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 
 - Remaining known limitation: session cookie is still a plain email identity, not an opaque signed token.
-- Other CRUD surfaces outside the touched PTSP-16 files, such as packages and course pages/actions, still need review for RBAC coverage if they are in PTSP-16 scope.
 - The seed data creates only the legacy `SUPER_ADMIN` user; it does not seed representative users for all platform roles.
 
 ## Recommended Next Step
 
 Continue with the next smallest PTSP-16 correctness gap:
 
-1. Review remaining CRUD surfaces for RBAC coverage.
-2. Add role gates to packages and course pages/actions if they are in PTSP-16 scope.
-3. Add representative seed users for all platform roles if needed for manual verification.
+1. Add representative seed users for all platform roles if needed for manual verification.
+2. Replace the demo plain-email session cookie with an opaque signed token before production.
