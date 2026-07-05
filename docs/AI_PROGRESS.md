@@ -79,11 +79,16 @@ The current uncommitted changes are centered on platform roles and permission en
   - Dashboard reporting table and CSV export render only for financial-view roles.
   - Dashboard report export API returns HTTP 403 for non-financial roles.
   - `npm run build` passed.
+- PTSP-16: Guarded provider, vendor, and location mutation surfaces.
+  - Provider/vendor and location create actions require operational create permission.
+  - Create controls and panels render only for `PROJECT_MANAGER` and `DATA_ENTRY`.
+  - Customer users are redirected away from provider/vendor and location management pages.
+  - `npm run build` passed.
 
 ## Known Missing Or Incomplete For PTSP-16
 
 - Remaining known limitation: session cookie is still a plain email identity, not an opaque signed token.
-- Other CRUD surfaces outside the touched PTSP-16 files, such as providers, vendors, locations, packages, and course pages/actions, still need review for RBAC coverage if they are in PTSP-16 scope.
+- Other CRUD surfaces outside the touched PTSP-16 files, such as packages and course pages/actions, still need review for RBAC coverage if they are in PTSP-16 scope.
 - The seed data creates only the legacy `SUPER_ADMIN` user; it does not seed representative users for all platform roles.
 
 ## Recommended Next Step
@@ -91,5 +96,5 @@ The current uncommitted changes are centered on platform roles and permission en
 Continue with the next smallest PTSP-16 correctness gap:
 
 1. Review remaining CRUD surfaces for RBAC coverage.
-2. Add role gates to providers, vendors, locations, packages, and course pages/actions if they are in PTSP-16 scope.
+2. Add role gates to packages and course pages/actions if they are in PTSP-16 scope.
 3. Add representative seed users for all platform roles if needed for manual verification.

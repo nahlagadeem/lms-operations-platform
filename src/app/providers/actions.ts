@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { VendorType } from "@/lib/brd-terminology";
+import {
+  assertPermission,
+  canCreateOperationalData,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 import * as vendorService from "@/server/services/vendor-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -12,6 +17,7 @@ function normalizeText(value: FormDataEntryValue | null) {
 
 export async function createVendor(formData: FormData) {
   await requireAuth();
+  assertPermission(await getCurrentPlatformRole(), canCreateOperationalData);
 
   const providerType = normalizeText(formData.get("providerType")) as VendorType;
   const nameAr = normalizeText(formData.get("nameAr"));

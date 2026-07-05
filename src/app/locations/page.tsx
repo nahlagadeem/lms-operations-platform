@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { LocationType, Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { createLocation } from "@/app/locations/actions";
 import { db } from "@/lib/db";
 import { getLocale } from "@/lib/locale";
+import {
+  canCreateOperationalData,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 
 type LocationsPageProps = {
   searchParams?: Promise<{
@@ -100,6 +106,13 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
   const locale = await getLocale();
   const text = pageText(locale);
   const params = (await searchParams) ?? {};
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+
+  if (isCustomerCapacityOnly(platformRole)) {
+    redirect("/");
+  }
+
   const searchTerm = normalizeSingleValue(params.q);
   const typeFilter = normalizeSingleValue(params.type) as LocationType | "";
   const openPanel = params.panel === "create" ? "create" : "";
@@ -140,9 +153,11 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
             <h2 className="section-title">{text.title}</h2>
             <p className="section-copy">{text.description}</p>
           </div>
-          <Link href="/locations?panel=create" className="primary-button w-full sm:w-auto">
-            {text.addButton}
-          </Link>
+          {canCreate ? (
+            <Link href="/locations?panel=create" className="primary-button w-full sm:w-auto">
+              {text.addButton}
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -215,7 +230,7 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
         )}
       </section>
 
-      {openPanel ? (
+      {openPanel && canCreate ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="jawraa-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">

@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { createVendor } from "@/app/providers/actions";
 import { VendorType } from "@/lib/brd-terminology";
 import { db } from "@/lib/db";
 import { getLocale } from "@/lib/locale";
+import {
+  canCreateOperationalData,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 
 type ProvidersPageProps = {
   searchParams?: Promise<{
@@ -105,6 +111,13 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
   const locale = await getLocale();
   const text = pageText(locale);
   const params = (await searchParams) ?? {};
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+
+  if (isCustomerCapacityOnly(platformRole)) {
+    redirect("/");
+  }
+
   const searchTerm = normalizeSingleValue(params.q);
   const typeFilter = normalizeSingleValue(params.type) as VendorType | "";
   const openPanel = params.panel === "create" ? "create" : "";
@@ -146,9 +159,11 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
             <h2 className="section-title">{text.title}</h2>
             <p className="section-copy">{text.description}</p>
           </div>
-          <Link href="/vendors?panel=create" className="primary-button w-full sm:w-auto">
-            {text.addButton}
-          </Link>
+          {canCreate ? (
+            <Link href="/vendors?panel=create" className="primary-button w-full sm:w-auto">
+              {text.addButton}
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -219,7 +234,7 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
         )}
       </section>
 
-      {openPanel ? (
+      {openPanel && canCreate ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="jawraa-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
