@@ -2,14 +2,14 @@
 
 ## Repository
 - Current branch: `feature/project-scope-to-purchase-order`
-- Current HEAD commit: `7e5a481734f8c583dcc643160a1d657e1dcad084`
-- Current status (working tree clean/dirty): clean after the PTSP-20 attendance grid commit
+- Current HEAD commit: `3974e19e181cc1e96ad732753ac3c5e30a1b2279`
+- Current status (working tree clean/dirty): clean after the PTSP-21 Course/Package attendance rollup verification commit
 
 ## Overall Project Status
-- Overall completion estimate: about 4 of 14 PTSP stories are complete, or roughly 29%; PTSP-16, PTSP-17, PTSP-19, and PTSP-20 are complete for demo/staging, PTSP-21 is in progress, and the remaining PTSP stories are still open.
-- PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`, `PTSP-20`
-- PTSP stories in progress: `PTSP-21`
-- PTSP stories not started: `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
+- Overall completion estimate: about 5 of 14 PTSP stories are complete, or roughly 36%; PTSP-16, PTSP-17, PTSP-19, PTSP-20, and PTSP-21 are complete for demo/staging, and the remaining PTSP stories are still open.
+- PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`, `PTSP-20`, `PTSP-21`
+- PTSP stories in progress: none
+- PTSP stories not started: `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
 ## Completed PTSP Stories
 ### PTSP-16
@@ -52,13 +52,14 @@
 - Legacy date-only attendance rows are displayed in the grid only when their date matches an existing Training session.
 
 ## PTSP-21 Summary
-- Status: started.
+- Status: complete for demo/staging.
 - Session-level attendance metric helpers added in `src/server/services/capacity-service.ts`.
 - Formula: attendance rate = successful attended sessions / total possible sessions * 100.
 - Successful attended sessions currently mean `PRESENT` attendance for a participant/session cell.
 - Total possible sessions = eligible enrolled attendees * Training session count.
 - Missing attendance records count as absent because they remain in the denominator.
 - Weighted rollup helpers were added for Training, Course, Package, and project-wide attendance rates.
+- Course and Package rollup helpers are ready: `getCourseSessionAttendanceRate` and `getPackageSessionAttendanceRate`.
 - Legacy date-only attendance rows are included only when their `attendanceDate` matches an existing `TrainingSession.sessionDate` for the same Training.
 - Training detail attendance rate card now uses `getTrainingSessionAttendanceRate`.
 - Training detail per-attendee completion rows now use Training session count as the denominator and `PRESENT` participant/session cells as attended sessions.
@@ -128,8 +129,8 @@
 - Expected role matrix: `PROJECT_MANAGER` sees full access and financials; `KEY_STAKEHOLDER` sees financials but is view-only; `DATA_ENTRY` can manage operational records but sees no financial output; `CUSTOMER` sees read-only capacity information only.
 
 ## Next Story Recommendation
-- Recommend `PTSP-21`.
-- Why: PTSP-20 now records per-session attendance for each enrollee, so the next dependency is calculating and presenting attendance rates correctly from session-backed attendance records.
+- Recommend `PTSP-22`.
+- Why: PTSP-20 and PTSP-21 now provide session-level attendance records and attendance-rate calculations, so the next attendance-dependent story can build on stable session-level data.
 
 ## Coding Rules
 - Never rebuild existing features.
@@ -140,4 +141,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: perform the final PTSP-21 completion audit and confirm whether attendance-rate formulas are complete for demo/staging.
+- First action for the next Codex session: start PTSP-22 with a repository review only, then identify its exact dependency on the completed session-level attendance and attendance-rate work.
