@@ -3,6 +3,7 @@ import {
   CourseRunStatus,
   DocumentEntityType,
   Prisma,
+  TrainingEvaluationType,
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
@@ -14,7 +15,14 @@ import {
   getProjectReportingRows,
   getReportingCategoryOptions,
 } from "@/server/services/project-reporting-service";
-import { getProjectSessionAttendanceRate } from "@/server/services/capacity-service";
+import {
+  getCourseSessionAttendanceRate,
+  getPackageSessionAttendanceRate,
+  getProjectSessionAttendanceRate,
+} from "@/server/services/capacity-service";
+import { getOverallPoFulfillment } from "@/server/services/purchase-order-service";
+import { getProjectFinancialOverview } from "@/server/services/training-financial-service";
+import { getProjectQualityOverview } from "@/server/services/training-evaluation-service";
 
 type HomePageProps = {
   searchParams?: Promise<{
@@ -101,6 +109,18 @@ function ratio(numerator: number, denominator: number) {
   return denominator > 0 ? (numerator / denominator) * 100 : 0;
 }
 
+function average(values: number[]) {
+  return values.length > 0
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : null;
+}
+
+function formatRating(value: number | null, locale: string) {
+  return value === null
+    ? "-"
+    : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value);
+}
+
 function buildDashboardUrl(params: { q?: string; category?: string; page?: number }) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
@@ -163,6 +183,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     recentlyCompletedRuns,
     reportingRows,
     projectSummary,
+    poFulfillment,
+    projectFinancialOverview,
+    projectQualityOverview,
+    dashboardPackages,
+    dashboardCourses,
     projectScopeRows,
     scopeDocumentCounts,
   ] = await Promise.all([
@@ -295,6 +320,51 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         })
       : Promise.resolve([]),
     getProjectSummary(),
+    getOverallPoFulfillment(),
+    canSeeFinancials ? getProjectFinancialOverview() : Promise.resolve(null),
+    getProjectQualityOverview(),
+    db.package.findMany({
+      orderBy: { code: "asc" },
+      include: {
+        courses: {
+          include: {
+            pricingRecords: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { finalUnitPriceWithoutTax: true },
+            },
+            runs: {
+              include: {
+                trainingEvaluations: {
+                  select: { evaluationType: true, rating: true },
+                },
+              },
+            },
+            scopeSelections: {
+              select: { estimatedSeats: true },
+            },
+          },
+        },
+      },
+    }),
+    db.course.findMany({
+      orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
+      include: {
+        package: {
+          select: { id: true, code: true, nameAr: true, nameEn: true },
+        },
+        runs: {
+          include: {
+            trainingEvaluations: {
+              select: { evaluationType: true, rating: true },
+            },
+          },
+        },
+        scopeSelections: {
+          select: { estimatedSeats: true },
+        },
+      },
+    }),
     db.projectScope.findMany({
       include: {
         selectedCourses: {
@@ -422,6 +492,105 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     };
   });
 
+  const completedTrainingCount = completedRuns;
+  const plannedTrainingCount = totalRuns;
+  const deliveredSeats = filledSeats;
+  const committedSeats = allocatedSeats;
+  const courseAttendanceRates = await Promise.all(
+    dashboardCourses.map(async (course) => ({
+      courseId: course.id,
+      attendanceRate: (await getCourseSessionAttendanceRate(course.id)).attendanceRate,
+    })),
+  );
+  const packageAttendanceRates = await Promise.all(
+    dashboardPackages.map(async (item) => ({
+      packageId: item.id,
+      attendanceRate: (await getPackageSessionAttendanceRate(item.id)).attendanceRate,
+    })),
+  );
+  const courseAttendanceById = new Map(
+    courseAttendanceRates.map((item) => [item.courseId, item.attendanceRate]),
+  );
+  const packageAttendanceById = new Map(
+    packageAttendanceRates.map((item) => [item.packageId, item.attendanceRate]),
+  );
+  const packageBreakdownRows = dashboardPackages.map((item) => {
+    const runs = item.courses.flatMap((course) => course.runs);
+    const plannedSeats = item.courses.reduce(
+      (sum, course) =>
+        sum +
+        course.scopeSelections.reduce(
+          (courseSum, selection) => courseSum + (selection.estimatedSeats ?? 0),
+          0,
+        ),
+      0,
+    );
+    const delivered = runs.reduce((sum, run) => sum + run.confirmedSeats, 0);
+    const completed = runs.filter((run) => completedRunStatuses.includes(run.status)).length;
+    const courseRatings = runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.COURSE)
+        .map((evaluation) => evaluation.rating),
+    );
+    const instructorRatings = runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.INSTRUCTOR)
+        .map((evaluation) => evaluation.rating),
+    );
+    const revenue = item.courses.reduce((sum, course) => {
+      const price = decimalToNumber(course.pricingRecords[0]?.finalUnitPriceWithoutTax);
+      const courseSeats = course.runs.reduce((seatSum, run) => seatSum + run.confirmedSeats, 0);
+      return sum + price * courseSeats;
+    }, 0);
+    const vendorCost = runs.reduce((sum, run) => sum + decimalToNumber(run.vendorCost), 0);
+
+    return {
+      id: item.id,
+      code: item.code,
+      name: item.nameEn || item.nameAr,
+      completed,
+      planned: runs.length,
+      delivered,
+      utilization: ratio(delivered, plannedSeats),
+      averageCourseRating: average(courseRatings),
+      averageInstructorRating: average(instructorRatings),
+      attendanceRate: packageAttendanceById.get(item.id) ?? 0,
+      revenue,
+      vendorCost,
+      marginPct: ratio(revenue - vendorCost, revenue),
+    };
+  });
+  const courseSummaryRows = dashboardCourses.map((course) => {
+    const plannedSeats = course.scopeSelections.reduce(
+      (sum, selection) => sum + (selection.estimatedSeats ?? 0),
+      0,
+    );
+    const delivered = course.runs.reduce((sum, run) => sum + run.confirmedSeats, 0);
+    const courseRatings = course.runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.COURSE)
+        .map((evaluation) => evaluation.rating),
+    );
+    const instructorRatings = course.runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.INSTRUCTOR)
+        .map((evaluation) => evaluation.rating),
+    );
+
+    return {
+      id: course.id,
+      name: course.nameEn || course.nameAr,
+      packageName: course.package.nameEn || course.package.nameAr || course.package.code,
+      totalTrainings: course.runs.length,
+      plannedSeats,
+      delivered,
+      utilization: ratio(delivered, plannedSeats),
+      averageCourseRating: average(courseRatings),
+      averageInstructorRating: average(instructorRatings),
+      attendanceRate: courseAttendanceById.get(course.id) ?? 0,
+    };
+  });
+
   return (
     <div className="space-y-8">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -442,6 +611,200 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         projectSummary={projectSummary}
         canSeeFinancials={canSeeFinancials}
       />
+
+      {canSeeFinancials && projectFinancialOverview ? (
+        <section className="panel-surface">
+          <div className="mb-5">
+            <p className="eyebrow">PTSP-27</p>
+            <h2 className="section-title">Financial Overview</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ReadOnlySummaryCard
+              label="Total Revenue Recognized"
+              value={formatCurrency(decimalToNumber(projectFinancialOverview.totals.revenue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label="Total Vendor Cost"
+              value={formatCurrency(decimalToNumber(projectFinancialOverview.totals.vendorCost), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label="Overall Gross Margin %"
+              value={formatPercent(projectFinancialOverview.totals.marginPct, numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label="Total Project Value"
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label="Total Invoiced"
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label="Total Collected"
+              value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label="Remaining Unbilled"
+              value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      <section className="panel-surface">
+        <div className="mb-5">
+          <p className="eyebrow">PTSP-28</p>
+          <h2 className="section-title">Delivery Overview</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ReadOnlySummaryCard
+            label="Baseline Progress %"
+            value={formatPercent(decimalToNumber(projectSummary.baselineProgress), numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label="Actual Progress %"
+            value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label="Total Trainings Planned vs Completed"
+            value={`${formatNumber(plannedTrainingCount, numberLocale)} / ${formatNumber(completedTrainingCount, numberLocale)}`}
+          />
+          <ReadOnlySummaryCard
+            label="Total Seats Committed vs Delivered"
+            value={`${formatNumber(committedSeats, numberLocale)} / ${formatNumber(deliveredSeats, numberLocale)}`}
+          />
+          <ReadOnlySummaryCard
+            label="Overall PO Fulfillment %"
+            value={formatPercent(poFulfillment.fulfillmentPct, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label="Project Start Date"
+            value={formatDate(projectSummary.startDate, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label="Expected End Date"
+            value={formatDate(projectSummary.expectedEndDate, numberLocale)}
+          />
+        </div>
+      </section>
+
+      <section className="panel-surface">
+        <div className="mb-5">
+          <p className="eyebrow">PTSP-29</p>
+          <h2 className="section-title">Quality Overview</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <ReadOnlySummaryCard
+            label="Average Course Rating project-wide"
+            value={formatRating(projectQualityOverview.averageCourseRating, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label="Average Instructor Rating project-wide"
+            value={formatRating(projectQualityOverview.averageInstructorRating, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label="Overall Attendance Rate %"
+            value={formatPercent(projectAttendanceSummary.attendanceRate, numberLocale)}
+          />
+        </div>
+      </section>
+
+      <section className="panel-surface">
+        <div className="mb-5">
+          <p className="eyebrow">PTSP-30</p>
+          <h2 className="section-title">Package Breakdown</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Package</th>
+                <th>Trainings Completed vs Planned</th>
+                <th>Total Seats Delivered</th>
+                <th>Seat Utilization %</th>
+                <th>Average Course Rating</th>
+                <th>Average Instructor Rating</th>
+                <th>Attendance Rate %</th>
+                {canSeeFinancials ? (
+                  <>
+                    <th>Revenue by Package</th>
+                    <th>Vendor Cost by Package</th>
+                    <th>Gross Margin % by Package</th>
+                  </>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {packageBreakdownRows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <p className="latin-chip">{row.code}</p>
+                    <p className="mt-1 font-semibold text-[var(--ink-strong)]">{row.name}</p>
+                  </td>
+                  <td>{formatNumber(row.completed, numberLocale)} / {formatNumber(row.planned, numberLocale)}</td>
+                  <td>{formatNumber(row.delivered, numberLocale)}</td>
+                  <td>{formatPercent(row.utilization, numberLocale)}</td>
+                  <td>{formatRating(row.averageCourseRating, numberLocale)}</td>
+                  <td>{formatRating(row.averageInstructorRating, numberLocale)}</td>
+                  <td>{formatPercent(row.attendanceRate, numberLocale)}</td>
+                  {canSeeFinancials ? (
+                    <>
+                      <td>{formatCurrency(row.revenue, numberLocale)}</td>
+                      <td>{formatCurrency(row.vendorCost, numberLocale)}</td>
+                      <td>{formatPercent(row.marginPct, numberLocale)}</td>
+                    </>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {platformRole !== "CUSTOMER" ? (
+        <section className="panel-surface">
+          <div className="mb-5">
+            <p className="eyebrow">PTSP-32</p>
+            <h2 className="section-title">Course Summary</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Course name</th>
+                  <th>Package</th>
+                  <th>Total Trainings</th>
+                  <th>Seats Planned</th>
+                  <th>Seats Delivered</th>
+                  <th>Utilization %</th>
+                  <th>Average Course Rating</th>
+                  <th>Average Instructor Rating</th>
+                  <th>Attendance Rate %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courseSummaryRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <Link href={`/courses/${row.id}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
+                        {row.name}
+                      </Link>
+                    </td>
+                    <td>{row.packageName}</td>
+                    <td>{formatNumber(row.totalTrainings, numberLocale)}</td>
+                    <td>{formatNumber(row.plannedSeats, numberLocale)}</td>
+                    <td>{formatNumber(row.delivered, numberLocale)}</td>
+                    <td>{formatPercent(row.utilization, numberLocale)}</td>
+                    <td>{formatRating(row.averageCourseRating, numberLocale)}</td>
+                    <td>{formatRating(row.averageInstructorRating, numberLocale)}</td>
+                    <td>{formatPercent(row.attendanceRate, numberLocale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel-surface">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
