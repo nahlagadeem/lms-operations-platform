@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
@@ -303,22 +304,16 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
               <h3 className="section-title">{localeText.projectScopes.summaryTitle}</h3>
             </div>
           </div>
-          <form className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <form className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
             {safeCoursePage > 1 ? <input type="hidden" name="coursePage" value={safeCoursePage} /> : null}
             {assignSearch ? <input type="hidden" name="assignQ" value={assignSearch} /> : null}
-            <label className="field-shell">
-              <span className="field-label">{localeText.common.search}</span>
-              <input
-                type="search"
-                name="trackingQ"
-                defaultValue={trackingSearch}
-                placeholder={localeText.common.searchPlaceholder}
-                className="field-input"
-              />
-            </label>
-            <button type="submit" className="primary-button self-end">
-              {localeText.common.search}
-            </button>
+            <InstantSearchField
+              name="trackingQ"
+              label={localeText.common.search}
+              defaultValue={trackingSearch}
+              placeholder={localeText.common.searchPlaceholder}
+              pageParams={["trackingPage"]}
+            />
             <Link
               href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, 1)}
               className="secondary-button self-end"

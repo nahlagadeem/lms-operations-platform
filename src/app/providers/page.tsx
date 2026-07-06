@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { createVendor } from "@/app/providers/actions";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { VendorType } from "@/lib/brd-terminology";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
@@ -214,16 +215,12 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
 
       <section className="panel-surface">
         <form className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{text.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={localeText.common.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
+          <InstantSearchField
+            label={text.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
 
           <label className="field-shell">
             <span className="field-label">{text.type}</span>

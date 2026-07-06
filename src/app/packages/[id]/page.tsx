@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActiveStatus, DeliveryType, Prisma } from "@prisma/client";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
@@ -303,16 +304,12 @@ export default async function PackageDetailPage({
         </div>
 
         <form className="grid gap-4 xl:grid-cols-[1.3fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{details.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={localeText.common.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
+          <InstantSearchField
+            label={details.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
 
           <label className="field-shell">
             <span className="field-label">{details.type}</span>

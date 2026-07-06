@@ -5,6 +5,7 @@ import {
   Prisma,
   TrainingEvaluationType,
 } from "@prisma/client";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
@@ -32,7 +33,6 @@ type HomePageProps = {
     packagePage?: string;
     coursePage?: string;
     poPage?: string;
-    packageQ?: string;
     courseQ?: string;
     poQ?: string;
   }>;
@@ -134,7 +134,6 @@ function buildDashboardUrl(params: {
   packagePage?: number;
   coursePage?: number;
   poPage?: number;
-  packageQ?: string;
   courseQ?: string;
   poQ?: string;
 }) {
@@ -145,7 +144,6 @@ function buildDashboardUrl(params: {
   if (params.packagePage && params.packagePage > 1) search.set("packagePage", String(params.packagePage));
   if (params.coursePage && params.coursePage > 1) search.set("coursePage", String(params.coursePage));
   if (params.poPage && params.poPage > 1) search.set("poPage", String(params.poPage));
-  if (params.packageQ) search.set("packageQ", params.packageQ);
   if (params.courseQ) search.set("courseQ", params.courseQ);
   if (params.poQ) search.set("poQ", params.poQ);
   const query = search.toString();
@@ -172,6 +170,7 @@ export const revalidate = 0;
 export default async function HomePage({ searchParams }: HomePageProps) {
   const locale = await getLocale();
   const localeText = t(locale);
+  const dashboardText = localeText.dashboardOverview;
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
   const platformRole = await getCurrentPlatformRole();
@@ -182,7 +181,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const packagePage = normalizePage(params.packagePage);
   const coursePage = normalizePage(params.coursePage);
   const poPage = normalizePage(params.poPage);
-  const packageSearch = normalize(params.packageQ).toLowerCase();
   const courseSearch = normalize(params.courseQ).toLowerCase();
   const poSearch = normalize(params.poQ).toLowerCase();
   const tableText =
@@ -618,16 +616,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       marginPct: ratio(revenue - vendorCost, revenue),
     };
   });
-  const filteredPackageBreakdownRows = packageBreakdownRows.filter((row) => {
-    if (!packageSearch) return true;
-    return [row.code, row.name].join(" ").toLowerCase().includes(packageSearch);
-  });
   const totalPackagePages = Math.max(
     1,
-    Math.ceil(filteredPackageBreakdownRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+    Math.ceil(packageBreakdownRows.length / DASHBOARD_TABLE_PAGE_SIZE),
   );
   const safePackagePage = Math.min(packagePage, totalPackagePages);
-  const visiblePackageBreakdownRows = filteredPackageBreakdownRows.slice(
+  const visiblePackageBreakdownRows = packageBreakdownRows.slice(
     (safePackagePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
     safePackagePage * DASHBOARD_TABLE_PAGE_SIZE,
   );
@@ -699,20 +693,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       {canSeeFinancials && projectFinancialOverview ? (
         <section className="panel-surface">
           <div className="mb-5">
-            <p className="eyebrow">Financials</p>
-            <h2 className="section-title">Financial Overview</h2>
+            <p className="eyebrow">{dashboardText.financialEyebrow}</p>
+            <h2 className="section-title">{dashboardText.financialTitle}</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <ReadOnlySummaryCard
-              label="Total Revenue Recognized"
+              label={dashboardText.totalRevenueRecognized}
               value={formatCurrency(decimalToNumber(projectFinancialOverview.totals.revenue), numberLocale)}
             />
             <ReadOnlySummaryCard
-              label="Total Vendor Cost"
+              label={dashboardText.totalVendorCost}
               value={formatCurrency(decimalToNumber(projectFinancialOverview.totals.vendorCost), numberLocale)}
             />
             <ReadOnlySummaryCard
-              label="Overall Gross Margin %"
+              label={dashboardText.overallGrossMargin}
               value={formatPercent(projectFinancialOverview.totals.marginPct, numberLocale)}
             />
             <ReadOnlySummaryCard
@@ -737,36 +731,36 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="panel-surface">
         <div className="mb-5">
-          <p className="eyebrow">Delivery</p>
-          <h2 className="section-title">Delivery Overview</h2>
+          <p className="eyebrow">{dashboardText.deliveryEyebrow}</p>
+          <h2 className="section-title">{dashboardText.deliveryTitle}</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <ReadOnlySummaryCard
-            label="Baseline Progress %"
+            label={dashboardText.baselineProgress}
             value={formatPercent(decimalToNumber(projectSummary.baselineProgress), numberLocale)}
           />
           <ReadOnlySummaryCard
-            label="Actual Progress %"
+            label={dashboardText.actualProgress}
             value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
           />
           <ReadOnlySummaryCard
-            label="Total Trainings Planned vs Completed"
+            label={dashboardText.trainingsPlannedCompleted}
             value={`${formatNumber(plannedTrainingCount, numberLocale)} / ${formatNumber(completedTrainingCount, numberLocale)}`}
           />
           <ReadOnlySummaryCard
-            label="Total Seats Committed vs Delivered"
+            label={dashboardText.seatsCommittedDelivered}
             value={`${formatNumber(committedSeats, numberLocale)} / ${formatNumber(deliveredSeats, numberLocale)}`}
           />
           <ReadOnlySummaryCard
-            label="Overall PO Fulfillment %"
+            label={dashboardText.overallPoFulfillment}
             value={formatPercent(poFulfillment.fulfillmentPct, numberLocale)}
           />
           <ReadOnlySummaryCard
-            label="Project Start Date"
+            label={dashboardText.projectStartDate}
             value={formatDate(projectSummary.startDate, numberLocale)}
           />
           <ReadOnlySummaryCard
-            label="Expected End Date"
+            label={dashboardText.expectedEndDate}
             value={formatDate(projectSummary.expectedEndDate, numberLocale)}
           />
         </div>
@@ -774,20 +768,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="panel-surface">
         <div className="mb-5">
-          <p className="eyebrow">Quality</p>
-          <h2 className="section-title">Quality Overview</h2>
+          <p className="eyebrow">{dashboardText.qualityEyebrow}</p>
+          <h2 className="section-title">{dashboardText.qualityTitle}</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <ReadOnlySummaryCard
-            label="Average Course Rating project-wide"
+            label={dashboardText.averageCourseRatingProject}
             value={formatRating(projectQualityOverview.averageCourseRating, numberLocale)}
           />
           <ReadOnlySummaryCard
-            label="Average Instructor Rating project-wide"
+            label={dashboardText.averageInstructorRatingProject}
             value={formatRating(projectQualityOverview.averageInstructorRating, numberLocale)}
           />
           <ReadOnlySummaryCard
-            label="Overall Attendance Rate %"
+            label={dashboardText.overallAttendanceRate}
             value={formatPercent(projectAttendanceSummary.attendanceRate, numberLocale)}
           />
         </div>
@@ -795,50 +789,25 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="panel-surface">
         <div className="mb-5">
-          <p className="eyebrow">Packages</p>
-          <h2 className="section-title">Package Performance</h2>
+          <p className="eyebrow">{dashboardText.packagesEyebrow}</p>
+          <h2 className="section-title">{dashboardText.packagePerformance}</h2>
         </div>
-        <TableSearchForm
-          label={tableText.search}
-          placeholder={tableText.searchPlaceholder}
-          name="packageQ"
-          value={params.packageQ ?? ""}
-          hidden={{
-            q: searchTerm,
-            category: categoryFilter,
-            page: String(safeReportingPage),
-            coursePage: String(safeCoursePage),
-            poPage: String(safePoPage),
-            courseQ: params.courseQ ?? "",
-            poQ: params.poQ ?? "",
-          }}
-          resetHref={buildDashboardUrl({
-            q: searchTerm,
-            category: categoryFilter,
-            page: safeReportingPage,
-            coursePage: safeCoursePage,
-            poPage: safePoPage,
-            courseQ: params.courseQ ?? "",
-            poQ: params.poQ ?? "",
-          })}
-          resetLabel={tableText.reset}
-        />
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Package</th>
-                <th>Trainings Completed vs Planned</th>
-                <th>Total Seats Delivered</th>
-                <th>Seat Utilization %</th>
-                <th>Average Course Rating</th>
-                <th>Average Instructor Rating</th>
-                <th>Attendance Rate %</th>
+                <th>{dashboardText.package}</th>
+                <th>{dashboardText.trainingsCompletedPlanned}</th>
+                <th>{dashboardText.totalSeatsDelivered}</th>
+                <th>{dashboardText.seatUtilization}</th>
+                <th>{dashboardText.averageCourseRating}</th>
+                <th>{dashboardText.averageInstructorRating}</th>
+                <th>{dashboardText.attendanceRate}</th>
                 {canSeeFinancials ? (
                   <>
-                    <th>Revenue by Package</th>
-                    <th>Vendor Cost by Package</th>
-                    <th>Gross Margin % by Package</th>
+                    <th>{dashboardText.revenueByPackage}</th>
+                    <th>{dashboardText.vendorCostByPackage}</th>
+                    <th>{dashboardText.grossMarginByPackage}</th>
                   </>
                 ) : null}
               </tr>
@@ -867,9 +836,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               ))}
             </tbody>
           </table>
-          {filteredPackageBreakdownRows.length === 0 ? (
-            <p className="mt-4 text-sm text-[var(--ink-soft)]">{tableText.noResults}</p>
-          ) : null}
         </div>
         <DashboardPagination
           currentPage={safePackagePage}
@@ -884,7 +850,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               packagePage: page,
               coursePage: safeCoursePage,
               poPage: safePoPage,
-              packageQ: params.packageQ ?? "",
               courseQ: params.courseQ ?? "",
               poQ: params.poQ ?? "",
             })
@@ -895,47 +860,44 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       {platformRole !== "CUSTOMER" ? (
         <section className="panel-surface">
           <div className="mb-5">
-            <p className="eyebrow">Courses</p>
-            <h2 className="section-title">Course Performance</h2>
+            <p className="eyebrow">{dashboardText.coursesEyebrow}</p>
+            <h2 className="section-title">{dashboardText.coursePerformance}</h2>
           </div>
-          <TableSearchForm
-            label={tableText.search}
-            placeholder={tableText.searchPlaceholder}
-            name="courseQ"
-            value={params.courseQ ?? ""}
-            hidden={{
-              q: searchTerm,
-              category: categoryFilter,
-              page: String(safeReportingPage),
-              packagePage: String(safePackagePage),
-              poPage: String(safePoPage),
-              packageQ: params.packageQ ?? "",
-              poQ: params.poQ ?? "",
-            }}
-            resetHref={buildDashboardUrl({
-              q: searchTerm,
-              category: categoryFilter,
-              page: safeReportingPage,
-              packagePage: safePackagePage,
-              poPage: safePoPage,
-              packageQ: params.packageQ ?? "",
-              poQ: params.poQ ?? "",
-            })}
-            resetLabel={tableText.reset}
-          />
+          <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <InstantSearchField
+              name="courseQ"
+              label={localeText.common.search}
+              defaultValue={params.courseQ ?? ""}
+              placeholder={localeText.common.searchPlaceholder}
+              pageParams={["coursePage"]}
+            />
+            <Link
+              href={buildDashboardUrl({
+                q: searchTerm,
+                category: categoryFilter,
+                page: safeReportingPage,
+                packagePage: safePackagePage,
+                poPage: safePoPage,
+                poQ: params.poQ ?? "",
+              })}
+              className="secondary-button self-end"
+            >
+              {localeText.common.reset}
+            </Link>
+          </div>
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Course name</th>
-                  <th>Package</th>
-                  <th>Total Trainings</th>
-                  <th>Seats Planned</th>
-                  <th>Seats Delivered</th>
-                  <th>Utilization %</th>
-                  <th>Average Course Rating</th>
-                  <th>Average Instructor Rating</th>
-                  <th>Attendance Rate %</th>
+                  <th>{dashboardText.courseName}</th>
+                  <th>{dashboardText.package}</th>
+                  <th>{dashboardText.totalTrainings}</th>
+                  <th>{dashboardText.seatsPlanned}</th>
+                  <th>{dashboardText.seatsDelivered}</th>
+                  <th>{dashboardText.utilization}</th>
+                  <th>{dashboardText.averageCourseRating}</th>
+                  <th>{dashboardText.averageInstructorRating}</th>
+                  <th>{dashboardText.attendanceRate}</th>
                 </tr>
               </thead>
               <tbody>
@@ -959,7 +921,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </tbody>
             </table>
             {filteredCourseSummaryRows.length === 0 ? (
-              <p className="mt-4 text-sm text-[var(--ink-soft)]">{tableText.noResults}</p>
+              <p className="mt-4 text-sm text-[var(--ink-soft)]">{localeText.common.noResults}</p>
             ) : null}
           </div>
           <DashboardPagination
@@ -975,7 +937,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 packagePage: safePackagePage,
                 coursePage: page,
                 poPage: safePoPage,
-                packageQ: params.packageQ ?? "",
                 courseQ: params.courseQ ?? "",
                 poQ: params.poQ ?? "",
               })
@@ -1000,31 +961,28 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             value={formatNumber(projectScopeSummaryRows.length, numberLocale)}
           />
         </div>
-        <TableSearchForm
-          label={tableText.search}
-          placeholder={tableText.searchPlaceholder}
-          name="poQ"
-          value={params.poQ ?? ""}
-          hidden={{
-            q: searchTerm,
-            category: categoryFilter,
-            page: String(safeReportingPage),
-            packagePage: String(safePackagePage),
-            coursePage: String(safeCoursePage),
-            packageQ: params.packageQ ?? "",
-            courseQ: params.courseQ ?? "",
-          }}
-          resetHref={buildDashboardUrl({
-            q: searchTerm,
-            category: categoryFilter,
-            page: safeReportingPage,
-            packagePage: safePackagePage,
-            coursePage: safeCoursePage,
-            packageQ: params.packageQ ?? "",
-            courseQ: params.courseQ ?? "",
-          })}
-          resetLabel={tableText.reset}
-        />
+        <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <InstantSearchField
+            name="poQ"
+            label={localeText.common.search}
+            defaultValue={params.poQ ?? ""}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["poPage"]}
+          />
+          <Link
+            href={buildDashboardUrl({
+              q: searchTerm,
+              category: categoryFilter,
+              page: safeReportingPage,
+              packagePage: safePackagePage,
+              coursePage: safeCoursePage,
+              courseQ: params.courseQ ?? "",
+            })}
+            className="secondary-button self-end"
+          >
+            {localeText.common.reset}
+          </Link>
+        </div>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -1069,7 +1027,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
           ) : null}
           {projectScopeSummaryRows.length > 0 && filteredProjectScopeSummaryRows.length === 0 ? (
-            <p className="mt-4 text-sm text-[var(--ink-soft)]">{tableText.noResults}</p>
+            <p className="mt-4 text-sm text-[var(--ink-soft)]">{localeText.common.noResults}</p>
           ) : null}
         </div>
         <DashboardPagination
@@ -1085,7 +1043,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               packagePage: safePackagePage,
               coursePage: safeCoursePage,
               poPage: page,
-              packageQ: params.packageQ ?? "",
               courseQ: params.courseQ ?? "",
               poQ: params.poQ ?? "",
             })
@@ -1101,7 +1058,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             href="/courses"
-            title="Courses framework"
+            title={dashboardText.coursesFramework}
             value={formatNumber(totalCourses, numberLocale)}
             detail={`${formatNumber(completedCourseIds.length, numberLocale)} completed / ${formatNumber(ongoingCourseIds.length, numberLocale)} ongoing / ${formatNumber(plannedCourseIds.length, numberLocale)} planned`}
           />
@@ -1121,7 +1078,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             href="/trainings"
             title="Seat utilization"
             value={formatPercent(seatUtilization, numberLocale)}
-            detail={`${formatNumber(filledSeats, numberLocale)} actual / ${formatNumber(allocatedSeats, numberLocale)} estimated seats`}
+            detail={dashboardText.actualEstimatedSeats
+              .replace("{actual}", formatNumber(filledSeats, numberLocale))
+              .replace("{estimated}", formatNumber(allocatedSeats, numberLocale))}
           />
           <KpiCard
             href="/trainings"
@@ -1163,7 +1122,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        <ChartPanel title="Course completion by PO">
+        <ChartPanel title={dashboardText.poCompletionChart}>
           {scopeProgress.map((item) => (
             <ProgressRow
               key={item.code}
@@ -1173,7 +1132,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             />
           ))}
         </ChartPanel>
-        <ChartPanel title="Monthly training activity">
+        <ChartPanel title={dashboardText.monthlyTrainingActivity}>
           <BarChart rows={monthlyChart} numberLocale={numberLocale} />
         </ChartPanel>
       </section>
@@ -1191,16 +1150,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
 
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{localeText.reporting.search}</span>
-            <input
-              name="q"
-              type="search"
-              defaultValue={searchTerm}
-              className="field-input"
-              placeholder={localeText.common.searchPlaceholder}
-            />
-          </label>
+          <InstantSearchField
+            label={localeText.reporting.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
           <label className="field-shell">
             <span className="field-label">{localeText.reporting.category}</span>
             <select name="category" defaultValue={categoryFilter} className="field-input">
@@ -1560,48 +1515,6 @@ function DashboardPagination({
         </Link>
       </div>
     </div>
-  );
-}
-
-function TableSearchForm({
-  label,
-  placeholder,
-  name,
-  value,
-  hidden,
-  resetHref,
-  resetLabel,
-}: {
-  label: string;
-  placeholder: string;
-  name: string;
-  value: string;
-  hidden: Record<string, string>;
-  resetHref: string;
-  resetLabel: string;
-}) {
-  return (
-    <form className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-      {Object.entries(hidden).map(([key, hiddenValue]) =>
-        hiddenValue ? <input key={key} type="hidden" name={key} value={hiddenValue} /> : null,
-      )}
-      <label className="field-shell">
-        <span className="field-label">{label}</span>
-        <input
-          type="search"
-          name={name}
-          defaultValue={value}
-          placeholder={placeholder}
-          className="field-input"
-        />
-      </label>
-      <button type="submit" className="primary-button self-end">
-        {label}
-      </button>
-      <Link href={resetHref} className="secondary-button self-end">
-        {resetLabel}
-      </Link>
-    </form>
   );
 }
 

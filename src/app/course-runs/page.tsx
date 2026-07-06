@@ -7,6 +7,7 @@ import {
   TrainingCity,
 } from "@prisma/client";
 import { createTraining } from "@/app/course-runs/actions";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
@@ -402,16 +403,12 @@ export default async function CourseRunsPage({
         </div>
 
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.8fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{localeText.courseRuns.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={localeText.common.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
+          <InstantSearchField
+            label={localeText.courseRuns.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
 
           <label className="field-shell">
             <span className="field-label">{localeText.courseRuns.filterPackage}</span>

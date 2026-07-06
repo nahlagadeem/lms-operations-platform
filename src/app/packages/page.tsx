@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 
@@ -97,20 +98,13 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
       </section>
 
       <section className="panel-surface">
-        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <label className="field-shell">
-            <span className="field-label">{localeText.common.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={localeText.common.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
-          <button type="submit" className="primary-button self-end">
-            {localeText.common.search}
-          </button>
+        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <InstantSearchField
+            label={localeText.common.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
           <Link href="/packages" className="secondary-button self-end">
             {localeText.common.reset}
           </Link>

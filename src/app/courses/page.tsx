@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ActiveStatus, DeliveryType, Prisma } from "@prisma/client";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getDirection, getLocale, Locale, t } from "@/lib/locale";
 import {
@@ -229,16 +230,12 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
         ) : null}
 
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_0.8fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{localeText.courses.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={localeText.common.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
+          <InstantSearchField
+            label={localeText.courses.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
 
           <label className="field-shell">
             <span className="field-label">{localeText.courses.package}</span>

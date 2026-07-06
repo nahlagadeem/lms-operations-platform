@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
@@ -325,21 +326,14 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
       ) : null}
 
       <section className="grid gap-4">
-        <form className="panel-surface grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <form className="panel-surface grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           {courseSearch ? <input type="hidden" name="courseQ" value={courseSearch} /> : null}
-          <label className="field-shell">
-            <span className="field-label">{localeText.common.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={poSearch}
-              placeholder={localeText.common.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
-          <button type="submit" className="primary-button self-end">
-            {localeText.common.search}
-          </button>
+          <InstantSearchField
+            label={localeText.common.search}
+            defaultValue={poSearch}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
           <Link
             href={courseSearch ? `/pos?courseQ=${encodeURIComponent(courseSearch)}` : "/pos"}
             className="secondary-button self-end"
