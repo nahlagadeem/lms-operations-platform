@@ -156,6 +156,9 @@ function detailText(locale: "en" | "ar") {
       noCompletionData: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¨ÙŠØ§Ù†Ø§Øª Ø­Ø¶ÙˆØ± ÙƒØ§ÙÙŠØ© Ù„Ø­Ø³Ø§Ø¨ Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„ Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†",
       attendanceRate: "Ù†Ø³Ø¨Ø© Ø§Ù„Ø­Ø¶ÙˆØ±",
       attendedDays: "Ø£ÙŠØ§Ù… Ø§Ù„Ø­Ø¶ÙˆØ±",
+      attended: "Ø­Ø¶Ø±",
+      missed: "ÙØ§ØªØªÙ‡",
+      sessionAttendanceDetail: "ØªÙØ§ØµÙŠÙ„ Ø­Ø¶ÙˆØ± Ø§Ù„Ø¬Ù„Ø³Ø§Øª",
       totalSessions: "Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¬Ù„Ø³Ø§Øª",
       completionEligible: "Ù…Ø¤Ù‡Ù„ Ù„Ù„Ø§ÙƒØªÙ…Ø§Ù„",
       certificateEligible: "Ù…Ø¤Ù‡Ù„ Ù„Ù„Ø´Ù‡Ø§Ø¯Ø©",
@@ -301,6 +304,9 @@ function detailText(locale: "en" | "ar") {
     noCompletionData: "There is not enough attendance data to calculate completion yet",
     attendanceRate: "Attendance rate",
     attendedDays: "Attended days",
+    attended: "Attended",
+    missed: "Missed",
+    sessionAttendanceDetail: "Session attendance detail",
     totalSessions: "Total sessions",
     completionEligible: "Completion eligible",
     certificateEligible: "Ready to issue certificate",
@@ -684,6 +690,17 @@ export default async function CourseRunDetailPage({
       }, 0);
       const attendanceRate =
         totalSessionCount > 0 ? presentCount / totalSessionCount : 0;
+      const sessionDetails = run.sessions.map((session) => {
+        const record = attendanceByCell.get(
+          attendanceCellKey(nomination.participantId, session.id),
+        );
+
+        return {
+          sessionId: session.id,
+          sessionDate: session.sessionDate,
+          attended: record?.attendanceStatus === "PRESENT",
+        };
+      });
       const completionEligible = attendanceRate >= completionThreshold;
       const certificateEligible =
         run.certificateRequired && completionEligible ? true : !run.certificateRequired;
@@ -695,6 +712,7 @@ export default async function CourseRunDetailPage({
         presentCount,
         totalSessions: totalSessionCount,
         attendanceRate,
+        sessionDetails,
         completionEligible,
         certificateEligible,
       };
@@ -1238,6 +1256,31 @@ export default async function CourseRunDetailPage({
                         label={details.certificateEligible}
                         value={row.certificateEligible ? details.yes : details.no}
                       />
+                    </div>
+
+                    <div className="mt-4 border-t border-[var(--line)] pt-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+                        {details.sessionAttendanceDetail}
+                      </p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {row.sessionDetails.map((sessionDetail) => (
+                          <div
+                            key={sessionDetail.sessionId}
+                            className="flex items-center justify-between gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm"
+                          >
+                            <span className="font-medium text-[var(--ink-strong)]">
+                              {new Intl.DateTimeFormat(numberLocale, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              }).format(sessionDetail.sessionDate)}
+                            </span>
+                            <span className="status-pill">
+                              {sessionDetail.attended ? details.attended : details.missed}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ))

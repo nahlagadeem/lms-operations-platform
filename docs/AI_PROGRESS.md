@@ -2,14 +2,14 @@
 
 ## Repository
 - Current branch: `feature/project-scope-to-purchase-order`
-- Current HEAD commit: `3974e19e181cc1e96ad732753ac3c5e30a1b2279`
-- Current status (working tree clean/dirty): clean after the PTSP-21 Course/Package attendance rollup verification commit
+- Current HEAD commit: `533b4c0`
+- Current status (working tree clean/dirty): dirty while PTSP-22 session attendance detail summary is being prepared
 
 ## Overall Project Status
-- Overall completion estimate: about 5 of 14 PTSP stories are complete, or roughly 36%; PTSP-16, PTSP-17, PTSP-19, PTSP-20, and PTSP-21 are complete for demo/staging, and the remaining PTSP stories are still open.
-- PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`, `PTSP-20`, `PTSP-21`
+- Overall completion estimate: about 6 of 14 PTSP stories are complete, or roughly 43%; PTSP-16, PTSP-17, PTSP-19, PTSP-20, PTSP-21, and PTSP-22 are complete for demo/staging, and the remaining PTSP stories are still open.
+- PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`, `PTSP-20`, `PTSP-21`, `PTSP-22`
 - PTSP stories in progress: none
-- PTSP stories not started: `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
+- PTSP stories not started: `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
 ## Completed PTSP Stories
 ### PTSP-16
@@ -66,6 +66,15 @@
 - Dashboard/home attendance KPI now uses `getProjectSessionAttendanceRate`.
 - Course and Package pages were audited; no Course-level or Package-level attendance rate displays currently exist, so no application wiring was needed there.
 
+## PTSP-22 Summary
+- Status: complete for demo/staging.
+- Training detail completion summary shows each eligible enrollee with attended days, total sessions, and individual attendance rate.
+- Each enrollee completion card now includes a read-only session attendance detail list.
+- Session detail status maps `PRESENT` to Attended.
+- Session detail status maps `ABSENT` and missing/no attendance record to Missed.
+- Existing attendance grid remains unchanged and continues to handle per-session editing for authorized roles.
+- No schema, service, permission, or attendance write changes were required.
+
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
 - Auth changes: `admin/admin` still works and resolves to `admin@jawraa.demo`; auth now resolves role from `AppUser`; raw role-cookie authentication is rejected in proxy; login is still email-based for the demo session cookie.
@@ -112,6 +121,8 @@
 - `feat(attendance): use session metrics on training detail` - Wire Training detail attendance rate and per-attendee completion rows to session-level attendance data.
 - `feat(attendance): use session metrics on dashboard` - Wire dashboard/home attendance KPI to project-wide session-level attendance data.
 - `feat(attendance): verify course and package attendance rollups` - Verify Course and Package pages have no attendance-rate displays requiring session-level rollup wiring.
+- `docs: mark PTSP-21 attendance metrics complete` - Document PTSP-21 as complete for demo/staging.
+- `feat(attendance): show enrollee session detail summary` - Add per-enrollee attended/missed session details on Training detail.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -129,8 +140,8 @@
 - Expected role matrix: `PROJECT_MANAGER` sees full access and financials; `KEY_STAKEHOLDER` sees financials but is view-only; `DATA_ENTRY` can manage operational records but sees no financial output; `CUSTOMER` sees read-only capacity information only.
 
 ## Next Story Recommendation
-- Recommend `PTSP-22`.
-- Why: PTSP-20 and PTSP-21 now provide session-level attendance records and attendance-rate calculations, so the next attendance-dependent story can build on stable session-level data.
+- Recommend `PTSP-23`.
+- Why: PTSP-20, PTSP-21, and PTSP-22 now provide session-level attendance data, rollup calculations, and per-enrollee attendance visibility. The next story should continue from this completed attendance foundation rather than reopening already stabilized RBAC or session work.
 
 ## Coding Rules
 - Never rebuild existing features.
@@ -141,4 +152,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: start PTSP-22 with a repository review only, then identify its exact dependency on the completed session-level attendance and attendance-rate work.
+- First action for the next Codex session: verify the exact PTSP-23 Jira story and acceptance criteria from project artifacts before making any code changes.
