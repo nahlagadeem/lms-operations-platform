@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 type PackageDetailPageProps = {
   params: Promise<{

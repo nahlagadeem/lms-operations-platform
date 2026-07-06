@@ -25,9 +25,11 @@ type CourseRunsPageProps = {
     panel?: string;
     sort?: string;
     dir?: string;
+    page?: string;
   }>;
 };
 
+const TRAININGS_PAGE_SIZE = 10;
 const statusGroupsForPlanned = [
   CourseRunStatus.PLANNED,
   CourseRunStatus.APPROVAL_PENDING,
@@ -52,6 +54,11 @@ function formatNumber(value: number, locale: string) {
 
 function normalizeSingleValue(value?: string) {
   return value?.trim() || "";
+}
+
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
 function pageText(locale: "en" | "ar") {
@@ -114,6 +121,39 @@ function sortHref(
   return `/trainings?${query.toString()}`;
 }
 
+function trainingsPageHref(params: {
+  q: string;
+  package: string;
+  status: string;
+  sort: TrainingListSortKey;
+  dir: SortDirection;
+  page: number;
+}) {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.package) query.set("package", params.package);
+  if (params.status) query.set("status", params.status);
+  query.set("sort", params.sort);
+  query.set("dir", params.dir);
+  if (params.page > 1) query.set("page", String(params.page));
+  return `/trainings?${query.toString()}`;
+}
+
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
+}
+
 function SortHeader({
   label,
   sortKey,
@@ -165,6 +205,7 @@ export default async function CourseRunsPage({
   const statusFilter = normalizeSingleValue(params.status) as CourseRunStatus | "";
   const sortKey = normalizeSortKey(params.sort);
   const sortDirection = normalizeSortDirection(params.dir);
+  const requestedPage = normalizePage(params.page);
   const platformRole = await getCurrentPlatformRole();
   const canCreate = canCreateOperationalData(platformRole);
   const canManageFinancials = canManageFinancialFields(platformRole);
@@ -317,6 +358,12 @@ export default async function CourseRunsPage({
         ? leftValue.localeCompare(rightValue, locale)
         : rightValue.localeCompare(leftValue, locale);
     });
+  const totalTrainingPages = Math.max(1, Math.ceil(trainingRows.length / TRAININGS_PAGE_SIZE));
+  const safeTrainingPage = Math.min(requestedPage, totalTrainingPages);
+  const visibleTrainingRows = trainingRows.slice(
+    (safeTrainingPage - 1) * TRAININGS_PAGE_SIZE,
+    safeTrainingPage * TRAININGS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -452,7 +499,7 @@ export default async function CourseRunsPage({
                 </tr>
               </thead>
               <tbody>
-                {trainingRows.map(({ run, training, estimatedSeats, actualSeats, locationLabel, duration }) => (
+                {visibleTrainingRows.map(({ run, training, estimatedSeats, actualSeats, locationLabel, duration }) => (
                   <tr
                     key={run.id}
                     className="cursor-pointer transition hover:bg-white"
@@ -492,6 +539,96 @@ export default async function CourseRunsPage({
                 ))}
               </tbody>
             </table>
+            {trainingRows.length > TRAININGS_PAGE_SIZE ? (
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeTrainingPage, numberLocale))
+                    .replace("{total}", formatNumber(totalTrainingPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: 1,
+                    })}
+                    aria-disabled={safeTrainingPage <= 1}
+                    className={`pagination-link ${safeTrainingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: Math.max(1, safeTrainingPage - 1),
+                    })}
+                    aria-disabled={safeTrainingPage <= 1}
+                    className={`pagination-link ${safeTrainingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeTrainingPage, totalTrainingPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={trainingsPageHref({
+                          q: searchTerm,
+                          package: packageCode,
+                          status: statusFilter,
+                          sort: sortKey,
+                          dir: sortDirection,
+                          page,
+                        })}
+                        aria-current={page === safeTrainingPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeTrainingPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: Math.min(totalTrainingPages, safeTrainingPage + 1),
+                    })}
+                    aria-disabled={safeTrainingPage >= totalTrainingPages}
+                    className={`pagination-link ${safeTrainingPage >= totalTrainingPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: totalTrainingPages,
+                    })}
+                    aria-disabled={safeTrainingPage >= totalTrainingPages}
+                    className={`pagination-link ${safeTrainingPage >= totalTrainingPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </section>

@@ -291,7 +291,7 @@ function detailText(locale: "en" | "ar") {
     saveAttendance: "Save attendance",
     recordedAttendance: "Attendance entries",
     evaluationTitle: "Training evaluations",
-    evaluationDescription: "Record internal course, instructor, and attendee evaluations.",
+    evaluationDescription: "Record course, instructor, and attendee evaluations.",
     courseEvaluation: "Course evaluation",
     instructorEvaluation: "Instructor evaluation",
     attendeeEvaluation: "Attendee evaluation",

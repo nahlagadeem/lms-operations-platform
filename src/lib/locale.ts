@@ -64,7 +64,7 @@ const englishText = {
     badge: "JAWRAA",
     title: "Training Management System",
     subtitle:
-      "Track packages, courses, schedules, operations, and execution status from one internal platform instead of scattered Excel files.",
+      "Track packages, courses, schedules, operations, and execution status from one platform instead of scattered Excel files.",
   },
   home: {
     packageCount: "Total packages",

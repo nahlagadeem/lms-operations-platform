@@ -8,7 +8,7 @@ import {
   isCustomerCapacityOnly,
 } from "@/lib/permissions";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 type CoursesPageProps = {
   searchParams?: Promise<{

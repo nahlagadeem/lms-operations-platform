@@ -24,11 +24,13 @@ type ScopeDetailPageProps = {
   }>;
   searchParams?: Promise<{
     coursePage?: string;
+    trackingPage?: string;
     assignQ?: string;
   }>;
 };
 
 const COURSES_PER_PAGE = 10;
+const TRACKING_ROWS_PER_PAGE = 10;
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -92,9 +94,17 @@ function normalizeSearch(value?: string) {
   return value?.trim() || "";
 }
 
-function buildScopeUrl(scopeId: string, page: number, assignQ?: string) {
+function buildScopeUrl(
+  scopeId: string,
+  page: number,
+  assignQ?: string,
+  trackingPage?: number,
+) {
   const search = new URLSearchParams();
   if (page > 1) search.set("coursePage", String(page));
+  if (trackingPage && trackingPage > 1) {
+    search.set("trackingPage", String(trackingPage));
+  }
   if (assignQ) search.set("assignQ", assignQ);
   const query = search.toString();
   return query ? `/pos/${scopeId}?${query}` : `/pos/${scopeId}`;
@@ -107,6 +117,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const localeText = t(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const requestedCoursePage = normalizePage(queryParams.coursePage);
+  const requestedTrackingPage = normalizePage(queryParams.trackingPage);
   const assignSearch = normalizeSearch(queryParams.assignQ);
   const platformRole = await getCurrentPlatformRole();
   const canCreate = canCreateOperationalData(platformRole);
@@ -190,6 +201,13 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const scopeName = formatPurchaseOrderTitle(scope, locale);
   const trackingByEntryId = new Map(
     tracking?.rows.map((row) => [row.purchaseOrderCourseEntryId, row] as const) ?? [],
+  );
+  const trackingRows = tracking?.rows ?? [];
+  const totalTrackingPages = Math.max(1, Math.ceil(trackingRows.length / TRACKING_ROWS_PER_PAGE));
+  const safeTrackingPage = Math.min(requestedTrackingPage, totalTrackingPages);
+  const visibleTrackingRows = trackingRows.slice(
+    (safeTrackingPage - 1) * TRACKING_ROWS_PER_PAGE,
+    safeTrackingPage * TRACKING_ROWS_PER_PAGE,
   );
   const totalCoursePages = Math.max(1, Math.ceil(scope.selectedCourses.length / COURSES_PER_PAGE));
   const safeCoursePage = Math.min(requestedCoursePage, totalCoursePages);
@@ -287,7 +305,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 </tr>
               </thead>
               <tbody>
-                {tracking.rows.map((row) => (
+                {visibleTrackingRows.map((row) => (
                   <tr key={row.purchaseOrderCourseEntryId}>
                     <td>
                       <Link href={`/courses/${row.courseId}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
@@ -316,6 +334,71 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 ))}
               </tbody>
             </table>
+            {trackingRows.length > TRACKING_ROWS_PER_PAGE ? (
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeTrackingPage, numberLocale))
+                    .replace("{total}", formatNumber(totalTrackingPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, 1)}
+                    aria-disabled={safeTrackingPage <= 1}
+                    className={`pagination-link ${safeTrackingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={buildScopeUrl(
+                      scope.id,
+                      safeCoursePage,
+                      assignSearch,
+                      Math.max(1, safeTrackingPage - 1),
+                    )}
+                    aria-disabled={safeTrackingPage <= 1}
+                    className={`pagination-link ${safeTrackingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeTrackingPage, totalTrackingPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`tracking-ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, page)}
+                        aria-current={page === safeTrackingPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeTrackingPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={buildScopeUrl(
+                      scope.id,
+                      safeCoursePage,
+                      assignSearch,
+                      Math.min(totalTrackingPages, safeTrackingPage + 1),
+                    )}
+                    aria-disabled={safeTrackingPage >= totalTrackingPages}
+                    className={`pagination-link ${safeTrackingPage >= totalTrackingPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, totalTrackingPages)}
+                    aria-disabled={safeTrackingPage >= totalTrackingPages}
+                    className={`pagination-link ${safeTrackingPage >= totalTrackingPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -441,14 +524,19 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href={buildScopeUrl(scope.id, 1, assignSearch)}
+                    href={buildScopeUrl(scope.id, 1, assignSearch, safeTrackingPage)}
                     aria-disabled={safeCoursePage <= 1}
                     className={`pagination-link ${safeCoursePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
                   >
                     {localeText.pagination.first}
                   </Link>
                   <Link
-                    href={buildScopeUrl(scope.id, Math.max(1, safeCoursePage - 1), assignSearch)}
+                    href={buildScopeUrl(
+                      scope.id,
+                      Math.max(1, safeCoursePage - 1),
+                      assignSearch,
+                      safeTrackingPage,
+                    )}
                     aria-disabled={safeCoursePage <= 1}
                     className={`pagination-link ${safeCoursePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
                   >
@@ -462,7 +550,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     ) : (
                       <Link
                         key={page}
-                        href={buildScopeUrl(scope.id, page, assignSearch)}
+                        href={buildScopeUrl(scope.id, page, assignSearch, safeTrackingPage)}
                         aria-current={page === safeCoursePage ? "page" : undefined}
                         className={`pagination-link ${page === safeCoursePage ? "pagination-link-active" : ""}`}
                       >
@@ -471,14 +559,19 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     ),
                   )}
                   <Link
-                    href={buildScopeUrl(scope.id, Math.min(totalCoursePages, safeCoursePage + 1), assignSearch)}
+                    href={buildScopeUrl(
+                      scope.id,
+                      Math.min(totalCoursePages, safeCoursePage + 1),
+                      assignSearch,
+                      safeTrackingPage,
+                    )}
                     aria-disabled={safeCoursePage >= totalCoursePages}
                     className={`pagination-link ${safeCoursePage >= totalCoursePages ? "pointer-events-none opacity-50" : ""}`}
                   >
                     {localeText.pagination.next}
                   </Link>
                   <Link
-                    href={buildScopeUrl(scope.id, totalCoursePages, assignSearch)}
+                    href={buildScopeUrl(scope.id, totalCoursePages, assignSearch, safeTrackingPage)}
                     aria-disabled={safeCoursePage >= totalCoursePages}
                     className={`pagination-link ${safeCoursePage >= totalCoursePages ? "pointer-events-none opacity-50" : ""}`}
                   >

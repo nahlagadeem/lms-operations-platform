@@ -29,10 +29,13 @@ type HomePageProps = {
     q?: string;
     category?: string;
     page?: string;
+    packagePage?: string;
+    coursePage?: string;
+    poPage?: string;
   }>;
 };
 
-const REPORTING_PAGE_SIZE = 15;
+const DASHBOARD_TABLE_PAGE_SIZE = 10;
 
 const plannedRunStatuses: CourseRunStatus[] = [
   CourseRunStatus.DRAFT,
@@ -121,11 +124,21 @@ function formatRating(value: number | null, locale: string) {
     : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value);
 }
 
-function buildDashboardUrl(params: { q?: string; category?: string; page?: number }) {
+function buildDashboardUrl(params: {
+  q?: string;
+  category?: string;
+  page?: number;
+  packagePage?: number;
+  coursePage?: number;
+  poPage?: number;
+}) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
   if (params.category) search.set("category", params.category);
   if (params.page && params.page > 1) search.set("page", String(params.page));
+  if (params.packagePage && params.packagePage > 1) search.set("packagePage", String(params.packagePage));
+  if (params.coursePage && params.coursePage > 1) search.set("coursePage", String(params.coursePage));
+  if (params.poPage && params.poPage > 1) search.set("poPage", String(params.poPage));
   const query = search.toString();
   return query ? `/?${query}` : "/";
 }
@@ -157,6 +170,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const searchTerm = normalize(params.q);
   const categoryFilter = normalize(params.category);
   const reportingPage = normalizePage(params.page);
+  const packagePage = normalizePage(params.packagePage);
+  const coursePage = normalizePage(params.coursePage);
+  const poPage = normalizePage(params.poPage);
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -458,12 +474,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const categoryOptions = getReportingCategoryOptions(locale);
   const totalReportingPages = Math.max(
     1,
-    Math.ceil(reportingRows.length / REPORTING_PAGE_SIZE),
+    Math.ceil(reportingRows.length / DASHBOARD_TABLE_PAGE_SIZE),
   );
   const safeReportingPage = Math.min(reportingPage, totalReportingPages);
   const visibleReportingRows = reportingRows.slice(
-    (safeReportingPage - 1) * REPORTING_PAGE_SIZE,
-    safeReportingPage * REPORTING_PAGE_SIZE,
+    (safeReportingPage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safeReportingPage * DASHBOARD_TABLE_PAGE_SIZE,
   );
   const scopeDocumentCountById = new Map(
     scopeDocumentCounts.map((item) => [item.entityId, item._count._all]),
@@ -491,6 +507,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       documents: scopeDocumentCountById.get(scope.id) ?? 0,
     };
   });
+  const totalPoPages = Math.max(
+    1,
+    Math.ceil(projectScopeSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+  );
+  const safePoPage = Math.min(poPage, totalPoPages);
+  const visibleProjectScopeSummaryRows = projectScopeSummaryRows.slice(
+    (safePoPage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safePoPage * DASHBOARD_TABLE_PAGE_SIZE,
+  );
 
   const completedTrainingCount = completedRuns;
   const plannedTrainingCount = totalRuns;
@@ -560,6 +585,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       marginPct: ratio(revenue - vendorCost, revenue),
     };
   });
+  const totalPackagePages = Math.max(
+    1,
+    Math.ceil(packageBreakdownRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+  );
+  const safePackagePage = Math.min(packagePage, totalPackagePages);
+  const visiblePackageBreakdownRows = packageBreakdownRows.slice(
+    (safePackagePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safePackagePage * DASHBOARD_TABLE_PAGE_SIZE,
+  );
   const courseSummaryRows = dashboardCourses.map((course) => {
     const plannedSeats = course.scopeSelections.reduce(
       (sum, selection) => sum + (selection.estimatedSeats ?? 0),
@@ -590,6 +624,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       attendanceRate: courseAttendanceById.get(course.id) ?? 0,
     };
   });
+  const totalCoursePages = Math.max(
+    1,
+    Math.ceil(courseSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+  );
+  const safeCoursePage = Math.min(coursePage, totalCoursePages);
+  const visibleCourseSummaryRows = courseSummaryRows.slice(
+    (safeCoursePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safeCoursePage * DASHBOARD_TABLE_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-8">
@@ -615,7 +658,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       {canSeeFinancials && projectFinancialOverview ? (
         <section className="panel-surface">
           <div className="mb-5">
-            <p className="eyebrow">PTSP-27</p>
+            <p className="eyebrow">Financials</p>
             <h2 className="section-title">Financial Overview</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -653,7 +696,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="panel-surface">
         <div className="mb-5">
-          <p className="eyebrow">PTSP-28</p>
+          <p className="eyebrow">Delivery</p>
           <h2 className="section-title">Delivery Overview</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -690,7 +733,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="panel-surface">
         <div className="mb-5">
-          <p className="eyebrow">PTSP-29</p>
+          <p className="eyebrow">Quality</p>
           <h2 className="section-title">Quality Overview</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
@@ -711,8 +754,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="panel-surface">
         <div className="mb-5">
-          <p className="eyebrow">PTSP-30</p>
-          <h2 className="section-title">Package Breakdown</h2>
+          <p className="eyebrow">Packages</p>
+          <h2 className="section-title">Package Performance</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="data-table">
@@ -735,7 +778,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </tr>
             </thead>
             <tbody>
-              {packageBreakdownRows.map((row) => (
+              {visiblePackageBreakdownRows.map((row) => (
                 <tr key={row.id}>
                   <td>
                     <p className="latin-chip">{row.code}</p>
@@ -759,13 +802,29 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </tbody>
           </table>
         </div>
+        <DashboardPagination
+          currentPage={safePackagePage}
+          totalPages={totalPackagePages}
+          numberLocale={numberLocale}
+          labels={localeText.pagination}
+          hrefForPage={(page) =>
+            buildDashboardUrl({
+              q: searchTerm,
+              category: categoryFilter,
+              page: safeReportingPage,
+              packagePage: page,
+              coursePage: safeCoursePage,
+              poPage: safePoPage,
+            })
+          }
+        />
       </section>
 
       {platformRole !== "CUSTOMER" ? (
         <section className="panel-surface">
           <div className="mb-5">
-            <p className="eyebrow">PTSP-32</p>
-            <h2 className="section-title">Course Summary</h2>
+            <p className="eyebrow">Courses</p>
+            <h2 className="section-title">Course Performance</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="data-table">
@@ -783,7 +842,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 </tr>
               </thead>
               <tbody>
-                {courseSummaryRows.map((row) => (
+                {visibleCourseSummaryRows.map((row) => (
                   <tr key={row.id}>
                     <td>
                       <Link href={`/courses/${row.id}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
@@ -803,6 +862,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </tbody>
             </table>
           </div>
+          <DashboardPagination
+            currentPage={safeCoursePage}
+            totalPages={totalCoursePages}
+            numberLocale={numberLocale}
+            labels={localeText.pagination}
+            hrefForPage={(page) =>
+              buildDashboardUrl({
+                q: searchTerm,
+                category: categoryFilter,
+                page: safeReportingPage,
+                packagePage: safePackagePage,
+                coursePage: page,
+                poPage: safePoPage,
+              })
+            }
+          />
         </section>
       ) : null}
 
@@ -837,7 +912,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </tr>
             </thead>
             <tbody>
-              {projectScopeSummaryRows.map((scope) => (
+              {visibleProjectScopeSummaryRows.map((scope) => (
                 <tr key={scope.id}>
                   <td>
                     <div className="space-y-1">
@@ -866,6 +941,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
           ) : null}
         </div>
+        <DashboardPagination
+          currentPage={safePoPage}
+          totalPages={totalPoPages}
+          numberLocale={numberLocale}
+          labels={localeText.pagination}
+          hrefForPage={(page) =>
+            buildDashboardUrl({
+              q: searchTerm,
+              category: categoryFilter,
+              page: safeReportingPage,
+              packagePage: safePackagePage,
+              coursePage: safeCoursePage,
+              poPage: page,
+            })
+          }
+        />
       </section>
 
       <section className="panel-surface">
@@ -1009,7 +1100,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {visibleReportingRows.map((row, index) => (
                 <tr key={row.id}>
                   <td className="latin-cell">
-                    {formatNumber((safeReportingPage - 1) * REPORTING_PAGE_SIZE + index + 1, numberLocale)}
+                    {formatNumber((safeReportingPage - 1) * DASHBOARD_TABLE_PAGE_SIZE + index + 1, numberLocale)}
                   </td>
                   <td>{row.categoryLabel}</td>
                   <td>{row.name}</td>
@@ -1028,7 +1119,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
           ) : null}
         </div>
-        {reportingRows.length > REPORTING_PAGE_SIZE ? (
+        {reportingRows.length > DASHBOARD_TABLE_PAGE_SIZE ? (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">
               {localeText.pagination.pageIndicator
@@ -1041,6 +1132,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   q: searchTerm,
                   category: categoryFilter,
                   page: 1,
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage <= 1}
                 className={`pagination-link ${safeReportingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
@@ -1052,6 +1146,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   q: searchTerm,
                   category: categoryFilter,
                   page: Math.max(1, safeReportingPage - 1),
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage <= 1}
                 className={`pagination-link ${safeReportingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
@@ -1070,6 +1167,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                       q: searchTerm,
                       category: categoryFilter,
                       page,
+                      packagePage: safePackagePage,
+                      coursePage: safeCoursePage,
+                      poPage: safePoPage,
                     })}
                     aria-current={page === safeReportingPage ? "page" : undefined}
                     className={`pagination-link ${page === safeReportingPage ? "pagination-link-active" : ""}`}
@@ -1083,6 +1183,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   q: searchTerm,
                   category: categoryFilter,
                   page: Math.min(totalReportingPages, safeReportingPage + 1),
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage >= totalReportingPages}
                 className={`pagination-link ${safeReportingPage >= totalReportingPages ? "pointer-events-none opacity-50" : ""}`}
@@ -1094,6 +1197,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   q: searchTerm,
                   category: categoryFilter,
                   page: totalReportingPages,
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage >= totalReportingPages}
                 className={`pagination-link ${safeReportingPage >= totalReportingPages ? "pointer-events-none opacity-50" : ""}`}
@@ -1244,6 +1350,80 @@ function ReadOnlyProgressCard({
           className="h-full rounded-full bg-[var(--brand-yellow)]"
           style={{ width: `${clamped}%` }}
         />
+      </div>
+    </div>
+  );
+}
+
+function DashboardPagination({
+  currentPage,
+  totalPages,
+  numberLocale,
+  labels,
+  hrefForPage,
+}: {
+  currentPage: number;
+  totalPages: number;
+  numberLocale: string;
+  labels: ReturnType<typeof t>["pagination"];
+  hrefForPage: (page: number) => string;
+}) {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm font-semibold text-[var(--ink-soft)]">
+        {labels.pageIndicator
+          .replace("{current}", formatNumber(currentPage, numberLocale))
+          .replace("{total}", formatNumber(totalPages, numberLocale))}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={hrefForPage(1)}
+          aria-disabled={currentPage <= 1}
+          className={`pagination-link ${currentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.first}
+        </Link>
+        <Link
+          href={hrefForPage(Math.max(1, currentPage - 1))}
+          aria-disabled={currentPage <= 1}
+          className={`pagination-link ${currentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.previous}
+        </Link>
+        {paginationPages(currentPage, totalPages).map((page, index) =>
+          page === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+              ...
+            </span>
+          ) : (
+            <Link
+              key={page}
+              href={hrefForPage(page)}
+              aria-current={page === currentPage ? "page" : undefined}
+              className={`pagination-link ${page === currentPage ? "pagination-link-active" : ""}`}
+            >
+              {formatNumber(page, numberLocale)}
+            </Link>
+          ),
+        )}
+        <Link
+          href={hrefForPage(Math.min(totalPages, currentPage + 1))}
+          aria-disabled={currentPage >= totalPages}
+          className={`pagination-link ${currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.next}
+        </Link>
+        <Link
+          href={hrefForPage(totalPages)}
+          aria-disabled={currentPage >= totalPages}
+          className={`pagination-link ${currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.last}
+        </Link>
       </div>
     </div>
   );
