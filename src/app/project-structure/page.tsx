@@ -83,6 +83,9 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
               package: true,
             },
           },
+          courseRuns: {
+            select: { confirmedSeats: true },
+          },
         },
         orderBy: { sortOrder: "asc" },
       },
@@ -269,6 +272,16 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
       <section className="grid gap-4">
         {scopes.map((scope) => {
           const courseCount = scope.selectedCourses.length;
+          const totalEstimatedSeats = scope.selectedCourses.reduce(
+            (sum, entry) => sum + (entry.estimatedSeats ?? 0),
+            0,
+          );
+          const totalActualSeats = scope.selectedCourses.reduce(
+            (sum, entry) =>
+              sum +
+              entry.courseRuns.reduce((runSum, run) => runSum + run.confirmedSeats, 0),
+            0,
+          );
           const actual = progressValue(scope.actualCompletion);
 
           return (
@@ -294,12 +307,20 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <InfoBox label={localeText.projectScopes.packages} value={formatNumber(scope.packages.length, numberLocale)} />
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <InfoBox label={localeText.projectScopes.courses} value={formatNumber(courseCount, numberLocale)} />
-                {canSeeFinancials ? (
-                  <InfoBox label={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
-                ) : null}
+                <InfoBox
+                  label={localeText.projectScopes.estimatedSeats}
+                  value={formatNumber(totalEstimatedSeats, numberLocale)}
+                />
+                <InfoBox
+                  label={localeText.projectScopes.actualSeats}
+                  value={formatNumber(totalActualSeats, numberLocale)}
+                />
+                <InfoBox
+                  label={localeText.projectScopes.remainingSeats}
+                  value={formatNumber(totalEstimatedSeats - totalActualSeats, numberLocale)}
+                />
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">

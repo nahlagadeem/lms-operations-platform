@@ -10,6 +10,7 @@ export type PoTrackingRow = {
   courseId: string;
   courseCode: string;
   courseName: string;
+  packageCode: string;
   estimatedSeats: number;
   actualSeats: number;
   remainingSeats: number;
@@ -56,6 +57,7 @@ function buildTrackingRow(entry: {
   courseId: string;
   courseCode: string;
   courseName: string;
+  packageCode: string;
   estimatedSeats: number | null;
   confirmedSeats: number[];
 }): PoTrackingRow {
@@ -73,6 +75,7 @@ function buildTrackingRow(entry: {
     courseId: entry.courseId,
     courseCode: entry.courseCode,
     courseName: entry.courseName,
+    packageCode: entry.packageCode,
     estimatedSeats,
     actualSeats,
     remainingSeats,
@@ -123,6 +126,7 @@ export async function getPoCourseTracking(scopeId: string): Promise<PoCourseTrac
               courseCode: true,
               nameAr: true,
               nameEn: true,
+              package: { select: { code: true } },
             },
           },
           courseRuns: {
@@ -147,6 +151,7 @@ export async function getPoCourseTracking(scopeId: string): Promise<PoCourseTrac
       courseId: entry.course.id,
       courseCode: entry.course.courseCode,
       courseName: normalizeName(entry.course.nameEn, entry.course.nameAr, entry.course.courseCode),
+      packageCode: entry.course.package.code,
       estimatedSeats: entry.estimatedSeats,
       confirmedSeats: entry.courseRuns.map((run) => run.confirmedSeats),
     }),
@@ -189,6 +194,7 @@ export async function getAllPoSummaryRows(): Promise<PoTrackingRow[]> {
           courseCode: true,
           nameAr: true,
           nameEn: true,
+          package: { select: { code: true } },
         },
       },
       courseRuns: {
@@ -209,6 +215,7 @@ export async function getAllPoSummaryRows(): Promise<PoTrackingRow[]> {
       courseId: entry.course.id,
       courseCode: entry.course.courseCode,
       courseName: normalizeName(entry.course.nameEn, entry.course.nameAr, entry.course.courseCode),
+      packageCode: entry.course.package.code,
       estimatedSeats: entry.estimatedSeats,
       confirmedSeats: entry.courseRuns.map((run) => run.confirmedSeats),
     }),

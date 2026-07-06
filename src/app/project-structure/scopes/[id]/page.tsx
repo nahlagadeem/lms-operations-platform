@@ -277,25 +277,25 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>{localeText.projectScopes.scope}</th>
                   <th>{localeText.courseRuns.course}</th>
+                  <th>{localeText.projectScopes.package}</th>
                   <th>{localeText.projectScopes.estimatedSeats}</th>
                   <th>{localeText.projectScopes.actualSeats}</th>
                   <th>{localeText.projectScopes.remainingSeats}</th>
                   <th>{localeText.projectScopes.fulfillmentPct}</th>
-                  <th>{localeText.projectScopes.linkedTrainings}</th>
-                  <th>{localeText.projectScopes.status}</th>
+                  <th>{localeText.projectScopes.overageFlag}</th>
                 </tr>
               </thead>
               <tbody>
                 {tracking.rows.map((row) => (
                   <tr key={row.purchaseOrderCourseEntryId}>
-                    <td className="latin-cell">
-                      {formatPurchaseOrderCode(row.purchaseOrderCode, locale)} | {row.purchaseOrderName}
-                    </td>
                     <td>
-                      {row.courseCode} | {row.courseName}
+                      <Link href={`/courses/${row.courseId}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
+                        {row.courseName}
+                      </Link>
+                      <p className="mt-1 text-xs text-[var(--ink-soft)]">{row.courseCode}</p>
                     </td>
+                    <td>{row.packageCode}</td>
                     <td>{formatNumber(row.estimatedSeats, numberLocale)}</td>
                     <td>{formatNumber(row.actualSeats, numberLocale)}</td>
                     <td>{formatNumber(row.remainingSeats, numberLocale)}</td>
@@ -305,22 +305,12 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       )}
                       %
                     </td>
-                    <td>{formatNumber(row.linkedTrainingsCount, numberLocale)}</td>
                     <td>
-                      <div className="flex flex-wrap gap-2">
-                        {row.overageFlag ? (
-                          <span className="status-pill">{localeText.projectScopes.overageFlag}</span>
-                        ) : null}
-                        {row.shortfallFlag ? (
-                          <span className="status-pill">{localeText.projectScopes.shortfallFlag}</span>
-                        ) : null}
-                        {row.zeroActualFlag ? (
-                          <span className="status-pill">{localeText.projectScopes.zeroActualFlag}</span>
-                        ) : null}
-                        {!row.overageFlag && !row.shortfallFlag && !row.zeroActualFlag ? (
-                          <span className="status-pill">{localeText.projectScopes.active}</span>
-                        ) : null}
-                      </div>
+                      {row.overageFlag ? (
+                        <span className="status-pill">{localeText.projectScopes.overageFlag}</span>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                   </tr>
                 ))}
