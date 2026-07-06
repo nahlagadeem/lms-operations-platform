@@ -63,7 +63,7 @@
 - Training detail attendance rate card now uses `getTrainingSessionAttendanceRate`.
 - Training detail per-attendee completion rows now use Training session count as the denominator and `PRESENT` participant/session cells as attended sessions.
 - Dashboard/home attendance KPI now uses `getProjectSessionAttendanceRate`.
-- Course and Package UI still need to be wired to session-level rollups where attendance rates are displayed.
+- Course and Package pages were audited; no Course-level or Package-level attendance rate displays currently exist, so no application wiring was needed there.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -110,6 +110,7 @@
 - `feat(attendance): add session-level attendance metrics` - Add reusable session-level attendance rate helpers for Training, Course, Package, and project-wide rollups.
 - `feat(attendance): use session metrics on training detail` - Wire Training detail attendance rate and per-attendee completion rows to session-level attendance data.
 - `feat(attendance): use session metrics on dashboard` - Wire dashboard/home attendance KPI to project-wide session-level attendance data.
+- `feat(attendance): verify course and package attendance rollups` - Verify Course and Package pages have no attendance-rate displays requiring session-level rollup wiring.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -139,4 +140,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: continue PTSP-21 by auditing Course and Package pages for attendance-rate displays and wiring any remaining rate displays to session-level rollups.
+- First action for the next Codex session: perform the final PTSP-21 completion audit and confirm whether attendance-rate formulas are complete for demo/staging.
