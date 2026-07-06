@@ -462,12 +462,26 @@ model CourseRun {
   documents            CourseRunDocument[]
   nominations          Nomination[]
   attendanceRecords    AttendanceRecord[]
+  sessions             TrainingSession[]
   evaluations          Evaluation[]
   trainingEvaluations  TrainingEvaluation[]
   qualityReports       QualityReport[]
 
   @@index([projectScopeId])
   @@index([projectScopeCourseId])
+}
+
+model TrainingSession {
+  id          String    @id @default(cuid())
+  courseRunId String
+  sessionDate DateTime
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  courseRun   CourseRun @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+
+  @@index([courseRunId])
+  @@unique([courseRunId, sessionDate])
 }
 
 model CourseRunTrainer {

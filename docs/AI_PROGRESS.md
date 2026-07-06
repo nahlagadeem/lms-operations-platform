@@ -6,10 +6,10 @@
 - Current status (working tree clean/dirty): clean after the handoff docs commit
 
 ## Overall Project Status
-- Overall completion estimate: about 2 of 14 PTSP stories are complete, or roughly 14%; PTSP-16 is complete and verified, PTSP-17 required no code changes, and the remaining PTSP stories are still open.
+- Overall completion estimate: about 2 of 14 PTSP stories are complete, or roughly 14%; PTSP-16 is complete and verified, PTSP-17 required no code changes, PTSP-19 is in progress, and the remaining PTSP stories are still open.
 - PTSP stories completed: `PTSP-16`, `PTSP-17`
-- PTSP stories in progress: none
-- PTSP stories not started: `PTSP-19`, `PTSP-20`, `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
+- PTSP stories in progress: `PTSP-19`
+- PTSP stories not started: `PTSP-20`, `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
 ## Completed PTSP Stories
 ### PTSP-16
@@ -23,6 +23,13 @@
 - Commits related: `docs: mark PTSP-17 training terminology complete`
 - Main files modified: `docs/AI_PROGRESS.md`
 - Notes: No application code changes were needed. Remaining `course run(s)`, `runCode`, and `activeRuns` references are internal identifiers, technical documentation, maintenance-script output, or already render as Training/Trainings.
+
+## PTSP-19 Summary
+- Status: started.
+- TrainingSession schema added as a first-class model related to `CourseRun`.
+- `CourseRun.daysHeld` is kept temporarily as a legacy field.
+- `AttendanceRecord` still uses `attendanceDate` for now.
+- No UI, server action, attendance, or backfill changes have been made yet.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -56,6 +63,7 @@
 - `3f7d466` - Seed demo users for all platform roles.
 - `d5c3d19` - Add the demo-only role login selector.
 - `docs: mark PTSP-17 training terminology complete` - Document PTSP-17 as complete after verifying no user-facing legacy wording remains.
+- `feat(training): add training session model` - Add the PTSP-19 `TrainingSession` schema and migration.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -85,4 +93,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: open the PTSP-19 story definition, inspect the current repository state, and identify the smallest scoped task before editing anything.
+- First action for the next Codex session: continue PTSP-19 by adding the smallest server-side session action/service slice before changing the UI.
