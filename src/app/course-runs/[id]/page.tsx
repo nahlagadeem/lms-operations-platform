@@ -4,6 +4,7 @@ import { DocumentEntityType, DocumentType, Prisma, TrainingCity } from "@prisma/
 import {
   assignInstructorToTraining,
   createAttendeeAndEnroll,
+  createTrainingSession,
   enrollExistingAttendee,
   recordAttendance,
   removeInstructorFromTraining,
@@ -11,6 +12,7 @@ import {
   upsertCourseEvaluation,
   upsertInstructorEvaluation,
   updateEnrollmentStatus,
+  updateTrainingSession,
   updateTraining,
 } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
@@ -145,6 +147,15 @@ function detailText(locale: "en" | "ar") {
       certificateEligible: "Ù…Ø¤Ù‡Ù„ Ù„Ù„Ø´Ù‡Ø§Ø¯Ø©",
       completionRule: "ÙŠØ¹ØªØ¨Ø± Ø§Ù„Ø­Ø§Ø¶Ø± Ù…Ø¤Ù‡Ù„Ø§Ù‹ Ø¹Ù†Ø¯ Ø­Ø¶ÙˆØ± 75% Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„ Ù…Ù† Ø§Ù„Ø¬Ù„Ø³Ø§Øª Ø§Ù„Ù…Ø³Ø¬Ù„Ø©.",
       eligibleCount: "Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ù…Ø¤Ù‡Ù„ÙˆÙ†",
+      sessions: "Ø§Ù„Ø¬Ù„Ø³Ø§Øª",
+      sessionSchedule: "Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ø¬Ù„Ø³Ø§Øª",
+      sessionDescription: "Ø£Ø¶Ù Ø£Ùˆ Ø¹Ø¯Ù„ Ø£ÙŠØ§Ù… Ø§Ù„ØªØ¯Ø±ÙŠØ¨ Ø¯ÙˆÙ† ØªØºÙŠÙŠØ± Ø­Ø§Ù„Ø© Ø§Ù„ØªØ¯Ø±ÙŠØ¨.",
+      sessionDate: "ØªØ§Ø±ÙŠØ® Ø§Ù„Ø¬Ù„Ø³Ø©",
+      sessionNotes: "Ù…Ù„Ø§Ø­Ø¸Ø§Øª Ø§Ù„Ø¬Ù„Ø³Ø©",
+      addSession: "Ø¥Ø¶Ø§ÙØ© Ø¬Ù„Ø³Ø©",
+      editSession: "ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ø¬Ù„Ø³Ø©",
+      saveSession: "Ø­ÙØ¸ Ø§Ù„Ø¬Ù„Ø³Ø©",
+      noSessions: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¬Ù„Ø³Ø§Øª Ù…Ø¶Ø§ÙØ© Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†.",
       threshold: "Ø­Ø¯ Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„",
       capacityTitle: "Ø³Ø¹Ø© Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
       capacityDescription: "Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„ØªÙ‚Ø¯ÙŠØ±ÙŠØ© Ù…Ù‚Ø§Ø¨Ù„ Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„Ù…Ø¤ÙƒØ¯Ø© Ù„Ù‡Ø°Ø§ Ø§Ù„ØªØ¯Ø±ÙŠØ¨.",
@@ -277,6 +288,15 @@ function detailText(locale: "en" | "ar") {
     certificateEligible: "Ready to issue certificate",
     completionRule: "An attendee is ready to complete the training after attending at least 75% of its sessions.",
     eligibleCount: "Eligible attendees",
+    sessions: "Sessions",
+    sessionSchedule: "Session schedule",
+    sessionDescription: "Add or edit training days without changing the training lifecycle status.",
+    sessionDate: "Session date",
+    sessionNotes: "Session notes",
+    addSession: "Add Session",
+    editSession: "Edit Session",
+    saveSession: "Save Session",
+    noSessions: "No sessions have been added yet.",
       threshold: "Completion threshold",
       capacityTitle: "Training Capacity",
       capacityDescription: "Estimated seats versus actual confirmed seats for this training.",
@@ -535,6 +555,9 @@ export default async function CourseRunDetailPage({
           },
           orderBy: [{ attendanceDate: "desc" }, { recordedAt: "desc" }],
           take: 20,
+        },
+        sessions: {
+          orderBy: { sessionDate: "asc" },
         },
         _count: {
           select: {
@@ -951,6 +974,107 @@ export default async function CourseRunDetailPage({
                       <span className="status-pill">
                         {attendanceStatusText(locale)[record.attendanceStatus]}
                       </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="panel-surface">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="eyebrow">{details.sessions}</p>
+                <h3 className="section-title">{details.sessionSchedule}</h3>
+                <p className="section-copy">{details.sessionDescription}</p>
+              </div>
+              <div className="min-w-[9rem]">
+                <ProgressCard
+                  label={details.totalSessions}
+                  value={formatNumber(run.sessions.length, numberLocale)}
+                  tone="teal"
+                />
+              </div>
+            </div>
+
+            {canEditOps ? (
+              <form action={createTrainingSession} className="mt-5 grid gap-4 xl:grid-cols-[0.8fr_1.2fr_auto]">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <label className="field-shell">
+                  <span className="field-label">{details.sessionDate}</span>
+                  <input type="date" name="sessionDate" className="field-input" required />
+                </label>
+                <label className="field-shell">
+                  <span className="field-label">{details.sessionNotes}</span>
+                  <input
+                    type="text"
+                    name="notes"
+                    className="field-input"
+                    placeholder={details.sessionNotes}
+                  />
+                </label>
+                <div className="flex items-end">
+                  <button type="submit" className="primary-button w-full sm:w-auto">
+                    {details.addSession}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
+            <div className="mt-5 space-y-3">
+              {run.sessions.length === 0 ? (
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                  {details.noSessions}
+                </div>
+              ) : (
+                run.sessions.map((session) => (
+                  <div key={session.id} className="jawraa-subcard px-4 py-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                          {new Intl.DateTimeFormat(numberLocale, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          }).format(session.sessionDate)}
+                        </p>
+                        {session.notes ? (
+                          <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
+                            {session.notes}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      {canEditOps ? (
+                        <form action={updateTrainingSession} className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[0.8fr_1fr_auto]">
+                          <input type="hidden" name="trainingId" value={run.id} />
+                          <input type="hidden" name="sessionId" value={session.id} />
+                          <label className="field-shell">
+                            <span className="field-label">{details.sessionDate}</span>
+                            <input
+                              type="date"
+                              name="sessionDate"
+                              className="field-input"
+                              defaultValue={formatDateInput(session.sessionDate)}
+                              required
+                            />
+                          </label>
+                          <label className="field-shell">
+                            <span className="field-label">{details.sessionNotes}</span>
+                            <input
+                              type="text"
+                              name="notes"
+                              className="field-input"
+                              defaultValue={session.notes ?? ""}
+                            />
+                          </label>
+                          <div className="flex items-end">
+                            <button type="submit" className="secondary-button w-full sm:w-auto">
+                              {details.saveSession}
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
                     </div>
                   </div>
                 ))
