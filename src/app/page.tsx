@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  AttendanceStatus,
   CourseRunStatus,
   DocumentEntityType,
   Prisma,
@@ -15,6 +14,7 @@ import {
   getProjectReportingRows,
   getReportingCategoryOptions,
 } from "@/server/services/project-reporting-service";
+import { getProjectSessionAttendanceRate } from "@/server/services/capacity-service";
 
 type HomePageProps = {
   searchParams?: Promise<{
@@ -152,7 +152,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     participantCounts,
     runGroups,
     seatRows,
-    successGroups,
+    projectAttendanceSummary,
     evaluationRows,
     qualitySatisfactionRows,
     activeTrainerCount,
@@ -193,10 +193,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     db.courseRun.findMany({
       select: { plannedSeats: true, confirmedSeats: true },
     }),
-    db.attendanceRecord.groupBy({
-      by: ["attendanceStatus"],
-      _count: { _all: true },
-    }),
+    getProjectSessionAttendanceRate(),
     db.evaluation.findMany({
       select: { overallScore: true },
       where: { overallScore: { not: null } },
@@ -342,16 +339,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const allocatedSeats = seatRows.reduce((sum, item) => sum + (item.plannedSeats ?? 0), 0);
   const filledSeats = seatRows.reduce((sum, item) => sum + item.confirmedSeats, 0);
   const seatUtilization = ratio(filledSeats, allocatedSeats);
-  const successStatuses: AttendanceStatus[] = [
-    AttendanceStatus.PRESENT,
-    AttendanceStatus.LATE,
-    AttendanceStatus.PARTIAL,
-  ];
-  const totalAttendance = successGroups.reduce((sum, item) => sum + item._count._all, 0);
-  const successfulAttendance = successGroups
-    .filter((item) => successStatuses.includes(item.attendanceStatus))
-    .reduce((sum, item) => sum + item._count._all, 0);
-  const successRate = ratio(successfulAttendance, totalAttendance);
+  const successRate = projectAttendanceSummary.attendanceRate;
   const evaluationSatisfaction =
     evaluationRows.length > 0
       ? evaluationRows.reduce((sum, item) => sum + decimalToNumber(item.overallScore) * 20, 0) /
@@ -549,9 +537,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           />
           <KpiCard
             href="/trainings"
-            title="Attendee success rate"
+            title="Attendance rate"
             value={formatPercent(successRate, numberLocale)}
-            detail={`${formatNumber(successfulAttendance, numberLocale)} successful attendance entries`}
+            detail={`${formatNumber(projectAttendanceSummary.attendedSessions, numberLocale)} attended / ${formatNumber(projectAttendanceSummary.possibleSessions, numberLocale)} possible session slots`}
           />
           <KpiCard
             href="/trainings"
