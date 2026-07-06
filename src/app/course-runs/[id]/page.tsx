@@ -135,6 +135,7 @@ function detailText(locale: "en" | "ar") {
       attendanceDate: "ØªØ§Ø±ÙŠØ® Ø§Ù„Ø­Ø¶ÙˆØ±",
       attendanceStatus: "Ø­Ø§Ù„Ø© Ø§Ù„Ø­Ø¶ÙˆØ±",
       chooseAttendee: "Ø§Ø®ØªØ± Ù…Ù† Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ù…Ø³Ø¬Ù„ÙŠÙ†",
+      chooseSession: "Ø§Ø®ØªØ± Ø¬Ù„Ø³Ø©",
       saveAttendance: "Ø­ÙØ¸ Ø§Ù„Ø­Ø¶ÙˆØ±",
       recordedAttendance: "Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ù…Ø³Ø¬Ù„",
       completion: "Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„ ÙˆØ§Ù„Ø£Ù‡Ù„ÙŠØ©",
@@ -156,6 +157,7 @@ function detailText(locale: "en" | "ar") {
       editSession: "ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ø¬Ù„Ø³Ø©",
       saveSession: "Ø­ÙØ¸ Ø§Ù„Ø¬Ù„Ø³Ø©",
       noSessions: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¬Ù„Ø³Ø§Øª Ù…Ø¶Ø§ÙØ© Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†.",
+      addSessionsBeforeAttendance: "Ø£Ø¶Ù Ø¬Ù„Ø³Ø§Øª Ø§Ù„ØªØ¯Ø±ÙŠØ¨ Ø£ÙˆÙ„Ø§ Ù‚Ø¨Ù„ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø­Ø¶ÙˆØ±.",
       threshold: "Ø­Ø¯ Ø§Ù„Ø§ÙƒØªÙ…Ø§Ù„",
       capacityTitle: "Ø³Ø¹Ø© Ø§Ù„ØªØ¯Ø±ÙŠØ¨",
       capacityDescription: "Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„ØªÙ‚Ø¯ÙŠØ±ÙŠØ© Ù…Ù‚Ø§Ø¨Ù„ Ø§Ù„Ù…Ù‚Ø§Ø¹Ø¯ Ø§Ù„Ù…Ø¤ÙƒØ¯Ø© Ù„Ù‡Ø°Ø§ Ø§Ù„ØªØ¯Ø±ÙŠØ¨.",
@@ -267,6 +269,7 @@ function detailText(locale: "en" | "ar") {
     attendanceDate: "Attendance date",
     attendanceStatus: "Attendance status",
     chooseAttendee: "Choose an enrolled attendee",
+    chooseSession: "Choose a session",
     saveAttendance: "Save attendance",
     recordedAttendance: "Attendance entries",
     evaluationTitle: "Training evaluations",
@@ -297,6 +300,7 @@ function detailText(locale: "en" | "ar") {
     editSession: "Edit Session",
     saveSession: "Save Session",
     noSessions: "No sessions have been added yet.",
+    addSessionsBeforeAttendance: "Add training sessions before recording attendance.",
       threshold: "Completion threshold",
       capacityTitle: "Training Capacity",
       capacityDescription: "Estimated seats versus actual confirmed seats for this training.",
@@ -2074,6 +2078,10 @@ export default async function CourseRunDetailPage({
                   </button>
                 </form>
               </div>
+            ) : run.sessions.length === 0 ? (
+              <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                {details.addSessionsBeforeAttendance}
+              </div>
             ) : (
               <form action={recordAttendance} className="space-y-4">
                 <input type="hidden" name="trainingId" value={run.id} />
@@ -2094,8 +2102,21 @@ export default async function CourseRunDetailPage({
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
-                    <span className="field-label">{details.attendanceDate}</span>
-                    <input type="date" name="attendanceDate" className="field-input" />
+                    <span className="field-label">{details.sessionDate}</span>
+                    <select name="trainingSessionId" className="field-input" defaultValue="" required>
+                      <option value="" disabled>
+                        {details.chooseSession}
+                      </option>
+                      {run.sessions.map((session) => (
+                        <option key={session.id} value={session.id}>
+                          {new Intl.DateTimeFormat(numberLocale, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          }).format(session.sessionDate)}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="field-shell">
