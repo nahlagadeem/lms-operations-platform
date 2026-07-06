@@ -2,13 +2,13 @@
 
 ## Repository
 - Current branch: `feature/project-scope-to-purchase-order`
-- Current HEAD commit: `d5c3d19904422fefc85559a8de58514933079f38`
-- Current status (working tree clean/dirty): clean after the handoff docs commit
+- Current HEAD commit: `7e5a481734f8c583dcc643160a1d657e1dcad084`
+- Current status (working tree clean/dirty): clean after the PTSP-20 attendance grid commit
 
 ## Overall Project Status
-- Overall completion estimate: about 3 of 14 PTSP stories are complete, or roughly 21%; PTSP-16, PTSP-17, and PTSP-19 are complete for demo/staging, PTSP-20 is in progress, and the remaining PTSP stories are still open.
-- PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`
-- PTSP stories in progress: `PTSP-20`
+- Overall completion estimate: about 4 of 14 PTSP stories are complete, or roughly 29%; PTSP-16, PTSP-17, PTSP-19, and PTSP-20 are complete for demo/staging, and the remaining PTSP stories are still open.
+- PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`, `PTSP-20`
+- PTSP stories in progress: none
 - PTSP stories not started: `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
 ## Completed PTSP Stories
@@ -37,16 +37,18 @@
 - Attendance work belongs to `PTSP-20`; `PTSP-19` intentionally does not change `AttendanceRecord` or attendance UI.
 
 ## PTSP-20 Summary
-- Status: started.
-- `AttendanceRecord` now has an optional `TrainingSession` link.
-- `attendanceDate` is retained temporarily for backward compatibility.
+- Status: complete for demo/staging.
+- `AttendanceRecord` is linked to `TrainingSession` through optional `trainingSessionId`.
 - Backfill script added so existing records can be linked to `TrainingSession` where dates match.
 - Unmatched attendance records remain nullable for review.
-- New attendance writes now support `TrainingSession`; when a session is provided, course and date are derived from the session and `trainingSessionId` is written.
-- Legacy `attendanceDate` writes are preserved when no session is provided.
+- New attendance writes use `trainingSessionId`; when a session is provided, course and date are derived from the session and `trainingSessionId` is written.
 - Attendance form now submits `trainingSessionId` by selecting from existing Training sessions.
 - If a training has no sessions, the attendance form is not rendered and the user is asked to add sessions first.
 - Attendance grid added to Training detail: enrolled/confirmed attendees are rows, Training sessions are columns, and editable cells submit `trainingSessionId` through the existing `recordAttendance` action.
+- `PROJECT_MANAGER` and `DATA_ENTRY` can edit attendance from the grid.
+- `KEY_STAKEHOLDER` and `CUSTOMER` see attendance as read-only.
+- Intentional legacy compatibility: `attendanceDate` still exists temporarily.
+- Intentional legacy compatibility: legacy date-only attendance writes are preserved when no session is provided.
 - Legacy date-only attendance rows are displayed in the grid only when their date matches an existing Training session.
 
 ## PTSP-16 Summary
@@ -90,6 +92,7 @@
 - `feat(attendance): write attendance against training sessions` - Update attendance write services/actions to support session-backed attendance while preserving legacy date writes.
 - `feat(attendance): select training session for attendance entry` - Update the existing attendance form to submit `trainingSessionId`.
 - `feat(attendance): add enrollee session attendance grid` - Add the per-attendee, per-session attendance grid on Training detail.
+- `docs: mark PTSP-20 attendance grid complete` - Document PTSP-20 as complete for demo/staging.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -107,8 +110,8 @@
 - Expected role matrix: `PROJECT_MANAGER` sees full access and financials; `KEY_STAKEHOLDER` sees financials but is view-only; `DATA_ENTRY` can manage operational records but sees no financial output; `CUSTOMER` sees read-only capacity information only.
 
 ## Next Story Recommendation
-- Recommend `PTSP-20`.
-- Why: PTSP-19 sessions are complete for demo/staging, and attendance wiring is explicitly the next story rather than remaining PTSP-19 work.
+- Recommend `PTSP-21`.
+- Why: PTSP-20 now records per-session attendance for each enrollee, so the next dependency is calculating and presenting attendance rates correctly from session-backed attendance records.
 
 ## Coding Rules
 - Never rebuild existing features.
@@ -119,4 +122,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: audit PTSP-20 attendance entry end-to-end and confirm whether any remaining PTSP-20-only gaps exist before starting PTSP-21 attendance rate formulas.
+- First action for the next Codex session: start PTSP-21 with an architecture review of current attendance rate formulas and identify where calculations still depend on legacy attendance assumptions.
