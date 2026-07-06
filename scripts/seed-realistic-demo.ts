@@ -18,6 +18,42 @@ import {
 } from "@prisma/client";
 import { db } from "../src/lib/db";
 
+const DEMO_PASSWORD = "test1234";
+const DEMO_USERS = [
+  {
+    fullName: "JAWRAA Demo Admin",
+    email: "admin@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.SUPER_ADMIN,
+    platformRole: PlatformRole.PROJECT_MANAGER,
+    department: "Project Office",
+  },
+  {
+    fullName: "Demo Key Stakeholder",
+    email: "stakeholder@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.REPORTING_ANALYST,
+    platformRole: PlatformRole.KEY_STAKEHOLDER,
+    department: "Leadership Office",
+  },
+  {
+    fullName: "Demo Data Entry",
+    email: "dataentry@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.OPERATIONS_COORDINATOR,
+    platformRole: PlatformRole.DATA_ENTRY,
+    department: "Operations",
+  },
+  {
+    fullName: "Demo Customer",
+    email: "customer@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.VIEWER,
+    platformRole: PlatformRole.CUSTOMER,
+    department: "Customer",
+  },
+] as const;
+
 const projectScopes = [
   {
     id: "scope-01",
@@ -225,40 +261,10 @@ async function main() {
   const packagesWithCourses = packages.filter((pkg) => pkg.courses.length > 0);
 
   const demoUsers = await db.appUser.createManyAndReturn({
-    data: [
-      {
-        fullName: "JAWRAA Demo Admin",
-        email: "admin@jawraa.demo",
-        role: UserRole.SUPER_ADMIN,
-        platformRole: PlatformRole.PROJECT_MANAGER,
-        department: "Project Office",
-        lastLoginAt: new Date(),
-      },
-      {
-        fullName: "Demo Key Stakeholder",
-        email: "stakeholder@jawraa.demo",
-        role: UserRole.REPORTING_ANALYST,
-        platformRole: PlatformRole.KEY_STAKEHOLDER,
-        department: "Leadership Office",
-        lastLoginAt: new Date(),
-      },
-      {
-        fullName: "Demo Data Entry",
-        email: "dataentry@jawraa.demo",
-        role: UserRole.OPERATIONS_COORDINATOR,
-        platformRole: PlatformRole.DATA_ENTRY,
-        department: "Operations",
-        lastLoginAt: new Date(),
-      },
-      {
-        fullName: "Demo Customer",
-        email: "customer@jawraa.demo",
-        role: UserRole.VIEWER,
-        platformRole: PlatformRole.CUSTOMER,
-        department: "Customer",
-        lastLoginAt: new Date(),
-      },
-    ],
+    data: DEMO_USERS.map(({ password: _password, ...user }) => ({
+      ...user,
+      lastLoginAt: new Date(),
+    })),
   });
   const admin = demoUsers.find((user) => user.email === "admin@jawraa.demo");
 

@@ -2,29 +2,10 @@ import { cookies } from "next/headers";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { validateDemoCredentials } from "@/lib/auth";
 import { getLocale, t } from "@/lib/locale";
 
 const AUTH_COOKIE_NAME = "lms_ops_auth";
-const DEMO_ROLE_LOGIN_ENABLED = process.env.ENABLE_DEMO_ROLE_LOGIN === "true";
-
-const DEMO_ROLE_LOGINS = [
-  {
-    label: "PROJECT_MANAGER",
-    email: "admin@jawraa.demo",
-  },
-  {
-    label: "KEY_STAKEHOLDER",
-    email: "stakeholder@jawraa.demo",
-  },
-  {
-    label: "DATA_ENTRY",
-    email: "dataentry@jawraa.demo",
-  },
-  {
-    label: "CUSTOMER",
-    email: "customer@jawraa.demo",
-  },
-] as const;
 
 type LoginPageProps = {
   searchParams?: Promise<{
@@ -35,40 +16,16 @@ type LoginPageProps = {
 async function login(formData: FormData) {
   "use server";
 
-  const username = String(formData.get("username") || "").trim();
-  const password = String(formData.get("password") || "").trim();
-
-  if (username !== "admin" || password !== "admin") {
-    redirect("/login?error=1");
-  }
-
-  const cookieStore = await cookies();
-  cookieStore.set(AUTH_COOKIE_NAME, "admin@jawraa.demo", {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-
-  redirect("/");
-}
-
-async function loginAsDemoRole(formData: FormData) {
-  "use server";
-
-  if (!DEMO_ROLE_LOGIN_ENABLED) {
-    redirect("/login?error=1");
-  }
-
   const email = String(formData.get("email") || "").trim();
-  const role = DEMO_ROLE_LOGINS.find((item) => item.email === email);
+  const password = String(formData.get("password") || "");
+  const authenticatedEmail = await validateDemoCredentials(email, password);
 
-  if (!role) {
+  if (!authenticatedEmail) {
     redirect("/login?error=1");
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(AUTH_COOKIE_NAME, role.email, {
+  cookieStore.set(AUTH_COOKIE_NAME, authenticatedEmail, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
@@ -108,18 +65,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         {params.error ? (
           <p className="mb-4 rounded-[8px] border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-            Username or password is incorrect.
+            Invalid email or password.
           </p>
         ) : null}
 
         <form action={login} className="space-y-4">
           <label className="field-shell">
-            <span className="field-label">Username</span>
+            <span className="field-label">Email</span>
             <input
-              name="username"
-              type="text"
+              name="email"
+              type="email"
               autoComplete="username"
               className="field-input"
+              required
             />
           </label>
 
@@ -130,6 +88,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               type="password"
               autoComplete="current-password"
               className="field-input"
+              required
             />
           </label>
 
@@ -137,27 +96,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             Login
           </button>
         </form>
-
-        {DEMO_ROLE_LOGIN_ENABLED ? (
-          <section className="mt-6 border-t border-[rgba(17,17,17,0.08)] pt-5">
-            <p className="text-sm font-semibold text-[var(--ink-strong)]">
-              Demo role login
-            </p>
-            <p className="mt-1 text-sm leading-6 text-[var(--ink-soft)]">
-              Use the seeded demo accounts to test role-specific access.
-            </p>
-            <div className="mt-4 grid gap-2">
-              {DEMO_ROLE_LOGINS.map((item) => (
-                <form key={item.email} action={loginAsDemoRole}>
-                  <input type="hidden" name="email" value={item.email} />
-                  <button type="submit" className="secondary-button w-full justify-start">
-                    {item.label} ({item.email})
-                  </button>
-                </form>
-              ))}
-            </div>
-          </section>
-        ) : null}
       </section>
     </main>
   );
