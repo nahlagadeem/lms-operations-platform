@@ -472,13 +472,14 @@ model CourseRun {
 }
 
 model TrainingSession {
-  id          String    @id @default(cuid())
-  courseRunId String
-  sessionDate DateTime
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  courseRun   CourseRun @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  id                String             @id @default(cuid())
+  courseRunId       String
+  sessionDate       DateTime
+  notes             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  courseRun         CourseRun          @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  attendanceRecords AttendanceRecord[]
 
   @@index([courseRunId])
   @@unique([courseRunId, sessionDate])
@@ -586,20 +587,24 @@ model Nomination {
 }
 
 model AttendanceRecord {
-  id               String           @id @default(cuid())
-  courseRunId      String
-  participantId    String
-  attendanceDate   DateTime
-  checkInTime      DateTime?
-  checkOutTime     DateTime?
-  attendanceStatus AttendanceStatus
-  notes            String?
-  recordedByUserId String?
-  recordedAt       DateTime         @default(now())
-  courseRun        CourseRun        @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
-  participant      Participant      @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  recordedByUser   AppUser?         @relation("RecordedAttendance", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+  id                String           @id @default(cuid())
+  courseRunId       String
+  trainingSessionId String?
+  participantId     String
+  attendanceDate    DateTime
+  checkInTime       DateTime?
+  checkOutTime      DateTime?
+  attendanceStatus  AttendanceStatus
+  notes             String?
+  recordedByUserId  String?
+  recordedAt        DateTime         @default(now())
+  courseRun         CourseRun        @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  trainingSession   TrainingSession? @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  participant       Participant      @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  recordedByUser    AppUser?         @relation("RecordedAttendance", fields: [recordedByUserId], references: [id], onDelete: SetNull)
 
+  @@index([trainingSessionId])
+  @@unique([trainingSessionId, participantId])
   @@unique([courseRunId, participantId, attendanceDate])
 }
 

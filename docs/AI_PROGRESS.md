@@ -6,10 +6,10 @@
 - Current status (working tree clean/dirty): clean after the handoff docs commit
 
 ## Overall Project Status
-- Overall completion estimate: about 3 of 14 PTSP stories are complete, or roughly 21%; PTSP-16, PTSP-17, and PTSP-19 are complete for demo/staging, and the remaining PTSP stories are still open.
+- Overall completion estimate: about 3 of 14 PTSP stories are complete, or roughly 21%; PTSP-16, PTSP-17, and PTSP-19 are complete for demo/staging, PTSP-20 is in progress, and the remaining PTSP stories are still open.
 - PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`
-- PTSP stories in progress: none
-- PTSP stories not started: `PTSP-20`, `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
+- PTSP stories in progress: `PTSP-20`
+- PTSP stories not started: `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
 ## Completed PTSP Stories
 ### PTSP-16
@@ -35,6 +35,12 @@
 - Training detail and training list now display duration/session count from `TrainingSession` count instead of the legacy `daysHeld` field.
 - Accepted caveat: legacy `daysHeld` still exists in schema, actions, services, and create/edit forms for backward compatibility.
 - Attendance work belongs to `PTSP-20`; `PTSP-19` intentionally does not change `AttendanceRecord` or attendance UI.
+
+## PTSP-20 Summary
+- Status: started.
+- `AttendanceRecord` now has an optional `TrainingSession` link.
+- `attendanceDate` is retained temporarily for backward compatibility.
+- Backfill and service/UI changes are next.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -72,6 +78,7 @@
 - `feat(training): add session service and actions` - Add PTSP-19 server-side session create/update service functions and actions.
 - `feat(training): add sessions panel to training detail` - Show Training sessions and add/edit controls on the Training detail page.
 - `feat(training): display duration from session count` - Use `TrainingSession` count for visible session/duration counts.
+- `feat(attendance): link attendance records to training sessions` - Add the nullable PTSP-20 attendance-to-session schema link.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -101,4 +108,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: open the PTSP-20 story definition, inspect the current attendance implementation, and identify the smallest scoped task before editing anything.
+- First action for the next Codex session: continue PTSP-20 with the attendance backfill and service/UI changes that use `TrainingSession` while keeping `attendanceDate` temporarily.
