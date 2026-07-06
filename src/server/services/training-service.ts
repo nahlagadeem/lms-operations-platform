@@ -224,13 +224,15 @@ export async function updateEnrollmentStatus(input: {
 
 export async function recordAttendance(input: {
   trainingId: string;
+  trainingSessionId?: string;
   attendeeId: string;
-  attendanceDate: Date;
+  attendanceDate?: Date;
   attendanceStatus: AttendanceStatus;
   notes: string;
 }) {
   return compatibilityService.recordAttendance({
     courseRunId: input.trainingId,
+    trainingSessionId: input.trainingSessionId,
     participantId: input.attendeeId,
     attendanceDate: input.attendanceDate,
     attendanceStatus: input.attendanceStatus,

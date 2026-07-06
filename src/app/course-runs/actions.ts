@@ -373,6 +373,7 @@ export async function recordAttendance(formData: FormData) {
   await requireOperationalAccess();
 
   const trainingId = normalizeText(formData.get("trainingId"));
+  const trainingSessionId = normalizeText(formData.get("trainingSessionId"));
   const attendeeId = normalizeText(formData.get("attendeeId"));
   const attendanceDateValue = normalizeText(formData.get("attendanceDate"));
   const attendanceStatus = normalizeText(
@@ -380,18 +381,23 @@ export async function recordAttendance(formData: FormData) {
   ) as AttendanceStatus;
   const notes = normalizeText(formData.get("notes"));
 
-  if (!trainingId || !attendeeId || !attendanceDateValue || !attendanceStatus) {
+  if (!trainingId || !attendeeId || !attendanceStatus) {
     throw new Error("Missing attendance fields.");
   }
 
-  const attendanceDate = parseOptionalDate(attendanceDateValue);
+  const parsedAttendanceDate = trainingSessionId
+    ? null
+    : parseOptionalDate(attendanceDateValue);
 
-  if (!attendanceDate) {
+  if (!trainingSessionId && !parsedAttendanceDate) {
     throw new Error("Attendance date is invalid.");
   }
 
+  const attendanceDate = parsedAttendanceDate ?? undefined;
+
   await trainingService.recordAttendance({
     trainingId,
+    trainingSessionId: trainingSessionId || undefined,
     attendeeId,
     attendanceDate,
     attendanceStatus,

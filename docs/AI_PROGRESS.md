@@ -42,7 +42,9 @@
 - `attendanceDate` is retained temporarily for backward compatibility.
 - Backfill script added so existing records can be linked to `TrainingSession` where dates match.
 - Unmatched attendance records remain nullable for review.
-- Service/UI changes are next.
+- New attendance writes now support `TrainingSession`; when a session is provided, course and date are derived from the session and `trainingSessionId` is written.
+- Legacy `attendanceDate` writes are preserved when no session is provided.
+- Attendance UI changes are next.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -82,6 +84,7 @@
 - `feat(training): display duration from session count` - Use `TrainingSession` count for visible session/duration counts.
 - `feat(attendance): link attendance records to training sessions` - Add the nullable PTSP-20 attendance-to-session schema link.
 - `chore(attendance): add training session backfill script` - Add an idempotent script to link existing attendance rows to matching training sessions.
+- `feat(attendance): write attendance against training sessions` - Update attendance write services/actions to support session-backed attendance while preserving legacy date writes.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -111,4 +114,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: continue PTSP-20 by updating attendance services/actions/UI to use `TrainingSession` while keeping `attendanceDate` temporarily.
+- First action for the next Codex session: continue PTSP-20 by updating the attendance UI to submit `trainingSessionId` from existing Training sessions.
