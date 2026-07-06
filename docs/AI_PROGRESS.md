@@ -6,9 +6,9 @@
 - Current status (working tree clean/dirty): clean after the handoff docs commit
 
 ## Overall Project Status
-- Overall completion estimate: about 2 of 14 PTSP stories are complete, or roughly 14%; PTSP-16 is complete and verified, PTSP-17 required no code changes, PTSP-19 is in progress, and the remaining PTSP stories are still open.
-- PTSP stories completed: `PTSP-16`, `PTSP-17`
-- PTSP stories in progress: `PTSP-19`
+- Overall completion estimate: about 3 of 14 PTSP stories are complete, or roughly 21%; PTSP-16, PTSP-17, and PTSP-19 are complete for demo/staging, and the remaining PTSP stories are still open.
+- PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`
+- PTSP stories in progress: none
 - PTSP stories not started: `PTSP-20`, `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
 ## Completed PTSP Stories
@@ -25,7 +25,7 @@
 - Notes: No application code changes were needed. Remaining `course run(s)`, `runCode`, and `activeRuns` references are internal identifiers, technical documentation, maintenance-script output, or already render as Training/Trainings.
 
 ## PTSP-19 Summary
-- Status: started.
+- Status: complete for demo/staging.
 - TrainingSession schema added as a first-class model related to `CourseRun`.
 - Server-side `TrainingSession` create/update service functions and server actions added.
 - Session mutations use the existing operational permission guard, allowing `PROJECT_MANAGER` and `DATA_ENTRY` while blocking read-only roles.
@@ -33,9 +33,8 @@
 - Training detail page now shows a Sessions panel with total session count, session dates, and notes.
 - `PROJECT_MANAGER` and `DATA_ENTRY` can add and edit sessions from the Training detail page; read-only roles see sessions without mutation controls.
 - Training detail and training list now display duration/session count from `TrainingSession` count instead of the legacy `daysHeld` field.
-- `CourseRun.daysHeld` is kept temporarily as a legacy field.
-- `AttendanceRecord` still uses `attendanceDate` for now.
-- Attendance, backfill, and legacy `daysHeld` cleanup have not been changed yet.
+- Accepted caveat: legacy `daysHeld` still exists in schema, actions, services, and create/edit forms for backward compatibility.
+- Attendance work belongs to `PTSP-20`; `PTSP-19` intentionally does not change `AttendanceRecord` or attendance UI.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -90,8 +89,8 @@
 - Expected role matrix: `PROJECT_MANAGER` sees full access and financials; `KEY_STAKEHOLDER` sees financials but is view-only; `DATA_ENTRY` can manage operational records but sees no financial output; `CUSTOMER` sees read-only capacity information only.
 
 ## Next Story Recommendation
-- Recommend `PTSP-19`.
-- Why: PTSP-16 is complete, PTSP-17 is verified complete without code changes, and PTSP-19 is the next unstarted story in the tracked backlog.
+- Recommend `PTSP-20`.
+- Why: PTSP-19 sessions are complete for demo/staging, and attendance wiring is explicitly the next story rather than remaining PTSP-19 work.
 
 ## Coding Rules
 - Never rebuild existing features.
@@ -102,4 +101,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: continue PTSP-19 by wiring attendance entry to existing TrainingSession dates while keeping `AttendanceRecord.attendanceDate` unchanged.
+- First action for the next Codex session: open the PTSP-20 story definition, inspect the current attendance implementation, and identify the smallest scoped task before editing anything.
