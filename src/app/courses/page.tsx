@@ -235,7 +235,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
               type="search"
               name="q"
               defaultValue={searchTerm}
-              placeholder={localeText.courses.searchPlaceholder}
+              placeholder={localeText.common.searchPlaceholder}
               className="field-input"
             />
           </label>

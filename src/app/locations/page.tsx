@@ -214,7 +214,7 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
               type="search"
               name="q"
               defaultValue={searchTerm}
-              placeholder={text.searchPlaceholder}
+              placeholder={localeText.common.searchPlaceholder}
               className="field-input"
             />
           </label>

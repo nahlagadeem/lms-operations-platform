@@ -198,17 +198,17 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
   return (
     <div className="space-y-6">
       <section className="panel-surface">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <p className="eyebrow">{text.eyebrow}</p>
             <h2 className="section-title">{text.title}</h2>
             <p className="section-copy">{text.description}</p>
+            {canCreate ? (
+              <Link href="/vendors?panel=create" className="primary-button mt-4 w-full sm:w-auto">
+                {text.addButton}
+              </Link>
+            ) : null}
           </div>
-          {canCreate ? (
-            <Link href="/vendors?panel=create" className="primary-button w-full sm:w-auto">
-              {text.addButton}
-            </Link>
-          ) : null}
         </div>
       </section>
 
@@ -220,7 +220,7 @@ export default async function ProvidersPage({ searchParams }: ProvidersPageProps
               type="search"
               name="q"
               defaultValue={searchTerm}
-              placeholder={text.searchPlaceholder}
+              placeholder={localeText.common.searchPlaceholder}
               className="field-input"
             />
           </label>

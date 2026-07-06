@@ -309,7 +309,7 @@ export default async function PackageDetailPage({
               type="search"
               name="q"
               defaultValue={searchTerm}
-              placeholder={details.searchPlaceholder}
+              placeholder={localeText.common.searchPlaceholder}
               className="field-input"
             />
           </label>

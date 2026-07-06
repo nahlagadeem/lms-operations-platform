@@ -25,6 +25,7 @@ type ScopeDetailPageProps = {
   searchParams?: Promise<{
     coursePage?: string;
     trackingPage?: string;
+    trackingQ?: string;
     assignQ?: string;
   }>;
 };
@@ -99,12 +100,14 @@ function buildScopeUrl(
   page: number,
   assignQ?: string,
   trackingPage?: number,
+  trackingQ?: string,
 ) {
   const search = new URLSearchParams();
   if (page > 1) search.set("coursePage", String(page));
   if (trackingPage && trackingPage > 1) {
     search.set("trackingPage", String(trackingPage));
   }
+  if (trackingQ) search.set("trackingQ", trackingQ);
   if (assignQ) search.set("assignQ", assignQ);
   const query = search.toString();
   return query ? `/pos/${scopeId}?${query}` : `/pos/${scopeId}`;
@@ -118,6 +121,8 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const requestedCoursePage = normalizePage(queryParams.coursePage);
   const requestedTrackingPage = normalizePage(queryParams.trackingPage);
+  const trackingSearch = normalizeSearch(queryParams.trackingQ);
+  const trackingSearchKey = trackingSearch.toLowerCase();
   const assignSearch = normalizeSearch(queryParams.assignQ);
   const platformRole = await getCurrentPlatformRole();
   const canCreate = canCreateOperationalData(platformRole);
@@ -203,9 +208,16 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
     tracking?.rows.map((row) => [row.purchaseOrderCourseEntryId, row] as const) ?? [],
   );
   const trackingRows = tracking?.rows ?? [];
-  const totalTrackingPages = Math.max(1, Math.ceil(trackingRows.length / TRACKING_ROWS_PER_PAGE));
+  const filteredTrackingRows = trackingRows.filter((row) => {
+    if (!trackingSearchKey) return true;
+    return [row.courseCode, row.courseName, row.packageCode]
+      .join(" ")
+      .toLowerCase()
+      .includes(trackingSearchKey);
+  });
+  const totalTrackingPages = Math.max(1, Math.ceil(filteredTrackingRows.length / TRACKING_ROWS_PER_PAGE));
   const safeTrackingPage = Math.min(requestedTrackingPage, totalTrackingPages);
-  const visibleTrackingRows = trackingRows.slice(
+  const visibleTrackingRows = filteredTrackingRows.slice(
     (safeTrackingPage - 1) * TRACKING_ROWS_PER_PAGE,
     safeTrackingPage * TRACKING_ROWS_PER_PAGE,
   );
@@ -291,6 +303,29 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
               <h3 className="section-title">{localeText.projectScopes.summaryTitle}</h3>
             </div>
           </div>
+          <form className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+            {safeCoursePage > 1 ? <input type="hidden" name="coursePage" value={safeCoursePage} /> : null}
+            {assignSearch ? <input type="hidden" name="assignQ" value={assignSearch} /> : null}
+            <label className="field-shell">
+              <span className="field-label">{localeText.common.search}</span>
+              <input
+                type="search"
+                name="trackingQ"
+                defaultValue={trackingSearch}
+                placeholder={localeText.common.searchPlaceholder}
+                className="field-input"
+              />
+            </label>
+            <button type="submit" className="primary-button self-end">
+              {localeText.common.search}
+            </button>
+            <Link
+              href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, 1)}
+              className="secondary-button self-end"
+            >
+              {localeText.common.reset}
+            </Link>
+          </form>
           <div className="mt-5 overflow-x-auto">
             <table className="data-table">
               <thead>
@@ -334,7 +369,12 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 ))}
               </tbody>
             </table>
-            {trackingRows.length > TRACKING_ROWS_PER_PAGE ? (
+            {filteredTrackingRows.length === 0 ? (
+              <p className="mt-4 text-sm text-[var(--ink-soft)]">
+                {localeText.common.noResults}
+              </p>
+            ) : null}
+            {filteredTrackingRows.length > TRACKING_ROWS_PER_PAGE ? (
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold text-[var(--ink-soft)]">
                   {localeText.pagination.pageIndicator
@@ -343,7 +383,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, 1)}
+                    href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, 1, trackingSearch)}
                     aria-disabled={safeTrackingPage <= 1}
                     className={`pagination-link ${safeTrackingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
                   >
@@ -355,6 +395,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       safeCoursePage,
                       assignSearch,
                       Math.max(1, safeTrackingPage - 1),
+                      trackingSearch,
                     )}
                     aria-disabled={safeTrackingPage <= 1}
                     className={`pagination-link ${safeTrackingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
@@ -369,7 +410,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     ) : (
                       <Link
                         key={page}
-                        href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, page)}
+                        href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, page, trackingSearch)}
                         aria-current={page === safeTrackingPage ? "page" : undefined}
                         className={`pagination-link ${page === safeTrackingPage ? "pagination-link-active" : ""}`}
                       >
@@ -383,6 +424,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       safeCoursePage,
                       assignSearch,
                       Math.min(totalTrackingPages, safeTrackingPage + 1),
+                      trackingSearch,
                     )}
                     aria-disabled={safeTrackingPage >= totalTrackingPages}
                     className={`pagination-link ${safeTrackingPage >= totalTrackingPages ? "pointer-events-none opacity-50" : ""}`}
@@ -390,7 +432,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     {localeText.pagination.next}
                   </Link>
                   <Link
-                    href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, totalTrackingPages)}
+                    href={buildScopeUrl(scope.id, safeCoursePage, assignSearch, totalTrackingPages, trackingSearch)}
                     aria-disabled={safeTrackingPage >= totalTrackingPages}
                     className={`pagination-link ${safeTrackingPage >= totalTrackingPages ? "pointer-events-none opacity-50" : ""}`}
                   >
@@ -524,7 +566,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href={buildScopeUrl(scope.id, 1, assignSearch, safeTrackingPage)}
+                    href={buildScopeUrl(scope.id, 1, assignSearch, safeTrackingPage, trackingSearch)}
                     aria-disabled={safeCoursePage <= 1}
                     className={`pagination-link ${safeCoursePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
                   >
@@ -536,6 +578,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       Math.max(1, safeCoursePage - 1),
                       assignSearch,
                       safeTrackingPage,
+                      trackingSearch,
                     )}
                     aria-disabled={safeCoursePage <= 1}
                     className={`pagination-link ${safeCoursePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
@@ -550,7 +593,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     ) : (
                       <Link
                         key={page}
-                        href={buildScopeUrl(scope.id, page, assignSearch, safeTrackingPage)}
+                        href={buildScopeUrl(scope.id, page, assignSearch, safeTrackingPage, trackingSearch)}
                         aria-current={page === safeCoursePage ? "page" : undefined}
                         className={`pagination-link ${page === safeCoursePage ? "pagination-link-active" : ""}`}
                       >
@@ -564,6 +607,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       Math.min(totalCoursePages, safeCoursePage + 1),
                       assignSearch,
                       safeTrackingPage,
+                      trackingSearch,
                     )}
                     aria-disabled={safeCoursePage >= totalCoursePages}
                     className={`pagination-link ${safeCoursePage >= totalCoursePages ? "pointer-events-none opacity-50" : ""}`}
@@ -571,7 +615,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                     {localeText.pagination.next}
                   </Link>
                   <Link
-                    href={buildScopeUrl(scope.id, totalCoursePages, assignSearch, safeTrackingPage)}
+                    href={buildScopeUrl(scope.id, totalCoursePages, assignSearch, safeTrackingPage, trackingSearch)}
                     aria-disabled={safeCoursePage >= totalCoursePages}
                     className={`pagination-link ${safeCoursePage >= totalCoursePages ? "pointer-events-none opacity-50" : ""}`}
                   >

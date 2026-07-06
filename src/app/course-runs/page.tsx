@@ -408,7 +408,7 @@ export default async function CourseRunsPage({
               type="search"
               name="q"
               defaultValue={searchTerm}
-              placeholder={localeText.courseRuns.searchPlaceholder}
+              placeholder={localeText.common.searchPlaceholder}
               className="field-input"
             />
           </label>

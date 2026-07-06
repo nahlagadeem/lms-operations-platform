@@ -32,6 +32,9 @@ type HomePageProps = {
     packagePage?: string;
     coursePage?: string;
     poPage?: string;
+    packageQ?: string;
+    courseQ?: string;
+    poQ?: string;
   }>;
 };
 
@@ -131,6 +134,9 @@ function buildDashboardUrl(params: {
   packagePage?: number;
   coursePage?: number;
   poPage?: number;
+  packageQ?: string;
+  courseQ?: string;
+  poQ?: string;
 }) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
@@ -139,6 +145,9 @@ function buildDashboardUrl(params: {
   if (params.packagePage && params.packagePage > 1) search.set("packagePage", String(params.packagePage));
   if (params.coursePage && params.coursePage > 1) search.set("coursePage", String(params.coursePage));
   if (params.poPage && params.poPage > 1) search.set("poPage", String(params.poPage));
+  if (params.packageQ) search.set("packageQ", params.packageQ);
+  if (params.courseQ) search.set("courseQ", params.courseQ);
+  if (params.poQ) search.set("poQ", params.poQ);
   const query = search.toString();
   return query ? `/?${query}` : "/";
 }
@@ -173,6 +182,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const packagePage = normalizePage(params.packagePage);
   const coursePage = normalizePage(params.coursePage);
   const poPage = normalizePage(params.poPage);
+  const packageSearch = normalize(params.packageQ).toLowerCase();
+  const courseSearch = normalize(params.courseQ).toLowerCase();
+  const poSearch = normalize(params.poQ).toLowerCase();
+  const tableText =
+    locale === "ar"
+      ? {
+          search: "Ø¨Ø­Ø«",
+          searchPlaceholder: "Ø¨Ø­Ø«...",
+          reset: "Ù…Ø³Ø­",
+          noResults: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù†ØªØ§Ø¦Ø¬ Ù…Ø·Ø§Ø¨Ù‚Ø© Ù„Ù„Ø¨Ø­Ø«.",
+        }
+      : {
+          search: "Search",
+          searchPlaceholder: "Search...",
+          reset: "Reset",
+          noResults: "No results match your search.",
+        };
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -507,12 +533,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       documents: scopeDocumentCountById.get(scope.id) ?? 0,
     };
   });
+  const filteredProjectScopeSummaryRows = projectScopeSummaryRows.filter((scope) => {
+    if (!poSearch) return true;
+    return [scope.code, scope.name, scope.status]
+      .join(" ")
+      .toLowerCase()
+      .includes(poSearch);
+  });
   const totalPoPages = Math.max(
     1,
-    Math.ceil(projectScopeSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+    Math.ceil(filteredProjectScopeSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
   );
   const safePoPage = Math.min(poPage, totalPoPages);
-  const visibleProjectScopeSummaryRows = projectScopeSummaryRows.slice(
+  const visibleProjectScopeSummaryRows = filteredProjectScopeSummaryRows.slice(
     (safePoPage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
     safePoPage * DASHBOARD_TABLE_PAGE_SIZE,
   );
@@ -585,12 +618,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       marginPct: ratio(revenue - vendorCost, revenue),
     };
   });
+  const filteredPackageBreakdownRows = packageBreakdownRows.filter((row) => {
+    if (!packageSearch) return true;
+    return [row.code, row.name].join(" ").toLowerCase().includes(packageSearch);
+  });
   const totalPackagePages = Math.max(
     1,
-    Math.ceil(packageBreakdownRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+    Math.ceil(filteredPackageBreakdownRows.length / DASHBOARD_TABLE_PAGE_SIZE),
   );
   const safePackagePage = Math.min(packagePage, totalPackagePages);
-  const visiblePackageBreakdownRows = packageBreakdownRows.slice(
+  const visiblePackageBreakdownRows = filteredPackageBreakdownRows.slice(
     (safePackagePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
     safePackagePage * DASHBOARD_TABLE_PAGE_SIZE,
   );
@@ -624,12 +661,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       attendanceRate: courseAttendanceById.get(course.id) ?? 0,
     };
   });
+  const filteredCourseSummaryRows = courseSummaryRows.filter((row) => {
+    if (!courseSearch) return true;
+    return [row.name, row.packageName].join(" ").toLowerCase().includes(courseSearch);
+  });
   const totalCoursePages = Math.max(
     1,
-    Math.ceil(courseSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+    Math.ceil(filteredCourseSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
   );
   const safeCoursePage = Math.min(coursePage, totalCoursePages);
-  const visibleCourseSummaryRows = courseSummaryRows.slice(
+  const visibleCourseSummaryRows = filteredCourseSummaryRows.slice(
     (safeCoursePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
     safeCoursePage * DASHBOARD_TABLE_PAGE_SIZE,
   );
@@ -757,6 +798,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <p className="eyebrow">Packages</p>
           <h2 className="section-title">Package Performance</h2>
         </div>
+        <TableSearchForm
+          label={tableText.search}
+          placeholder={tableText.searchPlaceholder}
+          name="packageQ"
+          value={params.packageQ ?? ""}
+          hidden={{
+            q: searchTerm,
+            category: categoryFilter,
+            page: String(safeReportingPage),
+            coursePage: String(safeCoursePage),
+            poPage: String(safePoPage),
+            courseQ: params.courseQ ?? "",
+            poQ: params.poQ ?? "",
+          }}
+          resetHref={buildDashboardUrl({
+            q: searchTerm,
+            category: categoryFilter,
+            page: safeReportingPage,
+            coursePage: safeCoursePage,
+            poPage: safePoPage,
+            courseQ: params.courseQ ?? "",
+            poQ: params.poQ ?? "",
+          })}
+          resetLabel={tableText.reset}
+        />
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -801,6 +867,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               ))}
             </tbody>
           </table>
+          {filteredPackageBreakdownRows.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--ink-soft)]">{tableText.noResults}</p>
+          ) : null}
         </div>
         <DashboardPagination
           currentPage={safePackagePage}
@@ -815,6 +884,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               packagePage: page,
               coursePage: safeCoursePage,
               poPage: safePoPage,
+              packageQ: params.packageQ ?? "",
+              courseQ: params.courseQ ?? "",
+              poQ: params.poQ ?? "",
             })
           }
         />
@@ -826,6 +898,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="eyebrow">Courses</p>
             <h2 className="section-title">Course Performance</h2>
           </div>
+          <TableSearchForm
+            label={tableText.search}
+            placeholder={tableText.searchPlaceholder}
+            name="courseQ"
+            value={params.courseQ ?? ""}
+            hidden={{
+              q: searchTerm,
+              category: categoryFilter,
+              page: String(safeReportingPage),
+              packagePage: String(safePackagePage),
+              poPage: String(safePoPage),
+              packageQ: params.packageQ ?? "",
+              poQ: params.poQ ?? "",
+            }}
+            resetHref={buildDashboardUrl({
+              q: searchTerm,
+              category: categoryFilter,
+              page: safeReportingPage,
+              packagePage: safePackagePage,
+              poPage: safePoPage,
+              packageQ: params.packageQ ?? "",
+              poQ: params.poQ ?? "",
+            })}
+            resetLabel={tableText.reset}
+          />
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
@@ -861,6 +958,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 ))}
               </tbody>
             </table>
+            {filteredCourseSummaryRows.length === 0 ? (
+              <p className="mt-4 text-sm text-[var(--ink-soft)]">{tableText.noResults}</p>
+            ) : null}
           </div>
           <DashboardPagination
             currentPage={safeCoursePage}
@@ -875,6 +975,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 packagePage: safePackagePage,
                 coursePage: page,
                 poPage: safePoPage,
+                packageQ: params.packageQ ?? "",
+                courseQ: params.courseQ ?? "",
+                poQ: params.poQ ?? "",
               })
             }
           />
@@ -897,6 +1000,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             value={formatNumber(projectScopeSummaryRows.length, numberLocale)}
           />
         </div>
+        <TableSearchForm
+          label={tableText.search}
+          placeholder={tableText.searchPlaceholder}
+          name="poQ"
+          value={params.poQ ?? ""}
+          hidden={{
+            q: searchTerm,
+            category: categoryFilter,
+            page: String(safeReportingPage),
+            packagePage: String(safePackagePage),
+            coursePage: String(safeCoursePage),
+            packageQ: params.packageQ ?? "",
+            courseQ: params.courseQ ?? "",
+          }}
+          resetHref={buildDashboardUrl({
+            q: searchTerm,
+            category: categoryFilter,
+            page: safeReportingPage,
+            packagePage: safePackagePage,
+            coursePage: safeCoursePage,
+            packageQ: params.packageQ ?? "",
+            courseQ: params.courseQ ?? "",
+          })}
+          resetLabel={tableText.reset}
+        />
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -940,6 +1068,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {localeText.projectScopes.noScopes}
             </p>
           ) : null}
+          {projectScopeSummaryRows.length > 0 && filteredProjectScopeSummaryRows.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--ink-soft)]">{tableText.noResults}</p>
+          ) : null}
         </div>
         <DashboardPagination
           currentPage={safePoPage}
@@ -954,6 +1085,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               packagePage: safePackagePage,
               coursePage: safeCoursePage,
               poPage: page,
+              packageQ: params.packageQ ?? "",
+              courseQ: params.courseQ ?? "",
+              poQ: params.poQ ?? "",
             })
           }
         />
@@ -1064,7 +1198,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               type="search"
               defaultValue={searchTerm}
               className="field-input"
-              placeholder={localeText.reporting.searchPlaceholder}
+              placeholder={localeText.common.searchPlaceholder}
             />
           </label>
           <label className="field-shell">
@@ -1426,6 +1560,48 @@ function DashboardPagination({
         </Link>
       </div>
     </div>
+  );
+}
+
+function TableSearchForm({
+  label,
+  placeholder,
+  name,
+  value,
+  hidden,
+  resetHref,
+  resetLabel,
+}: {
+  label: string;
+  placeholder: string;
+  name: string;
+  value: string;
+  hidden: Record<string, string>;
+  resetHref: string;
+  resetLabel: string;
+}) {
+  return (
+    <form className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+      {Object.entries(hidden).map(([key, hiddenValue]) =>
+        hiddenValue ? <input key={key} type="hidden" name={key} value={hiddenValue} /> : null,
+      )}
+      <label className="field-shell">
+        <span className="field-label">{label}</span>
+        <input
+          type="search"
+          name={name}
+          defaultValue={value}
+          placeholder={placeholder}
+          className="field-input"
+        />
+      </label>
+      <button type="submit" className="primary-button self-end">
+        {label}
+      </button>
+      <Link href={resetHref} className="secondary-button self-end">
+        {resetLabel}
+      </Link>
+    </form>
   );
 }
 

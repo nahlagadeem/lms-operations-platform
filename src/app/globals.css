@@ -120,12 +120,14 @@ a {
 .data-table {
   width: 100%;
   min-width: 860px;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .data-table th {
   border-bottom: 1px solid rgba(17, 17, 17, 0.1);
-  padding: 0 0 0.9rem;
+  background: var(--surface-soft);
+  padding: 0.85rem 1rem;
   text-align: start;
   font-size: 0.83rem;
   font-weight: 700;
@@ -134,10 +136,22 @@ a {
 
 .data-table td {
   border-bottom: 1px solid rgba(17, 17, 17, 0.07);
-  padding: 1rem 0;
+  padding: 1rem;
   vertical-align: top;
   font-size: 0.94rem;
   color: var(--ink-strong);
+}
+
+.data-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.data-table tbody tr:nth-child(even) td {
+  background: rgba(17, 17, 17, 0.018);
+}
+
+.data-table tbody tr:hover td {
+  background: var(--brand-yellow-soft);
 }
 
 .data-table tbody tr:last-child td {

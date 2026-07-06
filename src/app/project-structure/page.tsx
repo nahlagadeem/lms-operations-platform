@@ -19,6 +19,7 @@ import {
 
 type ProjectStructurePageProps = {
   searchParams?: Promise<{
+    q?: string;
     courseQ?: string;
     page?: string;
   }>;
@@ -58,8 +59,9 @@ function normalizePage(value?: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function purchaseOrdersPageHref(page: number, courseSearch: string) {
+function purchaseOrdersPageHref(page: number, poSearch: string, courseSearch: string) {
   const query = new URLSearchParams();
+  if (poSearch) query.set("q", poSearch);
   if (courseSearch) query.set("courseQ", courseSearch);
   if (page > 1) query.set("page", String(page));
   const queryString = query.toString();
@@ -86,6 +88,8 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
   const localeText = t(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
+  const poSearch = normalizeSearch(params.q);
+  const poSearchKey = poSearch.toLowerCase();
   const courseSearch = normalizeSearch(params.courseQ);
   const requestedPage = normalizePage(params.page);
   const platformRole = await getCurrentPlatformRole();
@@ -158,9 +162,22 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
     },
     { packages: 0, courses: 0, budget: 0, invoiced: 0 },
   );
-  const totalScopePages = Math.max(1, Math.ceil(scopes.length / PURCHASE_ORDERS_PAGE_SIZE));
+  const filteredScopes = scopes.filter((scope) => {
+    if (!poSearchKey) return true;
+    return [
+      formatPurchaseOrderCode(scope.code, locale),
+      formatPurchaseOrderTitle(scope, locale),
+      scope.description,
+      scope.region,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(poSearchKey);
+  });
+  const totalScopePages = Math.max(1, Math.ceil(filteredScopes.length / PURCHASE_ORDERS_PAGE_SIZE));
   const safeScopePage = Math.min(requestedPage, totalScopePages);
-  const visibleScopes = scopes.slice(
+  const visibleScopes = filteredScopes.slice(
     (safeScopePage - 1) * PURCHASE_ORDERS_PAGE_SIZE,
     safeScopePage * PURCHASE_ORDERS_PAGE_SIZE,
   );
@@ -308,6 +325,28 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
       ) : null}
 
       <section className="grid gap-4">
+        <form className="panel-surface grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          {courseSearch ? <input type="hidden" name="courseQ" value={courseSearch} /> : null}
+          <label className="field-shell">
+            <span className="field-label">{localeText.common.search}</span>
+            <input
+              type="search"
+              name="q"
+              defaultValue={poSearch}
+              placeholder={localeText.common.searchPlaceholder}
+              className="field-input"
+            />
+          </label>
+          <button type="submit" className="primary-button self-end">
+            {localeText.common.search}
+          </button>
+          <Link
+            href={courseSearch ? `/pos?courseQ=${encodeURIComponent(courseSearch)}` : "/pos"}
+            className="secondary-button self-end"
+          >
+            {localeText.common.reset}
+          </Link>
+        </form>
         {visibleScopes.map((scope) => {
           const courseCount = scope.selectedCourses.length;
           const totalEstimatedSeats = scope.selectedCourses.reduce(
@@ -497,7 +536,12 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </div>
           );
         })}
-        {scopes.length > PURCHASE_ORDERS_PAGE_SIZE ? (
+        {scopes.length > 0 && filteredScopes.length === 0 ? (
+          <div className="panel-surface border-dashed text-sm text-[var(--ink-soft)]">
+            {localeText.common.noResults}
+          </div>
+        ) : null}
+        {filteredScopes.length > PURCHASE_ORDERS_PAGE_SIZE ? (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">
               {localeText.pagination.pageIndicator
@@ -506,14 +550,14 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                href={purchaseOrdersPageHref(1, courseSearch)}
+                href={purchaseOrdersPageHref(1, poSearch, courseSearch)}
                 aria-disabled={safeScopePage <= 1}
                 className={`pagination-link ${safeScopePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
               >
                 {localeText.pagination.first}
               </Link>
               <Link
-                href={purchaseOrdersPageHref(Math.max(1, safeScopePage - 1), courseSearch)}
+                href={purchaseOrdersPageHref(Math.max(1, safeScopePage - 1), poSearch, courseSearch)}
                 aria-disabled={safeScopePage <= 1}
                 className={`pagination-link ${safeScopePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
               >
@@ -527,7 +571,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 ) : (
                   <Link
                     key={page}
-                    href={purchaseOrdersPageHref(page, courseSearch)}
+                    href={purchaseOrdersPageHref(page, poSearch, courseSearch)}
                     aria-current={page === safeScopePage ? "page" : undefined}
                     className={`pagination-link ${page === safeScopePage ? "pagination-link-active" : ""}`}
                   >
@@ -536,14 +580,14 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 ),
               )}
               <Link
-                href={purchaseOrdersPageHref(Math.min(totalScopePages, safeScopePage + 1), courseSearch)}
+                href={purchaseOrdersPageHref(Math.min(totalScopePages, safeScopePage + 1), poSearch, courseSearch)}
                 aria-disabled={safeScopePage >= totalScopePages}
                 className={`pagination-link ${safeScopePage >= totalScopePages ? "pointer-events-none opacity-50" : ""}`}
               >
                 {localeText.pagination.next}
               </Link>
               <Link
-                href={purchaseOrdersPageHref(totalScopePages, courseSearch)}
+                href={purchaseOrdersPageHref(totalScopePages, poSearch, courseSearch)}
                 aria-disabled={safeScopePage >= totalScopePages}
                 className={`pagination-link ${safeScopePage >= totalScopePages ? "pointer-events-none opacity-50" : ""}`}
               >

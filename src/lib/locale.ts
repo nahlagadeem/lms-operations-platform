@@ -45,6 +45,12 @@ const englishText = {
     projectDetails: "Project Details",
     exportExcel: "Export Excel",
   },
+  common: {
+    search: "Search",
+    searchPlaceholder: "Search...",
+    reset: "Reset",
+    noResults: "No results match your search.",
+  },
   aria: {
     edit: "Edit",
     delete: "Delete",
@@ -453,6 +459,12 @@ const englishText = {
 } as const;
 
 const arabicText = {
+  common: {
+    search: "Ø¨Ø­Ø«",
+    searchPlaceholder: "Ø¨Ø­Ø«...",
+    reset: "Ù…Ø³Ø­",
+    noResults: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù†ØªØ§Ø¦Ø¬ Ù…Ø·Ø§Ø¨Ù‚Ø© Ù„Ù„Ø¨Ø­Ø«.",
+  },
   nav: {
     home: "الرئيسية",
     projectScope: "POs",
