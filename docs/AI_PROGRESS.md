@@ -6,9 +6,9 @@
 - Current status (working tree clean/dirty): clean after the PTSP-20 attendance grid commit
 
 ## Overall Project Status
-- Overall completion estimate: about 4 of 14 PTSP stories are complete, or roughly 29%; PTSP-16, PTSP-17, PTSP-19, and PTSP-20 are complete for demo/staging, and the remaining PTSP stories are still open.
+- Overall completion estimate: about 4 of 14 PTSP stories are complete, or roughly 29%; PTSP-16, PTSP-17, PTSP-19, and PTSP-20 are complete for demo/staging, PTSP-21 is in progress, and the remaining PTSP stories are still open.
 - PTSP stories completed: `PTSP-16`, `PTSP-17`, `PTSP-19`, `PTSP-20`
-- PTSP stories in progress: none
+- PTSP stories in progress: `PTSP-21`
 - PTSP stories not started: `PTSP-21`, `PTSP-22`, `PTSP-23`, `PTSP-24`, `PTSP-25`, `PTSP-27`, `PTSP-28`, `PTSP-29`, `PTSP-30`, `PTSP-32`
 
 ## Completed PTSP Stories
@@ -50,6 +50,17 @@
 - Intentional legacy compatibility: `attendanceDate` still exists temporarily.
 - Intentional legacy compatibility: legacy date-only attendance writes are preserved when no session is provided.
 - Legacy date-only attendance rows are displayed in the grid only when their date matches an existing Training session.
+
+## PTSP-21 Summary
+- Status: started.
+- Session-level attendance metric helpers added in `src/server/services/capacity-service.ts`.
+- Formula: attendance rate = successful attended sessions / total possible sessions * 100.
+- Successful attended sessions currently mean `PRESENT` attendance for a participant/session cell.
+- Total possible sessions = eligible enrolled attendees * Training session count.
+- Missing attendance records count as absent because they remain in the denominator.
+- Weighted rollup helpers were added for Training, Course, Package, and project-wide attendance rates.
+- Legacy date-only attendance rows are included only when their `attendanceDate` matches an existing `TrainingSession.sessionDate` for the same Training.
+- Existing UI and dashboard still use legacy calculations until the next PTSP-21 wiring task.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -93,6 +104,7 @@
 - `feat(attendance): select training session for attendance entry` - Update the existing attendance form to submit `trainingSessionId`.
 - `feat(attendance): add enrollee session attendance grid` - Add the per-attendee, per-session attendance grid on Training detail.
 - `docs: mark PTSP-20 attendance grid complete` - Document PTSP-20 as complete for demo/staging.
+- `feat(attendance): add session-level attendance metrics` - Add reusable session-level attendance rate helpers for Training, Course, Package, and project-wide rollups.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -122,4 +134,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: start PTSP-21 with an architecture review of current attendance rate formulas and identify where calculations still depend on legacy attendance assumptions.
+- First action for the next Codex session: continue PTSP-21 by wiring Training detail attendance rate displays to the new session-level attendance metric helpers.
