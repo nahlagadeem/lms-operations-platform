@@ -27,9 +27,12 @@
 ## PTSP-19 Summary
 - Status: started.
 - TrainingSession schema added as a first-class model related to `CourseRun`.
+- Server-side `TrainingSession` create/update service functions and server actions added.
+- Session mutations use the existing operational permission guard, allowing `PROJECT_MANAGER` and `DATA_ENTRY` while blocking read-only roles.
+- Session dates are normalized to start-of-day before saving.
 - `CourseRun.daysHeld` is kept temporarily as a legacy field.
 - `AttendanceRecord` still uses `attendanceDate` for now.
-- No UI, server action, attendance, or backfill changes have been made yet.
+- No UI, attendance, or backfill changes have been made yet.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -64,6 +67,7 @@
 - `d5c3d19` - Add the demo-only role login selector.
 - `docs: mark PTSP-17 training terminology complete` - Document PTSP-17 as complete after verifying no user-facing legacy wording remains.
 - `feat(training): add training session model` - Add the PTSP-19 `TrainingSession` schema and migration.
+- `feat(training): add session service and actions` - Add PTSP-19 server-side session create/update service functions and actions.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -93,4 +97,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: continue PTSP-19 by adding the smallest server-side session action/service slice before changing the UI.
+- First action for the next Codex session: continue PTSP-19 by adding the Training detail sessions UI that calls the existing session server actions.

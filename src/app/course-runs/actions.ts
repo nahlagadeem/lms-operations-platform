@@ -18,6 +18,7 @@ import {
   getCurrentPlatformRole,
 } from "@/lib/permissions";
 import * as trainingEvaluationService from "@/server/services/training-evaluation-service";
+import * as trainingSessionService from "@/server/services/training-session-service";
 import * as trainingService from "@/server/services/training-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -216,6 +217,54 @@ export async function removeInstructorFromTraining(formData: FormData) {
   }
 
   await trainingService.removeInstructorFromTraining(trainingId, instructorId);
+
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
+}
+
+export async function createTrainingSession(formData: FormData) {
+  await requireAuth();
+  await requireOperationalAccess();
+
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const sessionDate = parseOptionalDate(normalizeText(formData.get("sessionDate")));
+  const notes = normalizeText(formData.get("notes"));
+
+  if (!trainingId || !sessionDate) {
+    throw new Error("Missing training session fields.");
+  }
+
+  await trainingSessionService.createTrainingSession({
+    courseRunId: trainingId,
+    sessionDate,
+    notes,
+  });
+
+  revalidatePath("/trainings");
+  revalidatePath(`/trainings/${trainingId}`);
+  redirect(`/trainings/${trainingId}`);
+}
+
+export async function updateTrainingSession(formData: FormData) {
+  await requireAuth();
+  await requireOperationalAccess();
+
+  const trainingId = normalizeText(formData.get("trainingId"));
+  const sessionId = normalizeText(formData.get("sessionId"));
+  const sessionDate = parseOptionalDate(normalizeText(formData.get("sessionDate")));
+  const notes = normalizeText(formData.get("notes"));
+
+  if (!trainingId || !sessionId || !sessionDate) {
+    throw new Error("Missing training session update fields.");
+  }
+
+  await trainingSessionService.updateTrainingSession({
+    sessionId,
+    courseRunId: trainingId,
+    sessionDate,
+    notes,
+  });
 
   revalidatePath("/trainings");
   revalidatePath(`/trainings/${trainingId}`);
