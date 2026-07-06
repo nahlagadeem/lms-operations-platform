@@ -26,7 +26,10 @@ import {
   getCurrentPlatformRole,
   isCustomerCapacityOnly,
 } from "@/lib/permissions";
-import { getAttendanceRate, getTrainingCapacity } from "@/server/services/capacity-service";
+import {
+  getTrainingCapacity,
+  getTrainingSessionAttendanceRate,
+} from "@/server/services/capacity-service";
 import { getTrainingEnrollmentSummary } from "@/server/services/enrollment-service";
 import {
   getAverageCourseRating,
@@ -635,59 +638,8 @@ export default async function CourseRunDetailPage({
     plannedSeats: run.plannedSeats,
     confirmedSeats: run.confirmedSeats,
   });
-  const attendanceSummary = await getAttendanceRate(run.id);
+  const attendanceSummary = await getTrainingSessionAttendanceRate(run.id);
   const totalSessionCount = run.sessions.length;
-
-  const attendanceByParticipant = new Map<
-    string,
-    {
-      participantId: string;
-      participantName: string;
-      presentCount: number;
-      totalSessions: number;
-      attendanceRate: number;
-      completionEligible: boolean;
-      certificateEligible: boolean;
-    }
-  >();
-
-  for (const record of run.attendanceRecords) {
-    const participantId = record.participantId;
-    const existing = attendanceByParticipant.get(participantId) ?? {
-      participantId,
-      participantName: record.participant.fullNameEn || record.participant.fullNameAr,
-      presentCount: 0,
-      totalSessions: totalSessionCount,
-      attendanceRate: 0,
-      completionEligible: false,
-      certificateEligible: false,
-    };
-
-    if (record.attendanceStatus === "PRESENT" || record.attendanceStatus === "PARTIAL") {
-      existing.presentCount += 1;
-    }
-
-    attendanceByParticipant.set(participantId, existing);
-  }
-
-  const completionRows = Array.from(attendanceByParticipant.values())
-    .map((item) => {
-      const attendanceRate =
-        item.totalSessions > 0 ? item.presentCount / item.totalSessions : 0;
-      const completionEligible = attendanceRate >= completionThreshold;
-      const certificateEligible =
-        run.certificateRequired && completionEligible ? true : !run.certificateRequired;
-
-      return {
-        ...item,
-        attendanceRate,
-        completionEligible,
-        certificateEligible,
-      };
-    })
-    .sort((left, right) => right.attendanceRate - left.attendanceRate);
-
-  const eligibleCount = completionRows.filter((item) => item.completionEligible).length;
   const latestAttendanceByParticipant = new Map<
     string,
     (typeof run.attendanceRecords)[number]
@@ -698,25 +650,6 @@ export default async function CourseRunDetailPage({
       latestAttendanceByParticipant.set(record.participantId, record);
     }
   }
-
-  const filteredEnrollments = run.nominations.filter((nomination) => {
-    const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
-    const participantSearch = [
-      nomination.participant.fullNameAr,
-      nomination.participant.fullNameEn,
-      nomination.participant.email,
-      nomination.participant.organizationName,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    const attendeeMatches = !enrollmentSearch || participantSearch.includes(enrollmentSearch);
-    const statusMatches =
-      !enrollmentStatusFilter || enrollmentStatusFilter === status;
-
-    return attendeeMatches && statusMatches;
-  });
 
   const attendanceSessionIdByDate = new Map(
     run.sessions.map((session) => [dateKey(session.sessionDate), session.id]),
@@ -736,6 +669,59 @@ export default async function CourseRunDetailPage({
       attendanceByCell.set(cellKey, record);
     }
   }
+
+  const completionRows = run.nominations
+    .filter((nomination) => {
+      const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
+      return status === "PENDING" || status === "CONFIRMED";
+    })
+    .map((nomination) => {
+      const presentCount = run.sessions.reduce((count, session) => {
+        const record = attendanceByCell.get(
+          attendanceCellKey(nomination.participantId, session.id),
+        );
+        return record?.attendanceStatus === "PRESENT" ? count + 1 : count;
+      }, 0);
+      const attendanceRate =
+        totalSessionCount > 0 ? presentCount / totalSessionCount : 0;
+      const completionEligible = attendanceRate >= completionThreshold;
+      const certificateEligible =
+        run.certificateRequired && completionEligible ? true : !run.certificateRequired;
+
+      return {
+        participantId: nomination.participantId,
+        participantName:
+          nomination.participant.fullNameEn || nomination.participant.fullNameAr,
+        presentCount,
+        totalSessions: totalSessionCount,
+        attendanceRate,
+        completionEligible,
+        certificateEligible,
+      };
+    })
+    .filter((row) => row.totalSessions > 0)
+    .sort((left, right) => right.attendanceRate - left.attendanceRate);
+
+  const eligibleCount = completionRows.filter((item) => item.completionEligible).length;
+
+  const filteredEnrollments = run.nominations.filter((nomination) => {
+    const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
+    const participantSearch = [
+      nomination.participant.fullNameAr,
+      nomination.participant.fullNameEn,
+      nomination.participant.email,
+      nomination.participant.organizationName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    const attendeeMatches = !enrollmentSearch || participantSearch.includes(enrollmentSearch);
+    const statusMatches =
+      !enrollmentStatusFilter || enrollmentStatusFilter === status;
+
+    return attendeeMatches && statusMatches;
+  });
 
   const attendanceGridEnrollments = run.nominations.filter((nomination) => {
     const status = getEnrollmentDisplayStatus(nomination.nominationStatus);

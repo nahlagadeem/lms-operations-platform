@@ -60,7 +60,9 @@
 - Missing attendance records count as absent because they remain in the denominator.
 - Weighted rollup helpers were added for Training, Course, Package, and project-wide attendance rates.
 - Legacy date-only attendance rows are included only when their `attendanceDate` matches an existing `TrainingSession.sessionDate` for the same Training.
-- Existing UI and dashboard still use legacy calculations until the next PTSP-21 wiring task.
+- Training detail attendance rate card now uses `getTrainingSessionAttendanceRate`.
+- Training detail per-attendee completion rows now use Training session count as the denominator and `PRESENT` participant/session cells as attended sessions.
+- Dashboard, Course, Package, and project-wide UI still need to be wired to session-level rollups.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -105,6 +107,7 @@
 - `feat(attendance): add enrollee session attendance grid` - Add the per-attendee, per-session attendance grid on Training detail.
 - `docs: mark PTSP-20 attendance grid complete` - Document PTSP-20 as complete for demo/staging.
 - `feat(attendance): add session-level attendance metrics` - Add reusable session-level attendance rate helpers for Training, Course, Package, and project-wide rollups.
+- `feat(attendance): use session metrics on training detail` - Wire Training detail attendance rate and per-attendee completion rows to session-level attendance data.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -134,4 +137,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: continue PTSP-21 by wiring Training detail attendance rate displays to the new session-level attendance metric helpers.
+- First action for the next Codex session: continue PTSP-21 by wiring dashboard/home attendance KPI to the new project-wide session-level attendance metric helper.
