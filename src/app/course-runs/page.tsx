@@ -192,6 +192,9 @@ export default async function CourseRunsPage({
         projectScopeCourse: {
           include: { course: true },
         },
+        _count: {
+          select: { sessions: true },
+        },
       },
       orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
       take: 50,
@@ -309,6 +312,7 @@ export default async function CourseRunsPage({
                   <th>{localeText.courseRuns.purchaseOrderCourseEntry}</th>
                   <th>{localeText.courseRuns.status}</th>
                   <th>{localeText.courseRuns.dates}</th>
+                  <th>{localeText.courseRuns.totalSessions}</th>
                   <th>{localeText.courseRuns.mode}</th>
                   <th>{localeText.courseRuns.seats}</th>
                 </tr>
@@ -369,6 +373,11 @@ export default async function CourseRunsPage({
                           numberLocale,
                           localeText.courseRuns.noDates,
                         )}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {formatNumber(run._count.sessions, numberLocale)}
                       </Link>
                     </td>
                     <td>

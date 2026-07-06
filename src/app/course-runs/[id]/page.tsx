@@ -622,6 +622,7 @@ export default async function CourseRunDetailPage({
     confirmedSeats: run.confirmedSeats,
   });
   const attendanceSummary = await getAttendanceRate(run.id);
+  const totalSessionCount = run.sessions.length;
 
   const attendanceByParticipant = new Map<
     string,
@@ -642,13 +643,11 @@ export default async function CourseRunDetailPage({
       participantId,
       participantName: record.participant.fullNameEn || record.participant.fullNameAr,
       presentCount: 0,
-      totalSessions: 0,
+      totalSessions: totalSessionCount,
       attendanceRate: 0,
       completionEligible: false,
       certificateEligible: false,
     };
-
-    existing.totalSessions += 1;
 
     if (record.attendanceStatus === "PRESENT" || record.attendanceStatus === "PARTIAL") {
       existing.presentCount += 1;
@@ -991,7 +990,7 @@ export default async function CourseRunDetailPage({
               <div className="min-w-[9rem]">
                 <ProgressCard
                   label={details.totalSessions}
-                  value={formatNumber(run.sessions.length, numberLocale)}
+                  value={formatNumber(totalSessionCount, numberLocale)}
                   tone="teal"
                 />
               </div>
