@@ -80,6 +80,14 @@ function formatDateInput(value: Date | null) {
   return value.toISOString().slice(0, 10);
 }
 
+function dateKey(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function attendanceCellKey(participantId: string, sessionId: string) {
+  return `${participantId}:${sessionId}`;
+}
+
 function detailText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
@@ -132,6 +140,8 @@ function detailText(locale: "en" | "ar") {
       attendance: "Ø§Ù„Ø­Ø¶ÙˆØ±",
       attendanceLog: "Ø³Ø¬Ù„ Ø§Ù„Ø­Ø¶ÙˆØ±",
       noAttendance: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø³Ø¬Ù„Ø§Øª Ø­Ø¶ÙˆØ± Ø­ØªÙ‰ Ø§Ù„Ø¢Ù†",
+      addEnrollmentsBeforeAttendance: "Ø£Ø¶Ù Ø§Ù„Ø­Ø¶ÙˆØ± Ø¥Ù„Ù‰ Ø§Ù„ØªØ¯Ø±ÙŠØ¨ Ù‚Ø¨Ù„ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø­Ø¶ÙˆØ±.",
+      notRecorded: "Ù„Ù… ÙŠØ³Ø¬Ù„",
       attendanceDate: "ØªØ§Ø±ÙŠØ® Ø§Ù„Ø­Ø¶ÙˆØ±",
       attendanceStatus: "Ø­Ø§Ù„Ø© Ø§Ù„Ø­Ø¶ÙˆØ±",
       chooseAttendee: "Ø§Ø®ØªØ± Ù…Ù† Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ù…Ø³Ø¬Ù„ÙŠÙ†",
@@ -266,6 +276,8 @@ function detailText(locale: "en" | "ar") {
     attendance: "Attendance",
     attendanceLog: "Attendance log",
     noAttendance: "No attendance entries have been added yet. Click Add Attendance to get started.",
+    addEnrollmentsBeforeAttendance: "Enroll attendees before recording attendance.",
+    notRecorded: "Not recorded",
     attendanceDate: "Attendance date",
     attendanceStatus: "Attendance status",
     chooseAttendee: "Choose an enrolled attendee",
@@ -486,7 +498,7 @@ function formatFileSize(bytes: number | null, locale: string) {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
 }
 
-function panelHref(id: string, panel: "edit" | "instructor" | "enrollment" | "attendance") {
+function panelHref(id: string, panel: "edit" | "instructor" | "enrollment") {
   return `/trainings/${id}?panel=${panel}`;
 }
 
@@ -501,8 +513,7 @@ export default async function CourseRunDetailPage({
   const openPanel =
     query.panel === "edit" ||
     query.panel === "instructor" ||
-    query.panel === "enrollment" ||
-    query.panel === "attendance"
+    query.panel === "enrollment"
       ? query.panel
       : "";
   const locale = await getLocale();
@@ -558,7 +569,6 @@ export default async function CourseRunDetailPage({
             participant: true,
           },
           orderBy: [{ attendanceDate: "desc" }, { recordedAt: "desc" }],
-          take: 20,
         },
         sessions: {
           orderBy: { sessionDate: "asc" },
@@ -708,6 +718,30 @@ export default async function CourseRunDetailPage({
     return attendeeMatches && statusMatches;
   });
 
+  const attendanceSessionIdByDate = new Map(
+    run.sessions.map((session) => [dateKey(session.sessionDate), session.id]),
+  );
+  const attendanceByCell = new Map<string, (typeof run.attendanceRecords)[number]>();
+
+  for (const record of run.attendanceRecords) {
+    const sessionId =
+      record.trainingSessionId ?? attendanceSessionIdByDate.get(dateKey(record.attendanceDate));
+
+    if (!sessionId) {
+      continue;
+    }
+
+    const cellKey = attendanceCellKey(record.participantId, sessionId);
+    if (!attendanceByCell.has(cellKey)) {
+      attendanceByCell.set(cellKey, record);
+    }
+  }
+
+  const attendanceGridEnrollments = run.nominations.filter((nomination) => {
+    const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
+    return status === "PENDING" || status === "CONFIRMED";
+  });
+
   return (
     <div className="space-y-6">
       <section className="panel-surface">
@@ -743,12 +777,6 @@ export default async function CourseRunDetailPage({
                 className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
               >
                 {details.addNomination}
-              </Link>
-              <Link
-                href={panelHref(run.id, "attendance")}
-                className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
-              >
-                {details.addAttendance}
               </Link>
             </div>
           ) : null}
@@ -949,39 +977,98 @@ export default async function CourseRunDetailPage({
               </div>
             </div>
 
-            <div className="mt-5 space-y-3">
-              {run.attendanceRecords.length === 0 ? (
-                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
-                  {details.noAttendance}
-                </div>
-              ) : (
-                run.attendanceRecords.map((record) => (
-                  <div
-                    key={record.id}
-                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--ink-strong)]">
-                        {record.participant.fullNameEn || record.participant.fullNameAr}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--ink-soft)]">
-                        {new Intl.DateTimeFormat(numberLocale, {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        }).format(record.attendanceDate)}
-                      </p>
-                    </div>
+            {run.sessions.length === 0 ? (
+              <div className="mt-5 jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                {details.addSessionsBeforeAttendance}
+              </div>
+            ) : attendanceGridEnrollments.length === 0 ? (
+              <div className="mt-5 jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                {details.addEnrollmentsBeforeAttendance}
+              </div>
+            ) : (
+              <div className="mt-5 overflow-x-auto">
+                <table className="data-table min-w-[48rem]">
+                  <thead>
+                    <tr>
+                      <th>{details.chooseAttendee}</th>
+                      {run.sessions.map((session) => (
+                        <th key={session.id}>
+                          {new Intl.DateTimeFormat(numberLocale, {
+                            month: "short",
+                            day: "numeric",
+                          }).format(session.sessionDate)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {attendanceGridEnrollments.map((nomination) => (
+                      <tr key={nomination.id}>
+                        <td>
+                          <div className="min-w-[12rem]">
+                            <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                              {nomination.participant.fullNameEn ||
+                                nomination.participant.fullNameAr}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                              {getEnrollmentStatusLabel(locale, nomination.nominationStatus)}
+                            </p>
+                          </div>
+                        </td>
+                        {run.sessions.map((session) => {
+                          const record = attendanceByCell.get(
+                            attendanceCellKey(nomination.participantId, session.id),
+                          );
+                          const currentStatus = record?.attendanceStatus;
+                          const statusLabel = currentStatus
+                            ? attendanceStatusText(locale)[currentStatus]
+                            : details.notRecorded;
 
-                    <div className="flex items-center gap-2">
-                      <span className="status-pill">
-                        {attendanceStatusText(locale)[record.attendanceStatus]}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+                          return (
+                            <td key={session.id}>
+                              {canEditOps ? (
+                                <form action={recordAttendance} className="min-w-[9rem] space-y-2">
+                                  <input type="hidden" name="trainingId" value={run.id} />
+                                  <input
+                                    type="hidden"
+                                    name="attendeeId"
+                                    value={nomination.participantId}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="trainingSessionId"
+                                    value={session.id}
+                                  />
+                                  <input type="hidden" name="notes" value={record?.notes ?? ""} />
+                                  <select
+                                    name="attendanceStatus"
+                                    defaultValue={currentStatus ?? "PRESENT"}
+                                    className="field-input"
+                                  >
+                                    <option value="PRESENT">
+                                      {attendanceStatusText(locale).PRESENT}
+                                    </option>
+                                    <option value="ABSENT">
+                                      {attendanceStatusText(locale).ABSENT}
+                                    </option>
+                                  </select>
+                                  <button type="submit" className="secondary-button w-full">
+                                    {details.saveAttendance}
+                                  </button>
+                                  <p className="text-xs text-[var(--ink-soft)]">{statusLabel}</p>
+                                </form>
+                              ) : (
+                                <span className="status-pill">{statusLabel}</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div className="panel-surface">

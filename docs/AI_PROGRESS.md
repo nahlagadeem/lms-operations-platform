@@ -46,7 +46,8 @@
 - Legacy `attendanceDate` writes are preserved when no session is provided.
 - Attendance form now submits `trainingSessionId` by selecting from existing Training sessions.
 - If a training has no sessions, the attendance form is not rendered and the user is asked to add sessions first.
-- Attendance grid work is next.
+- Attendance grid added to Training detail: enrolled/confirmed attendees are rows, Training sessions are columns, and editable cells submit `trainingSessionId` through the existing `recordAttendance` action.
+- Legacy date-only attendance rows are displayed in the grid only when their date matches an existing Training session.
 
 ## PTSP-16 Summary
 - Platform roles: added `PlatformRole` with `PROJECT_MANAGER`, `KEY_STAKEHOLDER`, `DATA_ENTRY`, and `CUSTOMER`; added `AppUser.platformRole`; seeded demo users for each role.
@@ -88,6 +89,7 @@
 - `chore(attendance): add training session backfill script` - Add an idempotent script to link existing attendance rows to matching training sessions.
 - `feat(attendance): write attendance against training sessions` - Update attendance write services/actions to support session-backed attendance while preserving legacy date writes.
 - `feat(attendance): select training session for attendance entry` - Update the existing attendance form to submit `trainingSessionId`.
+- `feat(attendance): add enrollee session attendance grid` - Add the per-attendee, per-session attendance grid on Training detail.
 
 ## Architecture Decisions
 - `PlatformRole` is the source of truth for RBAC.
@@ -117,4 +119,4 @@
 - Update `AI_PROGRESS.md` after every completed task.
 
 ## Current TODO
-- First action for the next Codex session: continue PTSP-20 by designing the enrollee-by-session attendance grid.
+- First action for the next Codex session: audit PTSP-20 attendance entry end-to-end and confirm whether any remaining PTSP-20-only gaps exist before starting PTSP-21 attendance rate formulas.
