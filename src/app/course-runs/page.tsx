@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { CourseRunStatus, DeliveryMode, Prisma, TrainingCity } from "@prisma/client";
+import {
+  CourseRunStatus,
+  DeliveryMode,
+  NominationStatus,
+  Prisma,
+  TrainingCity,
+} from "@prisma/client";
 import { createTraining } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
@@ -17,6 +23,8 @@ type CourseRunsPageProps = {
     package?: string;
     status?: string;
     panel?: string;
+    sort?: string;
+    dir?: string;
   }>;
 };
 
@@ -27,18 +35,16 @@ const statusGroupsForPlanned = [
   CourseRunStatus.CONFIRMED,
 ];
 
-const statusPriority: Record<CourseRunStatus, number> = {
-  ONGOING: 0,
-  CONFIRMED: 1,
-  OPEN_FOR_NOMINATION: 2,
-  APPROVAL_PENDING: 3,
-  PLANNED: 4,
-  DRAFT: 5,
-  POSTPONED: 6,
-  COMPLETED: 7,
-  CLOSED: 8,
-  CANCELED: 9,
-};
+const trainingListSortKeys = [
+  "code",
+  "estimatedSeats",
+  "actualSeats",
+  "location",
+  "duration",
+] as const;
+
+type TrainingListSortKey = (typeof trainingListSortKeys)[number];
+type SortDirection = "asc" | "desc";
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -46,29 +52,6 @@ function formatNumber(value: number, locale: string) {
 
 function normalizeSingleValue(value?: string) {
   return value?.trim() || "";
-}
-
-function formatDateRange(
-  startDate: Date | null,
-  endDate: Date | null,
-  locale: string,
-  emptyLabel: string,
-) {
-  if (!startDate && !endDate) {
-    return emptyLabel;
-  }
-
-  const formatter = new Intl.DateTimeFormat(locale, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-
-  if (startDate && endDate) {
-    return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
-  }
-
-  return formatter.format(startDate ?? endDate!);
 }
 
 function pageText(locale: "en" | "ar") {
@@ -87,6 +70,87 @@ function pageText(locale: "en" | "ar") {
   };
 }
 
+function normalizeSortKey(value?: string): TrainingListSortKey {
+  return trainingListSortKeys.includes(value as TrainingListSortKey)
+    ? (value as TrainingListSortKey)
+    : "code";
+}
+
+function normalizeSortDirection(value?: string): SortDirection {
+  return value === "desc" ? "desc" : "asc";
+}
+
+function compareNullableNumber(
+  left: number | null,
+  right: number | null,
+  direction: SortDirection,
+) {
+  if (left === null && right === null) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return direction === "asc" ? left - right : right - left;
+}
+
+function sortHref(
+  params: {
+    q: string;
+    package: string;
+    status: string;
+    sort: TrainingListSortKey;
+    dir: SortDirection;
+  },
+  key: TrainingListSortKey,
+) {
+  const nextDirection =
+    params.sort === key && params.dir === "asc" ? "desc" : "asc";
+  const query = new URLSearchParams();
+
+  if (params.q) query.set("q", params.q);
+  if (params.package) query.set("package", params.package);
+  if (params.status) query.set("status", params.status);
+  query.set("sort", key);
+  query.set("dir", nextDirection);
+
+  return `/trainings?${query.toString()}`;
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentDirection,
+  query,
+}: {
+  label: string;
+  sortKey: TrainingListSortKey;
+  currentSort: TrainingListSortKey;
+  currentDirection: SortDirection;
+  query: {
+    q: string;
+    package: string;
+    status: string;
+  };
+}) {
+  const isActive = currentSort === sortKey;
+  const indicator = isActive ? (currentDirection === "asc" ? " ↑" : " ↓") : "";
+
+  return (
+    <th>
+      <Link
+        href={sortHref({
+          ...query,
+          sort: currentSort,
+          dir: currentDirection,
+        }, sortKey)}
+        className="inline-flex items-center gap-1 text-inherit no-underline"
+      >
+        {label}
+        <span aria-hidden="true">{indicator}</span>
+      </Link>
+    </th>
+  );
+}
+
 export default async function CourseRunsPage({
   searchParams,
 }: CourseRunsPageProps) {
@@ -99,6 +163,8 @@ export default async function CourseRunsPage({
   const searchTerm = normalizeSingleValue(params.q);
   const packageCode = normalizeSingleValue(params.package);
   const statusFilter = normalizeSingleValue(params.status) as CourseRunStatus | "";
+  const sortKey = normalizeSortKey(params.sort);
+  const sortDirection = normalizeSortDirection(params.dir);
   const platformRole = await getCurrentPlatformRole();
   const canCreate = canCreateOperationalData(platformRole);
   const canManageFinancials = canManageFinancialFields(platformRole);
@@ -195,19 +261,62 @@ export default async function CourseRunsPage({
         _count: {
           select: { sessions: true },
         },
+        nominations: {
+          select: { nominationStatus: true },
+        },
       },
       orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
-      take: 50,
     }),
   ]);
 
-  const prioritizedRuns = [...courseRuns].sort((left, right) => {
-    const statusDiff = statusPriority[left.status] - statusPriority[right.status];
-    if (statusDiff !== 0) return statusDiff;
-    const leftTime = left.startDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    const rightTime = right.startDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    return leftTime - rightTime;
-  });
+  const trainingRows = courseRuns
+    .map((run) => {
+      const training = getTrainingBusinessFields(run);
+      const estimatedSeats = run.projectScopeCourse?.estimatedSeats ?? null;
+      const actualSeats = run.nominations.filter(
+        (nomination) => nomination.nominationStatus === NominationStatus.CONFIRMED,
+      ).length;
+      const locationLabel = run.city
+        ? localeText.courseRuns.trainingCities[
+            run.city as keyof typeof localeText.courseRuns.trainingCities
+          ]
+        : "-";
+
+      return {
+        run,
+        training,
+        estimatedSeats,
+        actualSeats,
+        locationLabel,
+        duration: run._count.sessions,
+      };
+    })
+    .sort((left, right) => {
+      if (sortKey === "estimatedSeats") {
+        return compareNullableNumber(left.estimatedSeats, right.estimatedSeats, sortDirection);
+      }
+
+      if (sortKey === "actualSeats") {
+        return sortDirection === "asc"
+          ? left.actualSeats - right.actualSeats
+          : right.actualSeats - left.actualSeats;
+      }
+
+      if (sortKey === "duration") {
+        return sortDirection === "asc"
+          ? left.duration - right.duration
+          : right.duration - left.duration;
+      }
+
+      const leftValue =
+        sortKey === "location" ? left.locationLabel : left.training.trainingCode;
+      const rightValue =
+        sortKey === "location" ? right.locationLabel : right.training.trainingCode;
+
+      return sortDirection === "asc"
+        ? leftValue.localeCompare(rightValue, locale)
+        : rightValue.localeCompare(leftValue, locale);
+    });
 
   return (
     <div className="space-y-6">
@@ -291,7 +400,7 @@ export default async function CourseRunsPage({
           </div>
         </form>
 
-        {prioritizedRuns.length === 0 ? (
+        {trainingRows.length === 0 ? (
           <div className="jawraa-subcard mt-6 border-dashed px-5 py-8">
             <h4 className="text-lg font-semibold text-[var(--ink-strong)]">
               {localeText.courseRuns.noRunsTitle}
@@ -305,22 +414,45 @@ export default async function CourseRunsPage({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>{localeText.courseRuns.runCode}</th>
-                  <th>{localeText.courseRuns.packageName}</th>
-                  <th>{localeText.courseRuns.courseName}</th>
-                  <th>{localeText.courseRuns.purchaseOrder}</th>
-                  <th>{localeText.courseRuns.purchaseOrderCourseEntry}</th>
-                  <th>{localeText.courseRuns.status}</th>
-                  <th>{localeText.courseRuns.dates}</th>
-                  <th>{localeText.courseRuns.totalSessions}</th>
-                  <th>{localeText.courseRuns.mode}</th>
-                  <th>{localeText.courseRuns.seats}</th>
+                  <SortHeader
+                    label={localeText.courseRuns.runCode}
+                    sortKey="code"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.courseRuns.seats}
+                    sortKey="estimatedSeats"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.projectScopes.actualSeats}
+                    sortKey="actualSeats"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.courseRuns.city}
+                    sortKey="location"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.projectScopes.duration}
+                    sortKey="duration"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
                 </tr>
               </thead>
               <tbody>
-                {prioritizedRuns.map((run) => {
-                  const training = getTrainingBusinessFields(run);
-                  return (
+                {trainingRows.map(({ run, training, estimatedSeats, actualSeats, locationLabel, duration }) => (
                   <tr
                     key={run.id}
                     className="cursor-pointer transition hover:bg-white"
@@ -336,66 +468,28 @@ export default async function CourseRunsPage({
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {run.course.package.nameEn || run.course.package.nameAr}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {run.course.nameEn || run.course.nameAr}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {run.projectScope
-                          ? `${formatPurchaseOrderCode(run.projectScope.code, locale)} | ${formatPurchaseOrderTitle(run.projectScope, locale)}`
+                        {estimatedSeats !== null
+                          ? formatNumber(estimatedSeats, numberLocale)
                           : "-"}
                       </Link>
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {run.projectScopeCourse
-                          ? `${run.projectScopeCourse.course.courseCode} | ${run.projectScopeCourse.course.nameEn || run.projectScopeCourse.course.nameAr}`
-                          : "-"}
+                        {formatNumber(actualSeats, numberLocale)}
                       </Link>
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        <span className="status-pill">
-                          {localeText.courseRunStatuses[run.status]}
-                        </span>
+                        {locationLabel}
                       </Link>
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {formatDateRange(
-                          run.startDate,
-                          run.endDate,
-                          numberLocale,
-                          localeText.courseRuns.noDates,
-                        )}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {formatNumber(run._count.sessions, numberLocale)}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {localeText.deliveryModes[run.deliveryMode]}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {run.projectScopeCourse?.estimatedSeats !== null &&
-                        run.projectScopeCourse?.estimatedSeats !== undefined
-                          ? formatNumber(run.projectScopeCourse.estimatedSeats, numberLocale)
-                          : "-"}
+                        {formatNumber(duration, numberLocale)}
                       </Link>
                     </td>
                   </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>
