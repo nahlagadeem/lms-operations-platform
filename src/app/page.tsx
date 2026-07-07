@@ -171,6 +171,58 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const locale = await getLocale();
   const localeText = t(locale);
   const dashboardText = localeText.dashboardOverview;
+  const homeUiText =
+    locale === "ar"
+      ? {
+          refresh: "تحديث",
+          totalProjectValue: "إجمالي قيمة المشروع",
+          totalInvoiced: "إجمالي المفوتر",
+          totalCollected: "إجمالي المحصل",
+          remainingUnbilled: "المتبقي غير المفوتر",
+          trainings: "التدريبات",
+          attendees: "المتدربون",
+          seatUtilization: "استخدام المقاعد",
+          attendanceRate: "نسبة الحضور",
+          satisfactionRate: "نسبة الرضا",
+          activeInstructors: "المدربون النشطون",
+          completedOngoingPlanned: "{completed} مكتمل / {ongoing} جاري / {planned} مخطط",
+          completedOngoingUpcoming: "{completed} مكتمل / {ongoing} جاري / {upcoming} قادم",
+          activeNow: "{active} نشط حاليا",
+          actualEstimatedSeats: "{actual} فعلي / {estimated} مقدر",
+          attendedPossibleSlots: "{attended} حضور / {possible} جلسة ممكنة",
+          feedbackEntries: "{count} إدخال تقييم",
+          approvedInstructorsLive: "مدربون معتمدون معينون على أعمال نشطة",
+          trainingsRunningToday: "تدريبات جارية اليوم",
+          upcomingNextSevenDays: "القادم خلال 7 أيام",
+          completedLastSevenDays: "المكتمل خلال آخر 7 أيام",
+          progressOfTotal: "{completed} من {total}",
+          noItems: "لا توجد عناصر.",
+        }
+      : {
+          refresh: "Refresh",
+          totalProjectValue: "Total Project Value",
+          totalInvoiced: "Total Invoiced",
+          totalCollected: "Total Collected",
+          remainingUnbilled: "Remaining Unbilled",
+          trainings: "Trainings",
+          attendees: "Attendees",
+          seatUtilization: "Seat utilization",
+          attendanceRate: "Attendance rate",
+          satisfactionRate: "Satisfaction rate",
+          activeInstructors: "Active instructors",
+          completedOngoingPlanned: "{completed} completed / {ongoing} ongoing / {planned} planned",
+          completedOngoingUpcoming: "{completed} completed / {ongoing} ongoing / {upcoming} upcoming",
+          activeNow: "{active} active right now",
+          actualEstimatedSeats: "{actual} actual / {estimated} estimated seats",
+          attendedPossibleSlots: "{attended} attended / {possible} possible session slots",
+          feedbackEntries: "{count} feedback entries",
+          approvedInstructorsLive: "Approved instructors assigned to live work",
+          trainingsRunningToday: "Trainings running today",
+          upcomingNextSevenDays: "Upcoming in next 7 days",
+          completedLastSevenDays: "Completed in last 7 days",
+          progressOfTotal: "{completed} of {total}",
+          noItems: "No items found.",
+        };
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
   const platformRole = await getCurrentPlatformRole();
@@ -183,20 +235,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const poPage = normalizePage(params.poPage);
   const courseSearch = normalize(params.courseQ).toLowerCase();
   const poSearch = normalize(params.poQ).toLowerCase();
-  const tableText =
-    locale === "ar"
-      ? {
-          search: "Ø¨Ø­Ø«",
-          searchPlaceholder: "Ø¨Ø­Ø«...",
-          reset: "Ù…Ø³Ø­",
-          noResults: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù†ØªØ§Ø¦Ø¬ Ù…Ø·Ø§Ø¨Ù‚Ø© Ù„Ù„Ø¨Ø­Ø«.",
-        }
-      : {
-          search: "Search",
-          searchPlaceholder: "Search...",
-          reset: "Reset",
-          noResults: "No results match your search.",
-        };
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -678,7 +716,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={buildDashboardUrl({})} className="primary-button">
-            Refresh
+            {homeUiText.refresh}
           </Link>
         </div>
       </section>
@@ -710,19 +748,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               value={formatPercent(projectFinancialOverview.totals.marginPct, numberLocale)}
             />
             <ReadOnlySummaryCard
-              label="Total Project Value"
+              label={homeUiText.totalProjectValue}
               value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
             />
             <ReadOnlySummaryCard
-              label="Total Invoiced"
+              label={homeUiText.totalInvoiced}
               value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
             />
             <ReadOnlySummaryCard
-              label="Total Collected"
+              label={homeUiText.totalCollected}
               value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
             />
             <ReadOnlySummaryCard
-              label="Remaining Unbilled"
+              label={homeUiText.remainingUnbilled}
               value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
             />
           </div>
@@ -1060,61 +1098,72 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             href="/courses"
             title={dashboardText.coursesFramework}
             value={formatNumber(totalCourses, numberLocale)}
-            detail={`${formatNumber(completedCourseIds.length, numberLocale)} completed / ${formatNumber(ongoingCourseIds.length, numberLocale)} ongoing / ${formatNumber(plannedCourseIds.length, numberLocale)} planned`}
+            detail={homeUiText.completedOngoingPlanned
+              .replace("{completed}", formatNumber(completedCourseIds.length, numberLocale))
+              .replace("{ongoing}", formatNumber(ongoingCourseIds.length, numberLocale))
+              .replace("{planned}", formatNumber(plannedCourseIds.length, numberLocale))}
           />
           <KpiCard
             href="/trainings"
-            title="Trainings"
+            title={homeUiText.trainings}
             value={formatNumber(totalRuns, numberLocale)}
-            detail={`${formatNumber(completedRuns, numberLocale)} completed / ${formatNumber(ongoingRuns, numberLocale)} ongoing / ${formatNumber(upcomingRunsCount, numberLocale)} upcoming`}
+            detail={homeUiText.completedOngoingUpcoming
+              .replace("{completed}", formatNumber(completedRuns, numberLocale))
+              .replace("{ongoing}", formatNumber(ongoingRuns, numberLocale))
+              .replace("{upcoming}", formatNumber(upcomingRunsCount, numberLocale))}
           />
           <KpiCard
             href="/courses"
-            title="Attendees"
+            title={homeUiText.attendees}
             value={formatNumber(allTimeTrainees, numberLocale)}
-            detail={`${formatNumber(activeTrainees, numberLocale)} active right now`}
+            detail={homeUiText.activeNow.replace("{active}", formatNumber(activeTrainees, numberLocale))}
           />
           <KpiCard
             href="/trainings"
-            title="Seat utilization"
+            title={homeUiText.seatUtilization}
             value={formatPercent(seatUtilization, numberLocale)}
-            detail={dashboardText.actualEstimatedSeats
+            detail={homeUiText.actualEstimatedSeats
               .replace("{actual}", formatNumber(filledSeats, numberLocale))
               .replace("{estimated}", formatNumber(allocatedSeats, numberLocale))}
           />
           <KpiCard
             href="/trainings"
-            title="Attendance rate"
+            title={homeUiText.attendanceRate}
             value={formatPercent(successRate, numberLocale)}
-            detail={`${formatNumber(projectAttendanceSummary.attendedSessions, numberLocale)} attended / ${formatNumber(projectAttendanceSummary.possibleSessions, numberLocale)} possible session slots`}
+            detail={homeUiText.attendedPossibleSlots
+              .replace("{attended}", formatNumber(projectAttendanceSummary.attendedSessions, numberLocale))
+              .replace("{possible}", formatNumber(projectAttendanceSummary.possibleSessions, numberLocale))}
           />
           <KpiCard
             href="/trainings"
-            title="Satisfaction rate"
+            title={homeUiText.satisfactionRate}
             value={formatPercent(satisfactionRate, numberLocale)}
-            detail={`${formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale)} feedback entries`}
+            detail={homeUiText.feedbackEntries.replace(
+              "{count}",
+              formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale),
+            )}
           />
           <KpiCard
             href="/vendors"
-            title="Active instructors"
+            title={homeUiText.activeInstructors}
             value={formatNumber(activeTrainerCount, numberLocale)}
-            detail="Approved instructors assigned to live work"
+            detail={homeUiText.approvedInstructorsLive}
           />
         </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <ActivityPanel title="Trainings running today" items={todayRuns.map((run) => ({
+        <ActivityPanel title={homeUiText.trainingsRunningToday} emptyText={homeUiText.noItems} items={todayRuns.map((run) => ({
           href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"} / ${run.trainers[0]?.trainer.fullNameEn || run.trainers[0]?.trainer.fullNameAr || "-"}`,
         }))} />
-        <ActivityPanel title="Upcoming in next 7 days" items={upcomingRuns.map((run) => ({
+        <ActivityPanel title={homeUiText.upcomingNextSevenDays} emptyText={homeUiText.noItems} items={upcomingRuns.map((run) => ({
           href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${formatDate(run.startDate, numberLocale)} / ${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"}`,
         }))} />
-        <ActivityPanel title="Completed in last 7 days" items={recentlyCompletedRuns.map((run) => ({
+        <ActivityPanel title={homeUiText.completedLastSevenDays} emptyText={homeUiText.noItems} items={recentlyCompletedRuns.map((run) => ({
           href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${formatDate(run.endDate, numberLocale)} / ${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"}`,
@@ -1128,12 +1177,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               key={item.code}
               label={item.name}
               value={item.percent}
-              detail={`${formatNumber(item.completed, numberLocale)} of ${formatNumber(item.total, numberLocale)}`}
+              detail={homeUiText.progressOfTotal
+                .replace("{completed}", formatNumber(item.completed, numberLocale))
+                .replace("{total}", formatNumber(item.total, numberLocale))}
             />
           ))}
         </ChartPanel>
         <ChartPanel title={dashboardText.monthlyTrainingActivity}>
-          <BarChart rows={monthlyChart} numberLocale={numberLocale} />
+          <BarChart rows={monthlyChart} numberLocale={numberLocale} emptyText={homeUiText.noItems} />
         </ChartPanel>
       </section>
 
@@ -1521,9 +1572,11 @@ function DashboardPagination({
 function ActivityPanel({
   title,
   items,
+  emptyText,
 }: {
   title: string;
   items: Array<{ href: string; title: string; meta: string }>;
+  emptyText: string;
 }) {
   return (
     <section className="panel-surface">
@@ -1534,7 +1587,7 @@ function ActivityPanel({
             <p className="font-semibold text-[var(--ink-strong)]">{item.title}</p>
             <p className="mt-1 text-sm text-[var(--ink-soft)]">{item.meta}</p>
           </Link>
-        )) : <p className="text-sm text-[var(--ink-soft)]">No items found.</p>}
+        )) : <p className="text-sm text-[var(--ink-soft)]">{emptyText}</p>}
       </div>
     </section>
   );
@@ -1574,17 +1627,19 @@ function ProgressRow({
 function BarChart({
   rows,
   numberLocale,
+  emptyText,
   suffix = "",
   maxValue,
 }: {
   rows: Array<{ label: string; value: number }>;
   numberLocale: string;
+  emptyText: string;
   suffix?: string;
   maxValue?: number;
 }) {
   const max = maxValue ?? Math.max(...rows.map((row) => row.value), 1);
   if (rows.length === 0) {
-    return <p className="text-sm text-[var(--ink-soft)]">No items found.</p>;
+    return <p className="text-sm text-[var(--ink-soft)]">{emptyText}</p>;
   }
   return (
     <div className="grid min-h-[220px] grid-cols-[repeat(auto-fit,minmax(56px,1fr))] items-end gap-3">
