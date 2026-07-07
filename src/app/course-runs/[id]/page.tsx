@@ -53,12 +53,14 @@ type CourseRunDetailPageProps = {
     completionQ?: string;
     completionPage?: string;
     completionView?: string;
+    evaluationPage?: string;
   }>;
 };
 
 const ENROLLMENTS_PAGE_SIZE = 10;
 const ATTENDANCE_PAGE_SIZE = 10;
 const COMPLETION_PAGE_SIZE = 10;
+const EVALUATIONS_PAGE_SIZE = 10;
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -148,6 +150,13 @@ function completionPageHref(
   if (completionQ) query.set("completionQ", completionQ);
   if (view === "all") query.set("completionView", "all");
   if (page > 1 && view !== "all") query.set("completionPage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
+}
+
+function evaluationPageHref(trainingId: string, page: number) {
+  const query = new URLSearchParams();
+  if (page > 1) query.set("evaluationPage", String(page));
   const queryString = query.toString();
   return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
 }
@@ -609,6 +618,7 @@ export default async function CourseRunDetailPage({
   const completionSearchRaw = (query.completionQ ?? "").trim();
   const requestedCompletionPage = normalizePage(query.completionPage);
   const showAllCompletion = query.completionView === "all";
+  const requestedEvaluationPage = normalizePage(query.evaluationPage);
   const openPanel =
     query.panel === "edit" ||
     query.panel === "instructor" ||
@@ -899,6 +909,15 @@ export default async function CourseRunDetailPage({
         (safeAttendancePage - 1) * ATTENDANCE_PAGE_SIZE,
         safeAttendancePage * ATTENDANCE_PAGE_SIZE,
       );
+  const totalEvaluationPages = Math.max(
+    1,
+    Math.ceil(run.trainingEvaluations.length / EVALUATIONS_PAGE_SIZE),
+  );
+  const safeEvaluationPage = Math.min(requestedEvaluationPage, totalEvaluationPages);
+  const visibleTrainingEvaluations = run.trainingEvaluations.slice(
+    (safeEvaluationPage - 1) * EVALUATIONS_PAGE_SIZE,
+    safeEvaluationPage * EVALUATIONS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -1987,6 +2006,121 @@ export default async function CourseRunDetailPage({
               />
             </div>
 
+            <div className="mt-6 space-y-3">
+              {run.trainingEvaluations.length === 0 ? (
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                  {details.noEvaluations}
+                </div>
+              ) : (
+                visibleTrainingEvaluations.map((evaluation) => {
+                  const subjectInstructorName =
+                    evaluation.subjectInstructor?.fullNameEn ||
+                    evaluation.subjectInstructor?.fullNameAr ||
+                    "";
+                  const evaluatorInstructorName =
+                    evaluation.evaluatorInstructor?.fullNameEn ||
+                    evaluation.evaluatorInstructor?.fullNameAr ||
+                    "";
+
+                  return (
+                    <div key={evaluation.id} className="jawraa-subcard px-4 py-4">
+                      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.7fr_1fr]">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                            {evaluation.participant.fullNameEn ||
+                              evaluation.participant.fullNameAr}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                            {evaluation.participant.email || evaluation.evaluationType}
+                          </p>
+                        </div>
+                        <InfoCard
+                          label={details.rating}
+                          value={`${evaluation.rating} / 5`}
+                        />
+                        <div className="text-sm leading-6 text-[var(--ink-soft)]">
+                          <p className="font-semibold text-[var(--ink-strong)]">
+                            {evaluation.evaluationType === "COURSE"
+                              ? details.courseEvaluation
+                              : evaluation.evaluationType === "INSTRUCTOR"
+                                ? details.instructorEvaluation
+                                : details.attendeeEvaluation}
+                          </p>
+                          {subjectInstructorName ? (
+                            <p>{details.chooseTrainer}: {subjectInstructorName}</p>
+                          ) : null}
+                          {evaluatorInstructorName ? (
+                            <p>{details.chooseTrainer}: {evaluatorInstructorName}</p>
+                          ) : null}
+                          {evaluation.comments ? (
+                            <p className="mt-2">{evaluation.comments}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {run.trainingEvaluations.length > EVALUATIONS_PAGE_SIZE ? (
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeEvaluationPage, numberLocale))
+                    .replace("{total}", formatNumber(totalEvaluationPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={evaluationPageHref(run.id, 1)}
+                    aria-disabled={safeEvaluationPage <= 1}
+                    className={`pagination-link ${safeEvaluationPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={evaluationPageHref(run.id, Math.max(1, safeEvaluationPage - 1))}
+                    aria-disabled={safeEvaluationPage <= 1}
+                    className={`pagination-link ${safeEvaluationPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeEvaluationPage, totalEvaluationPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`evaluation-ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={evaluationPageHref(run.id, page)}
+                        aria-current={page === safeEvaluationPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeEvaluationPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={evaluationPageHref(
+                      run.id,
+                      Math.min(totalEvaluationPages, safeEvaluationPage + 1),
+                    )}
+                    aria-disabled={safeEvaluationPage >= totalEvaluationPages}
+                    className={`pagination-link ${safeEvaluationPage >= totalEvaluationPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={evaluationPageHref(run.id, totalEvaluationPages)}
+                    aria-disabled={safeEvaluationPage >= totalEvaluationPages}
+                    className={`pagination-link ${safeEvaluationPage >= totalEvaluationPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-6 grid gap-6 xl:grid-cols-3">
               <form action={upsertCourseEvaluation} className="space-y-4">
                 <input type="hidden" name="trainingId" value={run.id} />
@@ -2149,62 +2283,6 @@ export default async function CourseRunDetailPage({
               </form>
             </div>
 
-            <div className="mt-6 space-y-3">
-              {run.trainingEvaluations.length === 0 ? (
-                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
-                  {details.noEvaluations}
-                </div>
-              ) : (
-                run.trainingEvaluations.map((evaluation) => {
-                  const subjectInstructorName =
-                    evaluation.subjectInstructor?.fullNameEn ||
-                    evaluation.subjectInstructor?.fullNameAr ||
-                    "";
-                  const evaluatorInstructorName =
-                    evaluation.evaluatorInstructor?.fullNameEn ||
-                    evaluation.evaluatorInstructor?.fullNameAr ||
-                    "";
-
-                  return (
-                    <div key={evaluation.id} className="jawraa-subcard px-4 py-4">
-                      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.7fr_1fr]">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--ink-strong)]">
-                            {evaluation.participant.fullNameEn ||
-                              evaluation.participant.fullNameAr}
-                          </p>
-                          <p className="mt-1 text-xs text-[var(--ink-soft)]">
-                            {evaluation.participant.email || evaluation.evaluationType}
-                          </p>
-                        </div>
-                        <InfoCard
-                          label={details.rating}
-                          value={`${evaluation.rating} / 5`}
-                        />
-                        <div className="text-sm leading-6 text-[var(--ink-soft)]">
-                          <p className="font-semibold text-[var(--ink-strong)]">
-                            {evaluation.evaluationType === "COURSE"
-                              ? details.courseEvaluation
-                              : evaluation.evaluationType === "INSTRUCTOR"
-                                ? details.instructorEvaluation
-                                : details.attendeeEvaluation}
-                          </p>
-                          {subjectInstructorName ? (
-                            <p>{details.chooseTrainer}: {subjectInstructorName}</p>
-                          ) : null}
-                          {evaluatorInstructorName ? (
-                            <p>{details.chooseTrainer}: {evaluatorInstructorName}</p>
-                          ) : null}
-                          {evaluation.comments ? (
-                            <p className="mt-2">{evaluation.comments}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
             </div>
           ) : null}
 
