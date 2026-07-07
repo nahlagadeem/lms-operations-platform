@@ -1840,29 +1840,29 @@ export default async function CourseRunDetailPage({
               <form action={updateTraining} className="space-y-4">
                 <input type="hidden" name="trainingId" value={run.id} />
 
-                <label className="field-shell">
+                <input
+                  type="hidden"
+                  name="purchaseOrderCourseEntryId"
+                  value={selectedPurchaseOrderCourseEntryId}
+                />
+                <div className="field-shell">
                   <span className="field-label">
                     {localeText.courseRuns.purchaseOrderCourseEntry}
                   </span>
-                  <select
-                    name="purchaseOrderCourseEntryId"
-                    className="field-input"
-                    defaultValue={selectedPurchaseOrderCourseEntryId}
-                    required
-                  >
-                    <option value="" disabled>
-                      {localeText.courseRuns.selectPurchaseOrderCourseEntry}
-                    </option>
-                    {purchaseOrderCourseEntries.map((entry) => (
-                      <option key={entry.id} value={entry.id}>
-                        {formatPurchaseOrderCode(entry.scope.code, locale)} |{" "}
-                        {formatPurchaseOrderTitle(entry.scope, locale)} |{" "}
-                        {entry.course.courseCode} | {entry.course.nameEn || entry.course.nameAr} |{" "}
-                        {localeText.courseRuns.plannedSeats}: {entry.estimatedSeats ?? "-"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <div className="field-input bg-[var(--surface-soft)] text-[var(--ink-soft)]">
+                    {run.projectScopeCourse ? (
+                      <>
+                        {formatPurchaseOrderCode(run.projectScopeCourse.scope.code, locale)} |{" "}
+                        {formatPurchaseOrderTitle(run.projectScopeCourse.scope, locale)} |{" "}
+                        {run.projectScopeCourse.course.courseCode} |{" "}
+                        {run.projectScopeCourse.course.nameEn ||
+                          run.projectScopeCourse.course.nameAr}
+                      </>
+                    ) : (
+                      localeText.courseRuns.selectPurchaseOrderCourseEntry
+                    )}
+                  </div>
+                </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">

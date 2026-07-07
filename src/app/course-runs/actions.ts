@@ -125,7 +125,7 @@ export async function updateTraining(formData: FormData) {
   const canManageFinancials = canManageFinancialFields(role);
 
   const trainingId = normalizeText(formData.get("trainingId"));
-  const purchaseOrderCourseEntryId = normalizeText(
+  let purchaseOrderCourseEntryId = normalizeText(
     formData.get("purchaseOrderCourseEntryId"),
   );
   const vendorId = normalizeText(formData.get("vendorId"));
@@ -140,17 +140,24 @@ export async function updateTraining(formData: FormData) {
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
   const notes = normalizeText(formData.get("notes"));
 
-  if (!trainingId || !purchaseOrderCourseEntryId || !deliveryMode || !status) {
+  if (!trainingId || !deliveryMode || !status) {
     throw new Error("Please complete the required training details.");
   }
 
   const existingTraining = await db.courseRun.findUnique({
     where: { id: trainingId },
-    select: { vendorCost: true },
+    select: { vendorCost: true, projectScopeCourseId: true },
   });
 
   if (!existingTraining) {
     throw new Error("Training was not found.");
+  }
+
+  purchaseOrderCourseEntryId =
+    purchaseOrderCourseEntryId || existingTraining.projectScopeCourseId || "";
+
+  if (!purchaseOrderCourseEntryId) {
+    throw new Error("Training is missing its PO Course Entry.");
   }
 
   const vendorCost = canManageFinancials
