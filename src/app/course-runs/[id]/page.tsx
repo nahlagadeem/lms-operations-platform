@@ -839,6 +839,12 @@ export default async function CourseRunDetailPage({
                 label={details.location}
                 value={run.location?.nameEn || run.location?.nameAr || details.notAssigned}
               />
+              {canSeeFinancials && trainingFinancials ? (
+                <InfoCard
+                  label={details.vendorCost}
+                  value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
+                />
+              ) : null}
             </div>
 
             <div className="jawraa-subcard mt-5 p-4">
@@ -1494,13 +1500,11 @@ export default async function CourseRunDetailPage({
               <h3 className="section-title">{details.financialTitle}</h3>
               <p className="section-copy">{details.financialDescription}</p>
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                {canManageFinancials ? (
-                  <ProgressCard
-                    label={details.vendorCost}
-                    value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
-                    tone="ink"
-                  />
-                ) : null}
+                <ProgressCard
+                  label={details.vendorCost}
+                  value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
+                  tone="ink"
+                />
                 <ProgressCard
                   label={details.revenue}
                   value={formatCurrency(trainingFinancials.revenue, numberLocale)}
