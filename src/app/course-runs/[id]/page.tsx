@@ -50,11 +50,15 @@ type CourseRunDetailPageProps = {
     attendanceQ?: string;
     attendancePage?: string;
     attendanceView?: string;
+    completionQ?: string;
+    completionPage?: string;
+    completionView?: string;
   }>;
 };
 
 const ENROLLMENTS_PAGE_SIZE = 10;
 const ATTENDANCE_PAGE_SIZE = 10;
+const COMPLETION_PAGE_SIZE = 10;
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -130,6 +134,20 @@ function attendancePageHref(
   if (attendanceQ) query.set("attendanceQ", attendanceQ);
   if (view === "all") query.set("attendanceView", "all");
   if (page > 1 && view !== "all") query.set("attendancePage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
+}
+
+function completionPageHref(
+  trainingId: string,
+  page: number,
+  completionQ?: string,
+  view?: string,
+) {
+  const query = new URLSearchParams();
+  if (completionQ) query.set("completionQ", completionQ);
+  if (view === "all") query.set("completionView", "all");
+  if (page > 1 && view !== "all") query.set("completionPage", String(page));
   const queryString = query.toString();
   return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
 }
@@ -585,6 +603,10 @@ export default async function CourseRunDetailPage({
   const attendanceSearchRaw = (query.attendanceQ ?? "").trim();
   const requestedAttendancePage = normalizePage(query.attendancePage);
   const showAllAttendance = query.attendanceView === "all";
+  const completionSearch = (query.completionQ ?? "").trim().toLowerCase();
+  const completionSearchRaw = (query.completionQ ?? "").trim();
+  const requestedCompletionPage = normalizePage(query.completionPage);
+  const showAllCompletion = query.completionView === "all";
   const openPanel =
     query.panel === "edit" ||
     query.panel === "instructor" ||
@@ -794,6 +816,20 @@ export default async function CourseRunDetailPage({
     .sort((left, right) => right.attendanceRate - left.attendanceRate);
 
   const eligibleCount = completionRows.filter((item) => item.completionEligible).length;
+  const filteredCompletionRows = completionRows.filter((row) =>
+    !completionSearch || row.participantName.toLowerCase().includes(completionSearch),
+  );
+  const totalCompletionPages = Math.max(
+    1,
+    Math.ceil(filteredCompletionRows.length / COMPLETION_PAGE_SIZE),
+  );
+  const safeCompletionPage = Math.min(requestedCompletionPage, totalCompletionPages);
+  const visibleCompletionRows = showAllCompletion
+    ? filteredCompletionRows
+    : filteredCompletionRows.slice(
+        (safeCompletionPage - 1) * COMPLETION_PAGE_SIZE,
+        safeCompletionPage * COMPLETION_PAGE_SIZE,
+      );
 
   const filteredEnrollments = run.nominations.filter((nomination) => {
     const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
@@ -966,6 +1002,12 @@ export default async function CourseRunDetailPage({
                 <h3 className="section-title">{details.currentNominations}</h3>
               </div>
               <div className="flex flex-wrap gap-2">
+                <a
+                  href={`/api/trainings/${run.id}/enrollments/export`}
+                  className="secondary-button"
+                >
+                  {localeText.buttons.exportExcel}
+                </a>
                 <Link href={panelHref(run.id, "enrollment")} className="secondary-button">
                   {details.addNominationButton}
                 </Link>
@@ -1184,6 +1226,12 @@ export default async function CourseRunDetailPage({
                   {showAllAttendance ? details.showPagedAttendance : details.seeAllAttendance}
                 </Link>
               ) : null}
+              <a
+                href={`/api/trainings/${run.id}/attendance/export`}
+                className="secondary-button"
+              >
+                {localeText.buttons.exportExcel}
+              </a>
             </div>
 
             {run.sessions.length === 0 ? (
@@ -1471,6 +1519,18 @@ export default async function CourseRunDetailPage({
                 <p className="eyebrow">{details.completion}</p>
                 <h3 className="section-title">{details.completionSummary}</h3>
               </div>
+              {filteredCompletionRows.length > COMPLETION_PAGE_SIZE ? (
+                <Link
+                  href={
+                    showAllCompletion
+                      ? completionPageHref(run.id, 1, completionSearchRaw)
+                      : completionPageHref(run.id, 1, completionSearchRaw, "all")
+                  }
+                  className="secondary-button"
+                >
+                  {showAllCompletion ? details.showPagedAttendance : details.seeAllAttendance}
+                </Link>
+              ) : null}
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -1497,13 +1557,30 @@ export default async function CourseRunDetailPage({
               </p>
             </div>
 
+            <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <InstantSearchField
+                name="completionQ"
+                label={details.filterAttendee}
+                defaultValue={completionSearchRaw}
+                placeholder={details.filterAttendee}
+                pageParams={["completionPage"]}
+              />
+              <Link href={`/trainings/${run.id}`} className="secondary-button self-end">
+                {localeText.common.reset}
+              </Link>
+            </div>
+
             <div className="mt-5 space-y-3">
               {completionRows.length === 0 ? (
                 <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noCompletionData}
                 </div>
+              ) : filteredCompletionRows.length === 0 ? (
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                  {localeText.common.noResults}
+                </div>
               ) : (
-                completionRows.map((row) => (
+                visibleCompletionRows.map((row) => (
                   <div
                     key={row.participantId}
                     className="jawraa-subcard px-4 py-4"
@@ -1575,6 +1652,69 @@ export default async function CourseRunDetailPage({
                 ))
               )}
             </div>
+            {!showAllCompletion && filteredCompletionRows.length > COMPLETION_PAGE_SIZE ? (
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeCompletionPage, numberLocale))
+                    .replace("{total}", formatNumber(totalCompletionPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={completionPageHref(run.id, 1, completionSearchRaw)}
+                    aria-disabled={safeCompletionPage <= 1}
+                    className={`pagination-link ${safeCompletionPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={completionPageHref(
+                      run.id,
+                      Math.max(1, safeCompletionPage - 1),
+                      completionSearchRaw,
+                    )}
+                    aria-disabled={safeCompletionPage <= 1}
+                    className={`pagination-link ${safeCompletionPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeCompletionPage, totalCompletionPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`completion-ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={completionPageHref(run.id, page, completionSearchRaw)}
+                        aria-current={page === safeCompletionPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeCompletionPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={completionPageHref(
+                      run.id,
+                      Math.min(totalCompletionPages, safeCompletionPage + 1),
+                      completionSearchRaw,
+                    )}
+                    aria-disabled={safeCompletionPage >= totalCompletionPages}
+                    className={`pagination-link ${safeCompletionPage >= totalCompletionPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={completionPageHref(run.id, totalCompletionPages, completionSearchRaw)}
+                    aria-disabled={safeCompletionPage >= totalCompletionPages}
+                    className={`pagination-link ${safeCompletionPage >= totalCompletionPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="panel-surface">
