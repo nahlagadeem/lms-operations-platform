@@ -557,7 +557,7 @@ export default async function CourseRunDetailPage({
         },
         projectScope: true,
         projectScopeCourse: {
-          include: { course: true },
+          include: { course: true, scope: true },
         },
         provider: true,
         location: true,
@@ -635,6 +635,13 @@ export default async function CourseRunDetailPage({
   if (!run) notFound();
 
   const training = getTrainingBusinessFields(run);
+  const selectedPurchaseOrderCourseEntryId =
+    run.projectScopeCourseId ||
+    purchaseOrderCourseEntries.find(
+      (entry) =>
+        entry.scopeId === run.projectScopeId && entry.courseId === run.courseId,
+    )?.id ||
+    "";
   const [trainingFinancials, averageCourseRating, averageInstructorRating] = await Promise.all([
     getTrainingFinancials(run.id),
     getAverageCourseRating(run.id),
@@ -1840,7 +1847,7 @@ export default async function CourseRunDetailPage({
                   <select
                     name="purchaseOrderCourseEntryId"
                     className="field-input"
-                    defaultValue={run.projectScopeCourseId || ""}
+                    defaultValue={selectedPurchaseOrderCourseEntryId}
                     required
                   >
                     <option value="" disabled>
