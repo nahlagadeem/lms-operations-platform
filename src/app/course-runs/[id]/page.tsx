@@ -15,6 +15,7 @@ import {
   updateTrainingSession,
   updateTraining,
 } from "@/app/course-runs/actions";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
@@ -45,8 +46,15 @@ type CourseRunDetailPageProps = {
     panel?: string;
     attendee?: string;
     status?: string;
+    enrollmentPage?: string;
+    attendanceQ?: string;
+    attendancePage?: string;
+    attendanceView?: string;
   }>;
 };
+
+const ENROLLMENTS_PAGE_SIZE = 10;
+const ATTENDANCE_PAGE_SIZE = 10;
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -76,6 +84,54 @@ function formatAverageRating(value: number | null, locale: string) {
   return new Intl.NumberFormat(locale, {
     maximumFractionDigits: 1,
   }).format(value);
+}
+
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
+}
+
+function enrollmentPageHref(
+  trainingId: string,
+  page: number,
+  attendee?: string,
+  status?: string,
+) {
+  const query = new URLSearchParams();
+  if (attendee) query.set("attendee", attendee);
+  if (status) query.set("status", status);
+  if (page > 1) query.set("enrollmentPage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
+}
+
+function attendancePageHref(
+  trainingId: string,
+  page: number,
+  attendanceQ?: string,
+  view?: string,
+) {
+  const query = new URLSearchParams();
+  if (attendanceQ) query.set("attendanceQ", attendanceQ);
+  if (view === "all") query.set("attendanceView", "all");
+  if (page > 1 && view !== "all") query.set("attendancePage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
 }
 
 function formatDateInput(value: Date | null) {
@@ -142,6 +198,8 @@ function detailText(locale: "en" | "ar") {
       createAndNominate: "إضافة وتسجيل",
       attendance: "الحضور",
       attendanceLog: "سجل الحضور",
+      seeAllAttendance: "عرض كل الحضور",
+      showPagedAttendance: "عرض الصفحات",
       noAttendance: "لا توجد سجلات حضور حتى الآن",
       addEnrollmentsBeforeAttendance: "أضف الحضور إلى التدريب قبل تسجيل الحضور.",
       notRecorded: "لم يسجل",
@@ -281,6 +339,8 @@ function detailText(locale: "en" | "ar") {
     createAndNominate: "Add and Enroll",
     attendance: "Attendance",
     attendanceLog: "Attendance log",
+    seeAllAttendance: "See all attendance",
+    showPagedAttendance: "Show paged list",
     noAttendance: "No attendance entries have been added yet. Click Add Attendance to get started.",
     addEnrollmentsBeforeAttendance: "Enroll attendees before recording attendance.",
     notRecorded: "Not recorded",
@@ -518,7 +578,13 @@ export default async function CourseRunDetailPage({
   const { id } = await params;
   const query = (await searchParams) ?? {};
   const enrollmentSearch = (query.attendee ?? "").trim().toLowerCase();
+  const enrollmentSearchRaw = (query.attendee ?? "").trim();
   const enrollmentStatusFilter = (query.status ?? "").trim();
+  const requestedEnrollmentPage = normalizePage(query.enrollmentPage);
+  const attendanceSearch = (query.attendanceQ ?? "").trim().toLowerCase();
+  const attendanceSearchRaw = (query.attendanceQ ?? "").trim();
+  const requestedAttendancePage = normalizePage(query.attendancePage);
+  const showAllAttendance = query.attendanceView === "all";
   const openPanel =
     query.panel === "edit" ||
     query.panel === "instructor" ||
@@ -747,11 +813,46 @@ export default async function CourseRunDetailPage({
 
     return attendeeMatches && statusMatches;
   });
+  const totalEnrollmentPages = Math.max(
+    1,
+    Math.ceil(filteredEnrollments.length / ENROLLMENTS_PAGE_SIZE),
+  );
+  const safeEnrollmentPage = Math.min(requestedEnrollmentPage, totalEnrollmentPages);
+  const visibleEnrollments = filteredEnrollments.slice(
+    (safeEnrollmentPage - 1) * ENROLLMENTS_PAGE_SIZE,
+    safeEnrollmentPage * ENROLLMENTS_PAGE_SIZE,
+  );
 
   const attendanceGridEnrollments = run.nominations.filter((nomination) => {
     const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
     return status === "PENDING" || status === "CONFIRMED";
   });
+  const filteredAttendanceGridEnrollments = attendanceGridEnrollments.filter((nomination) => {
+    if (!attendanceSearch) return true;
+
+    const participantSearch = [
+      nomination.participant.fullNameAr,
+      nomination.participant.fullNameEn,
+      nomination.participant.email,
+      nomination.participant.organizationName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return participantSearch.includes(attendanceSearch);
+  });
+  const totalAttendancePages = Math.max(
+    1,
+    Math.ceil(filteredAttendanceGridEnrollments.length / ATTENDANCE_PAGE_SIZE),
+  );
+  const safeAttendancePage = Math.min(requestedAttendancePage, totalAttendancePages);
+  const visibleAttendanceGridEnrollments = showAllAttendance
+    ? filteredAttendanceGridEnrollments
+    : filteredAttendanceGridEnrollments.slice(
+        (safeAttendancePage - 1) * ATTENDANCE_PAGE_SIZE,
+        safeAttendancePage * ATTENDANCE_PAGE_SIZE,
+      );
 
   return (
     <div className="space-y-6">
@@ -905,7 +1006,7 @@ export default async function CourseRunDetailPage({
                   {details.noNominations}
                 </div>
               ) : (
-                filteredEnrollments.map((nomination) => {
+                visibleEnrollments.map((nomination) => {
                   const latestAttendance = latestAttendanceByParticipant.get(nomination.participantId);
                   const attendanceLabel = latestAttendance
                     ? attendanceStatusText(locale)[latestAttendance.attendanceStatus]
@@ -918,7 +1019,7 @@ export default async function CourseRunDetailPage({
 
                   return (
                     <div key={nomination.id} className="jawraa-subcard px-4 py-4">
-                      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.8fr_0.8fr]">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_0.8fr_0.8fr_auto] lg:items-start">
                         <div>
                           <p className="text-sm font-semibold text-[var(--ink-strong)]">
                             {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
@@ -935,18 +1036,22 @@ export default async function CourseRunDetailPage({
                           ) : null}
                         </div>
 
-                        <div className="space-y-3">
-                          <InfoCard
-                            label={details.nominationStatus}
-                            value={getEnrollmentStatusLabel(locale, nomination.nominationStatus)}
-                          />
+                        <InfoCard
+                          label={details.nominationStatus}
+                          value={getEnrollmentStatusLabel(locale, nomination.nominationStatus)}
+                        />
+
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                           <InfoCard label={details.enrollmentDate} value={enrollmentDate} />
+                          <InfoCard label={details.attendanceStatus} value={attendanceLabel} />
                         </div>
 
-                        <div className="space-y-3">
-                          <InfoCard label={details.attendanceStatus} value={attendanceLabel} />
-                          {canEditOps ? (
-                            <form action={updateEnrollmentStatus} className="space-y-3">
+                        {canEditOps ? (
+                          <details className="lg:justify-self-end">
+                            <summary className="secondary-button cursor-pointer list-none text-center">
+                              {details.edit}
+                            </summary>
+                            <form action={updateEnrollmentStatus} className="mt-4 min-w-[min(22rem,80vw)] space-y-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] bg-white p-4">
                               <input type="hidden" name="trainingId" value={run.id} />
                               <input type="hidden" name="enrollmentId" value={nomination.id} />
                               <label className="field-shell">
@@ -975,14 +1080,89 @@ export default async function CourseRunDetailPage({
                                 {details.saveNomination}
                               </button>
                             </form>
-                          ) : null}
-                        </div>
+                          </details>
+                        ) : null}
                       </div>
                     </div>
                   );
                 })
               )}
             </div>
+            {filteredEnrollments.length > ENROLLMENTS_PAGE_SIZE ? (
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeEnrollmentPage, numberLocale))
+                    .replace("{total}", formatNumber(totalEnrollmentPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={enrollmentPageHref(run.id, 1, enrollmentSearchRaw, enrollmentStatusFilter)}
+                    aria-disabled={safeEnrollmentPage <= 1}
+                    className={`pagination-link ${safeEnrollmentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={enrollmentPageHref(
+                      run.id,
+                      Math.max(1, safeEnrollmentPage - 1),
+                      enrollmentSearchRaw,
+                      enrollmentStatusFilter,
+                    )}
+                    aria-disabled={safeEnrollmentPage <= 1}
+                    className={`pagination-link ${safeEnrollmentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeEnrollmentPage, totalEnrollmentPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`enrollment-ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={enrollmentPageHref(
+                          run.id,
+                          page,
+                          enrollmentSearchRaw,
+                          enrollmentStatusFilter,
+                        )}
+                        aria-current={page === safeEnrollmentPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeEnrollmentPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={enrollmentPageHref(
+                      run.id,
+                      Math.min(totalEnrollmentPages, safeEnrollmentPage + 1),
+                      enrollmentSearchRaw,
+                      enrollmentStatusFilter,
+                    )}
+                    aria-disabled={safeEnrollmentPage >= totalEnrollmentPages}
+                    className={`pagination-link ${safeEnrollmentPage >= totalEnrollmentPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={enrollmentPageHref(
+                      run.id,
+                      totalEnrollmentPages,
+                      enrollmentSearchRaw,
+                      enrollmentStatusFilter,
+                    )}
+                    aria-disabled={safeEnrollmentPage >= totalEnrollmentPages}
+                    className={`pagination-link ${safeEnrollmentPage >= totalEnrollmentPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
             </div>
           ) : null}
 
@@ -992,6 +1172,18 @@ export default async function CourseRunDetailPage({
                 <p className="eyebrow">{details.attendance}</p>
                 <h3 className="section-title">{details.attendanceLog}</h3>
               </div>
+              {filteredAttendanceGridEnrollments.length > ATTENDANCE_PAGE_SIZE ? (
+                <Link
+                  href={
+                    showAllAttendance
+                      ? attendancePageHref(run.id, 1, attendanceSearchRaw)
+                      : attendancePageHref(run.id, 1, attendanceSearchRaw, "all")
+                  }
+                  className="secondary-button"
+                >
+                  {showAllAttendance ? details.showPagedAttendance : details.seeAllAttendance}
+                </Link>
+              ) : null}
             </div>
 
             {run.sessions.length === 0 ? (
@@ -1003,23 +1195,41 @@ export default async function CourseRunDetailPage({
                 {details.addEnrollmentsBeforeAttendance}
               </div>
             ) : (
-              <div className="mt-5 overflow-x-auto">
-                <table className="data-table min-w-[48rem]">
-                  <thead>
-                    <tr>
-                      <th>{details.chooseAttendee}</th>
-                      {run.sessions.map((session) => (
-                        <th key={session.id}>
-                          {new Intl.DateTimeFormat(numberLocale, {
-                            month: "short",
-                            day: "numeric",
-                          }).format(session.sessionDate)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendanceGridEnrollments.map((nomination) => (
+              <>
+                <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <InstantSearchField
+                    name="attendanceQ"
+                    label={details.filterAttendee}
+                    defaultValue={attendanceSearchRaw}
+                    placeholder={details.filterAttendee}
+                    pageParams={["attendancePage"]}
+                  />
+                  <Link href={`/trainings/${run.id}`} className="secondary-button self-end">
+                    {localeText.common.reset}
+                  </Link>
+                </div>
+                {filteredAttendanceGridEnrollments.length === 0 ? (
+                  <div className="mt-5 jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                    {localeText.common.noResults}
+                  </div>
+                ) : (
+                  <div className="mt-5 overflow-x-auto">
+                    <table className="data-table min-w-[48rem]">
+                      <thead>
+                        <tr>
+                          <th>{details.chooseAttendee}</th>
+                          {run.sessions.map((session) => (
+                            <th key={session.id}>
+                              {new Intl.DateTimeFormat(numberLocale, {
+                                month: "short",
+                                day: "numeric",
+                              }).format(session.sessionDate)}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleAttendanceGridEnrollments.map((nomination) => (
                       <tr key={nomination.id}>
                         <td>
                           <div className="min-w-[12rem]">
@@ -1081,10 +1291,76 @@ export default async function CourseRunDetailPage({
                           );
                         })}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {!showAllAttendance &&
+                filteredAttendanceGridEnrollments.length > ATTENDANCE_PAGE_SIZE ? (
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                      {localeText.pagination.pageIndicator
+                        .replace("{current}", formatNumber(safeAttendancePage, numberLocale))
+                        .replace("{total}", formatNumber(totalAttendancePages, numberLocale))}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={attendancePageHref(run.id, 1, attendanceSearchRaw)}
+                        aria-disabled={safeAttendancePage <= 1}
+                        className={`pagination-link ${safeAttendancePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.first}
+                      </Link>
+                      <Link
+                        href={attendancePageHref(
+                          run.id,
+                          Math.max(1, safeAttendancePage - 1),
+                          attendanceSearchRaw,
+                        )}
+                        aria-disabled={safeAttendancePage <= 1}
+                        className={`pagination-link ${safeAttendancePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.previous}
+                      </Link>
+                      {paginationPages(safeAttendancePage, totalAttendancePages).map((page, index) =>
+                        page === "ellipsis" ? (
+                          <span key={`attendance-ellipsis-${index}`} className="pagination-ellipsis">
+                            ...
+                          </span>
+                        ) : (
+                          <Link
+                            key={page}
+                            href={attendancePageHref(run.id, page, attendanceSearchRaw)}
+                            aria-current={page === safeAttendancePage ? "page" : undefined}
+                            className={`pagination-link ${page === safeAttendancePage ? "pagination-link-active" : ""}`}
+                          >
+                            {formatNumber(page, numberLocale)}
+                          </Link>
+                        ),
+                      )}
+                      <Link
+                        href={attendancePageHref(
+                          run.id,
+                          Math.min(totalAttendancePages, safeAttendancePage + 1),
+                          attendanceSearchRaw,
+                        )}
+                        aria-disabled={safeAttendancePage >= totalAttendancePages}
+                        className={`pagination-link ${safeAttendancePage >= totalAttendancePages ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.next}
+                      </Link>
+                      <Link
+                        href={attendancePageHref(run.id, totalAttendancePages, attendanceSearchRaw)}
+                        aria-disabled={safeAttendancePage >= totalAttendancePages}
+                        className={`pagination-link ${safeAttendancePage >= totalAttendancePages ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.last}
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
 
