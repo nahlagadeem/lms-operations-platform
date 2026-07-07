@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 type InstantSearchFieldProps = {
   name?: string;
@@ -20,18 +20,20 @@ export function InstantSearchField({
 }: InstantSearchFieldProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [value, setValue] = useState(defaultValue);
-  const [, startTransition] = useTransition();
+  const pageParamKey = useMemo(() => pageParams.join("|"), [pageParams]);
 
   useEffect(() => {
     setValue(defaultValue);
   }, [defaultValue]);
 
-  const updateSearch = useCallback(
-    (nextValue: string) => {
-      const nextParams = new URLSearchParams(searchParams.toString());
-      const trimmedValue = nextValue.trim();
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const nextParams = new URLSearchParams(window.location.search);
+      const trimmedValue = value.trim();
+      const currentValue = nextParams.get(name) ?? "";
+
+      if (currentValue === trimmedValue) return;
 
       if (trimmedValue) {
         nextParams.set(name, trimmedValue);
@@ -39,15 +41,14 @@ export function InstantSearchField({
         nextParams.delete(name);
       }
 
-      pageParams.forEach((pageParam) => nextParams.delete(pageParam));
+      pageParamKey.split("|").forEach((pageParam) => nextParams.delete(pageParam));
 
       const query = nextParams.toString();
-      startTransition(() => {
-        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-      });
-    },
-    [name, pageParams, pathname, router, searchParams],
-  );
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [name, pageParamKey, pathname, router, value]);
 
   return (
     <label className="field-shell">
@@ -56,11 +57,7 @@ export function InstantSearchField({
         type="search"
         name={name}
         value={value}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setValue(nextValue);
-          updateSearch(nextValue);
-        }}
+        onChange={(event) => setValue(event.target.value)}
         placeholder={placeholder}
         className="field-input"
       />
