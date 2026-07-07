@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 type InstantSearchFieldProps = {
   name?: string;
@@ -21,6 +21,7 @@ export function InstantSearchField({
   const router = useRouter();
   const pathname = usePathname();
   const [value, setValue] = useState(defaultValue);
+  const [, startTransition] = useTransition();
   const pageParamKey = useMemo(() => pageParams.join("|"), [pageParams]);
 
   useEffect(() => {
@@ -44,11 +45,17 @@ export function InstantSearchField({
       pageParamKey.split("|").forEach((pageParam) => nextParams.delete(pageParam));
 
       const query = nextParams.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-    }, 300);
+      const nextUrl = query ? `${pathname}?${query}` : pathname;
+      const currentUrl = `${window.location.pathname}${window.location.search}`;
+      if (nextUrl === currentUrl) return;
+
+      startTransition(() => {
+        router.replace(nextUrl, { scroll: false });
+      });
+    }, 450);
 
     return () => window.clearTimeout(timer);
-  }, [name, pageParamKey, pathname, router, value]);
+  }, [name, pageParamKey, pathname, router, startTransition, value]);
 
   return (
     <label className="field-shell">
