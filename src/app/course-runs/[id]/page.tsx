@@ -1531,6 +1531,12 @@ export default async function CourseRunDetailPage({
                   {showAllCompletion ? details.showPagedAttendance : details.seeAllAttendance}
                 </Link>
               ) : null}
+              <a
+                href={`/api/trainings/${run.id}/completion/export`}
+                className="secondary-button"
+              >
+                {localeText.buttons.exportExcel}
+              </a>
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -1950,6 +1956,12 @@ export default async function CourseRunDetailPage({
                   <h3 className="section-title">{details.evaluationTitle}</h3>
                   <p className="section-copy">{details.evaluationDescription}</p>
                 </div>
+                <a
+                  href={`/api/trainings/${run.id}/evaluations/export`}
+                  className="secondary-button"
+                >
+                  {localeText.buttons.exportExcel}
+                </a>
               </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
