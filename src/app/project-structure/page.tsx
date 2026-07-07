@@ -225,18 +225,6 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           <p className="eyebrow">{localeText.projectScopes.addScope}</p>
           <h2 className="section-title">{localeText.projectScopes.addScope}</h2>
         </div>
-        <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto]">
-          <InstantSearchField
-            name="courseQ"
-            label={localeText.projectScopes.searchCourses}
-            defaultValue={courseSearch}
-            placeholder={localeText.projectScopes.searchCoursesPlaceholder}
-            pageParams={["page"]}
-          />
-          <Link href="/pos#add-project-scope" className="secondary-button self-end">
-            {localeText.projectScopes.clearSearch}
-          </Link>
-        </div>
         <form action={createProjectScope} className="grid gap-4 lg:grid-cols-2">
           <label className="field-shell">
             <span className="field-label">{localeText.projectScopes.code}</span>
@@ -288,6 +276,18 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           </label>
           <fieldset className="field-shell lg:col-span-2">
             <legend className="field-label">{localeText.projectScopes.bulkCourses}</legend>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+              <InstantSearchField
+                name="courseQ"
+                label={localeText.projectScopes.searchCourses}
+                defaultValue={courseSearch}
+                placeholder={localeText.projectScopes.searchCoursesPlaceholder}
+                pageParams={["page"]}
+              />
+              <Link href="/pos#add-project-scope" className="secondary-button self-end">
+                {localeText.projectScopes.clearSearch}
+              </Link>
+            </div>
             <div className="mt-3 grid max-h-[22rem] gap-3 overflow-y-auto rounded-[8px] border border-[rgba(17,17,17,0.1)] bg-white p-3 md:grid-cols-2 xl:grid-cols-3">
               {allCourses.map((course) => (
                 <label key={course.id} className="flex items-start gap-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] p-3 text-sm">
@@ -319,8 +319,8 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
         </section>
       ) : null}
 
-      <section className="grid gap-4">
-        <form className="panel-surface grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <section className="panel-surface">
+        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           {courseSearch ? <input type="hidden" name="courseQ" value={courseSearch} /> : null}
           <InstantSearchField
             label={localeText.common.search}
@@ -335,7 +335,8 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             {localeText.common.reset}
           </Link>
         </form>
-        {visibleScopes.map((scope) => {
+        <div className="mt-5 grid gap-4">
+          {visibleScopes.map((scope) => {
           const courseCount = scope.selectedCourses.length;
           const totalEstimatedSeats = scope.selectedCourses.reduce(
             (sum, entry) => sum + (entry.estimatedSeats ?? 0),
@@ -352,7 +353,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           return (
             <div
               key={scope.id}
-              className="panel-surface"
+              className="jawraa-subcard p-5"
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -523,12 +524,13 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
               ) : null}
             </div>
           );
-        })}
-        {scopes.length > 0 && filteredScopes.length === 0 ? (
-          <div className="panel-surface border-dashed text-sm text-[var(--ink-soft)]">
-            {localeText.common.noResults}
-          </div>
-        ) : null}
+          })}
+          {scopes.length > 0 && filteredScopes.length === 0 ? (
+            <div className="jawraa-subcard border-dashed p-5 text-sm text-[var(--ink-soft)]">
+              {localeText.common.noResults}
+            </div>
+          ) : null}
+        </div>
         {filteredScopes.length > PURCHASE_ORDERS_PAGE_SIZE ? (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">
