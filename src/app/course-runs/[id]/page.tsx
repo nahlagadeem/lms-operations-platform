@@ -298,6 +298,7 @@ function detailText(locale: "en" | "ar") {
       completionRate: "نسبة الإكمال %",
       evaluationTitle: "تقييمات التدريب",
       evaluationDescription: "قم بتسجيل تقييم للدورة أو المدرب أو المتدرب.",
+      noEvaluations: "لا توجد تقييمات مسجلة حتى الآن.",
       courseEvaluation: "تقييم الدورة",
       instructorEvaluation: "تقييم المدرب",
       attendeeEvaluation: "تقييم المتدرب",
@@ -370,6 +371,7 @@ function detailText(locale: "en" | "ar") {
     recordedAttendance: "Attendance entries",
     evaluationTitle: "Training evaluations",
     evaluationDescription: "Record course, instructor, and attendee evaluations.",
+    noEvaluations: "No evaluations have been recorded yet.",
     courseEvaluation: "Course evaluation",
     instructorEvaluation: "Instructor evaluation",
     attendeeEvaluation: "Attendee evaluation",
@@ -669,6 +671,14 @@ export default async function CourseRunDetailPage({
         },
         sessions: {
           orderBy: { sessionDate: "asc" },
+        },
+        trainingEvaluations: {
+          include: {
+            participant: true,
+            subjectInstructor: true,
+            evaluatorInstructor: true,
+          },
+          orderBy: [{ evaluationType: "asc" }, { updatedAt: "desc" }],
         },
         _count: {
           select: {
@@ -2137,6 +2147,63 @@ export default async function CourseRunDetailPage({
                   {details.attendeeEvaluation}
                 </button>
               </form>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {run.trainingEvaluations.length === 0 ? (
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                  {details.noEvaluations}
+                </div>
+              ) : (
+                run.trainingEvaluations.map((evaluation) => {
+                  const subjectInstructorName =
+                    evaluation.subjectInstructor?.fullNameEn ||
+                    evaluation.subjectInstructor?.fullNameAr ||
+                    "";
+                  const evaluatorInstructorName =
+                    evaluation.evaluatorInstructor?.fullNameEn ||
+                    evaluation.evaluatorInstructor?.fullNameAr ||
+                    "";
+
+                  return (
+                    <div key={evaluation.id} className="jawraa-subcard px-4 py-4">
+                      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.7fr_1fr]">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                            {evaluation.participant.fullNameEn ||
+                              evaluation.participant.fullNameAr}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                            {evaluation.participant.email || evaluation.evaluationType}
+                          </p>
+                        </div>
+                        <InfoCard
+                          label={details.rating}
+                          value={`${evaluation.rating} / 5`}
+                        />
+                        <div className="text-sm leading-6 text-[var(--ink-soft)]">
+                          <p className="font-semibold text-[var(--ink-strong)]">
+                            {evaluation.evaluationType === "COURSE"
+                              ? details.courseEvaluation
+                              : evaluation.evaluationType === "INSTRUCTOR"
+                                ? details.instructorEvaluation
+                                : details.attendeeEvaluation}
+                          </p>
+                          {subjectInstructorName ? (
+                            <p>{details.chooseTrainer}: {subjectInstructorName}</p>
+                          ) : null}
+                          {evaluatorInstructorName ? (
+                            <p>{details.chooseTrainer}: {evaluatorInstructorName}</p>
+                          ) : null}
+                          {evaluation.comments ? (
+                            <p className="mt-2">{evaluation.comments}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
             </div>
           ) : null}
