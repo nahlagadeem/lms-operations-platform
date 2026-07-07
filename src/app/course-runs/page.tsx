@@ -40,6 +40,7 @@ const statusGroupsForPlanned = [
 
 const trainingListSortKeys = [
   "code",
+  "course",
   "estimatedSeats",
   "actualSeats",
   "location",
@@ -323,10 +324,15 @@ export default async function CourseRunsPage({
             run.city as keyof typeof localeText.courseRuns.trainingCities
           ]
         : "-";
+      const courseLabel =
+        locale === "ar"
+          ? run.course.nameAr || run.course.nameEn || run.course.courseCode
+          : run.course.nameEn || run.course.nameAr || run.course.courseCode;
 
       return {
         run,
         training,
+        courseLabel,
         estimatedSeats,
         actualSeats,
         locationLabel,
@@ -351,9 +357,17 @@ export default async function CourseRunsPage({
       }
 
       const leftValue =
-        sortKey === "location" ? left.locationLabel : left.training.trainingCode;
+        sortKey === "location"
+          ? left.locationLabel
+          : sortKey === "course"
+            ? left.courseLabel
+            : left.training.trainingCode;
       const rightValue =
-        sortKey === "location" ? right.locationLabel : right.training.trainingCode;
+        sortKey === "location"
+          ? right.locationLabel
+          : sortKey === "course"
+            ? right.courseLabel
+            : right.training.trainingCode;
 
       return sortDirection === "asc"
         ? leftValue.localeCompare(rightValue, locale)
@@ -466,6 +480,13 @@ export default async function CourseRunsPage({
                     query={{ q: searchTerm, package: packageCode, status: statusFilter }}
                   />
                   <SortHeader
+                    label={localeText.courseRuns.courseName}
+                    sortKey="course"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
                     label={localeText.courseRuns.seats}
                     sortKey="estimatedSeats"
                     currentSort={sortKey}
@@ -496,7 +517,7 @@ export default async function CourseRunsPage({
                 </tr>
               </thead>
               <tbody>
-                {visibleTrainingRows.map(({ run, training, estimatedSeats, actualSeats, locationLabel, duration }) => (
+                {visibleTrainingRows.map(({ run, training, courseLabel, estimatedSeats, actualSeats, locationLabel, duration }) => (
                   <tr
                     key={run.id}
                     className="cursor-pointer transition hover:bg-white"
@@ -508,6 +529,11 @@ export default async function CourseRunsPage({
                         className="block w-full font-semibold text-[var(--brand-ink)] no-underline"
                       >
                         {training.trainingCode}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {courseLabel}
                       </Link>
                     </td>
                     <td>

@@ -625,24 +625,18 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
             <div className="panel-surface">
               <p className="eyebrow">{localeText.projectScopes.bulkCourses}</p>
               <h3 className="section-title">{localeText.projectScopes.assignCourses}</h3>
-              <form className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-                <label className="field-shell">
-                  <span className="field-label">{localeText.projectScopes.searchCourses}</span>
-                  <input
-                    name="assignQ"
-                    type="search"
-                    className="field-input"
-                    defaultValue={assignSearch}
-                    placeholder={localeText.projectScopes.searchCoursesPlaceholder}
-                  />
-                </label>
-                <button type="submit" className="primary-button self-end">
-                  {localeText.projectScopes.applySearch}
-                </button>
+              <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
+                <InstantSearchField
+                  name="assignQ"
+                  label={localeText.projectScopes.searchCourses}
+                  defaultValue={assignSearch}
+                  placeholder={localeText.projectScopes.searchCoursesPlaceholder}
+                  pageParams={["coursePage"]}
+                />
                 <Link href={`/pos/${scope.id}`} className="secondary-button self-end">
                   {localeText.projectScopes.clearSearch}
                 </Link>
-              </form>
+              </div>
               <form action={assignProjectScopeCourses} className="mt-5 space-y-4">
                 <input type="hidden" name="scopeId" value={scope.id} />
                 {hiddenSelectedCourseIds.map((courseId) => (

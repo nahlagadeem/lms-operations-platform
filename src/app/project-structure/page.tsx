@@ -225,24 +225,18 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           <p className="eyebrow">{localeText.projectScopes.addScope}</p>
           <h2 className="section-title">{localeText.projectScopes.addScope}</h2>
         </div>
-        <form className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.searchCourses}</span>
-            <input
-              name="courseQ"
-              type="search"
-              className="field-input"
-              defaultValue={courseSearch}
-              placeholder={localeText.projectScopes.searchCoursesPlaceholder}
-            />
-          </label>
-          <button type="submit" className="primary-button self-end">
-            {localeText.projectScopes.applySearch}
-          </button>
+        <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto]">
+          <InstantSearchField
+            name="courseQ"
+            label={localeText.projectScopes.searchCourses}
+            defaultValue={courseSearch}
+            placeholder={localeText.projectScopes.searchCoursesPlaceholder}
+            pageParams={["page"]}
+          />
           <Link href="/pos#add-project-scope" className="secondary-button self-end">
             {localeText.projectScopes.clearSearch}
           </Link>
-        </form>
+        </div>
         <form action={createProjectScope} className="grid gap-4 lg:grid-cols-2">
           <label className="field-shell">
             <span className="field-label">{localeText.projectScopes.code}</span>
