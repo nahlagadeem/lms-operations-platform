@@ -156,10 +156,6 @@ export async function updateTraining(formData: FormData) {
   purchaseOrderCourseEntryId =
     purchaseOrderCourseEntryId || existingTraining.projectScopeCourseId || "";
 
-  if (!purchaseOrderCourseEntryId) {
-    throw new Error("Training is missing its PO Course Entry.");
-  }
-
   const vendorCost = canManageFinancials
     ? submittedVendorCost
     : existingTraining.vendorCost === null

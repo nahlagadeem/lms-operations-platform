@@ -23,7 +23,7 @@ type CreateTrainingInput = {
 
 type UpdateTrainingInput = {
   trainingId: string;
-  purchaseOrderCourseEntryId: string;
+  purchaseOrderCourseEntryId?: string;
   vendorId: string;
   locationId: string;
   vendorCost?: number | null;
@@ -120,16 +120,21 @@ export async function createTraining(input: CreateTrainingInput) {
 }
 
 export async function updateTraining(input: UpdateTrainingInput) {
-  const purchaseOrderCourseEntry = await resolvePurchaseOrderCourseEntry(
-    input.purchaseOrderCourseEntryId,
-  );
+  const purchaseOrderCourseEntry = input.purchaseOrderCourseEntryId
+    ? await resolvePurchaseOrderCourseEntry(input.purchaseOrderCourseEntryId)
+    : null;
 
   await db.courseRun.update({
     where: { id: input.trainingId },
     data: {
-      courseId: purchaseOrderCourseEntry.courseId,
-      projectScopeId: purchaseOrderCourseEntry.scopeId,
-      projectScopeCourseId: purchaseOrderCourseEntry.id,
+      ...(purchaseOrderCourseEntry
+        ? {
+            courseId: purchaseOrderCourseEntry.courseId,
+            projectScopeId: purchaseOrderCourseEntry.scopeId,
+            projectScopeCourseId: purchaseOrderCourseEntry.id,
+            plannedSeats: purchaseOrderCourseEntry.estimatedSeats,
+          }
+        : {}),
       providerId: input.vendorId || null,
       locationId: input.locationId || null,
       vendorCost:
@@ -142,7 +147,6 @@ export async function updateTraining(input: UpdateTrainingInput) {
       status: input.status,
       startDate: input.startDate,
       endDate: input.endDate,
-      plannedSeats: purchaseOrderCourseEntry.estimatedSeats,
       notes: input.notes || null,
     },
   });
