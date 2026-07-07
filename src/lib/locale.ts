@@ -504,10 +504,10 @@ const englishText = {
 
 const arabicText = {
   common: {
-    search: "Ø¨Ø­Ø«",
-    searchPlaceholder: "Ø¨Ø­Ø«...",
-    reset: "Ù…Ø³Ø­",
-    noResults: "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù†ØªØ§Ø¦Ø¬ Ù…Ø·Ø§Ø¨Ù‚Ø© Ù„Ù„Ø¨Ø­Ø«.",
+    search: "بحث",
+    searchPlaceholder: "بحث...",
+    reset: "مسح",
+    noResults: "لا توجد نتائج مطابقة للبحث.",
   },
   nav: {
     home: "الرئيسية",
