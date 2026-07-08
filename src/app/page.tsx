@@ -395,7 +395,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       orderBy: { endDate: "desc" },
       take: 8,
     }),
-    canSeeFinancials
+    SHOW_DASHBOARD_REPORTING && canSeeFinancials
       ? getProjectReportingRows(locale, {
           q: searchTerm,
           category: categoryFilter,
@@ -429,24 +429,26 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         },
       },
     }),
-    db.course.findMany({
-      orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
-      include: {
-        package: {
-          select: { id: true, code: true, nameAr: true, nameEn: true },
-        },
-        runs: {
+    SHOW_DASHBOARD_COURSE_PERFORMANCE
+      ? db.course.findMany({
+          orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
           include: {
-            trainingEvaluations: {
-              select: { evaluationType: true, rating: true },
+            package: {
+              select: { id: true, code: true, nameAr: true, nameEn: true },
+            },
+            runs: {
+              include: {
+                trainingEvaluations: {
+                  select: { evaluationType: true, rating: true },
+                },
+              },
+            },
+            scopeSelections: {
+              select: { estimatedSeats: true },
             },
           },
-        },
-        scopeSelections: {
-          select: { estimatedSeats: true },
-        },
-      },
-    }),
+        })
+      : Promise.resolve([]),
     db.projectScope.findMany({
       include: {
         selectedCourses: {
@@ -618,12 +620,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const plannedTrainingCount = totalRuns;
   const deliveredSeats = filledSeats;
   const committedSeats = allocatedSeats;
-  const courseAttendanceRates = await Promise.all(
-    dashboardCourses.map(async (course) => ({
-      courseId: course.id,
-      attendanceRate: (await getCourseSessionAttendanceRate(course.id)).attendanceRate,
-    })),
-  );
+  const courseAttendanceRates = SHOW_DASHBOARD_COURSE_PERFORMANCE
+    ? await Promise.all(
+        dashboardCourses.map(async (course) => ({
+          courseId: course.id,
+          attendanceRate: (await getCourseSessionAttendanceRate(course.id)).attendanceRate,
+        })),
+      )
+    : [];
   const packageAttendanceRates = await Promise.all(
     dashboardPackages.map(async (item) => ({
       packageId: item.id,

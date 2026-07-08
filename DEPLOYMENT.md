@@ -50,6 +50,10 @@ After changing Render environment variables:
 2. Go to Manual Deploy.
 3. Choose Deploy latest commit.
 
+Render free tier may sleep when idle. The first request after sleep can take
+30-60 seconds while Render starts the service and Neon establishes the first
+database connection. Open the app a few minutes before a demo to warm it up.
+
 ## Demo Logins
 
 Use these accounts for online testing:

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { validateDemoCredentials } from "@/lib/auth";
 import { getLocale, t } from "@/lib/locale";
+import { LoginForm } from "./login-form";
 
 const AUTH_COOKIE_NAME = "lms_ops_auth";
 
@@ -47,6 +48,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           password: "كلمة المرور",
           invalid: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
           submit: "تسجيل الدخول",
+          pending: "جاري تسجيل الدخول...",
         }
       : {
           title: "Login",
@@ -54,6 +56,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           password: "Password",
           invalid: "Invalid email or password.",
           submit: "Login",
+          pending: "Signing in...",
         };
 
   return (
@@ -85,33 +88,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </p>
         ) : null}
 
-        <form action={login} className="space-y-4">
-          <label className="field-shell">
-            <span className="field-label">{loginText.email}</span>
-            <input
-              name="email"
-              type="email"
-              autoComplete="username"
-              className="field-input"
-              required
-            />
-          </label>
-
-          <label className="field-shell">
-            <span className="field-label">{loginText.password}</span>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              className="field-input"
-              required
-            />
-          </label>
-
-          <button type="submit" className="primary-button w-full">
-            {loginText.submit}
-          </button>
-        </form>
+        <LoginForm action={login} labels={loginText} />
       </section>
     </main>
   );
