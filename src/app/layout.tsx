@@ -87,7 +87,6 @@ export default async function RootLayout({
         { href: "/project-details", label: localeText.nav.projectDetails },
         { href: "/packages", label: localeText.nav.packages },
         { href: "/courses", label: localeText.nav.courses },
-        { href: "/providers", label: localeText.nav.providers },
       ];
 
   return (

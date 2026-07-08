@@ -25,7 +25,7 @@ export function t(locale: Locale) {
 
 const englishText = {
   nav: {
-    home: "Dashboard",
+    home: "Home",
     projectScope: "POs",
     packages: "Packages",
     courses: "Courses",
@@ -510,7 +510,7 @@ const arabicText = {
     noResults: "لا توجد نتائج مطابقة للبحث.",
   },
   nav: {
-    home: "لوحة التحكم",
+    home: "الرئيسية",
     projectScope: "أوامر الشراء",
     packages: "الحزم",
     courses: "الدورات",
