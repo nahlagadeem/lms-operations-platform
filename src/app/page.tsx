@@ -1,12 +1,14 @@
 import Link from "next/link";
 import {
-  AttendanceStatus,
   CourseRunStatus,
   DocumentEntityType,
   Prisma,
+  TrainingEvaluationType,
 } from "@prisma/client";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import { getProjectSummary } from "@/server/services/project-overview-service";
 import {
@@ -14,17 +16,29 @@ import {
   getProjectReportingRows,
   getReportingCategoryOptions,
 } from "@/server/services/project-reporting-service";
+import {
+  getCourseSessionAttendanceRate,
+  getPackageSessionAttendanceRate,
+  getProjectSessionAttendanceRate,
+} from "@/server/services/capacity-service";
+import { getOverallPoFulfillment } from "@/server/services/purchase-order-service";
+import { getProjectFinancialOverview } from "@/server/services/training-financial-service";
+import { getProjectQualityOverview } from "@/server/services/training-evaluation-service";
 
 type HomePageProps = {
   searchParams?: Promise<{
-    role?: string;
     q?: string;
     category?: string;
     page?: string;
+    packagePage?: string;
+    coursePage?: string;
+    poPage?: string;
+    courseQ?: string;
+    poQ?: string;
   }>;
 };
 
-const REPORTING_PAGE_SIZE = 15;
+const DASHBOARD_TABLE_PAGE_SIZE = 10;
 
 const plannedRunStatuses: CourseRunStatus[] = [
   CourseRunStatus.DRAFT,
@@ -66,15 +80,6 @@ function normalizePage(value?: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function dashboardRole(value?: string) {
-  const role = normalize(value).toUpperCase();
-  if (role === "TRAINER") return "TRAINER";
-  if (role === "FINANCE" || role === "FINANCE_OFFICER") return "FINANCE_OFFICER";
-  if (role === "OPERATIONS_COORDINATOR") return "OPERATIONS_COORDINATOR";
-  if (role === "REPORTING_ANALYST") return "REPORTING_ANALYST";
-  return "GOVERNMENT_PROJECT_MANAGER";
-}
-
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
 }
@@ -110,17 +115,37 @@ function ratio(numerator: number, denominator: number) {
   return denominator > 0 ? (numerator / denominator) * 100 : 0;
 }
 
+function average(values: number[]) {
+  return values.length > 0
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : null;
+}
+
+function formatRating(value: number | null, locale: string) {
+  return value === null
+    ? "-"
+    : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value);
+}
+
 function buildDashboardUrl(params: {
-  role: string;
   q?: string;
   category?: string;
   page?: number;
+  packagePage?: number;
+  coursePage?: number;
+  poPage?: number;
+  courseQ?: string;
+  poQ?: string;
 }) {
   const search = new URLSearchParams();
-  if (params.role !== "GOVERNMENT_PROJECT_MANAGER") search.set("role", params.role);
   if (params.q) search.set("q", params.q);
   if (params.category) search.set("category", params.category);
   if (params.page && params.page > 1) search.set("page", String(params.page));
+  if (params.packagePage && params.packagePage > 1) search.set("packagePage", String(params.packagePage));
+  if (params.coursePage && params.coursePage > 1) search.set("coursePage", String(params.coursePage));
+  if (params.poPage && params.poPage > 1) search.set("poPage", String(params.poPage));
+  if (params.courseQ) search.set("courseQ", params.courseQ);
+  if (params.poQ) search.set("poQ", params.poQ);
   const query = search.toString();
   return query ? `/?${query}` : "/";
 }
@@ -145,12 +170,71 @@ export const revalidate = 0;
 export default async function HomePage({ searchParams }: HomePageProps) {
   const locale = await getLocale();
   const localeText = t(locale);
+  const dashboardText = localeText.dashboardOverview;
+  const homeUiText =
+    locale === "ar"
+      ? {
+          refresh: "تحديث",
+          totalProjectValue: "إجمالي قيمة المشروع",
+          totalInvoiced: "إجمالي المفوتر",
+          totalCollected: "إجمالي المحصل",
+          remainingUnbilled: "المتبقي غير المفوتر",
+          trainings: "التدريبات",
+          attendees: "المتدربون",
+          seatUtilization: "استخدام المقاعد",
+          attendanceRate: "نسبة الحضور",
+          satisfactionRate: "نسبة الرضا",
+          activeInstructors: "المدربون النشطون",
+          completedOngoingPlanned: "{completed} مكتمل / {ongoing} جاري / {planned} مخطط",
+          completedOngoingUpcoming: "{completed} مكتمل / {ongoing} جاري / {upcoming} قادم",
+          activeNow: "{active} نشط حاليا",
+          actualEstimatedSeats: "{actual} فعلي / {estimated} مقدر",
+          attendedPossibleSlots: "{attended} حضور / {possible} جلسة ممكنة",
+          feedbackEntries: "{count} إدخال تقييم",
+          approvedInstructorsLive: "مدربون معتمدون معينون على أعمال نشطة",
+          trainingsRunningToday: "تدريبات جارية اليوم",
+          upcomingNextSevenDays: "القادم خلال 7 أيام",
+          completedLastSevenDays: "المكتمل خلال آخر 7 أيام",
+          progressOfTotal: "{completed} من {total}",
+          noItems: "لا توجد عناصر.",
+        }
+      : {
+          refresh: "Refresh",
+          totalProjectValue: "Total Project Value",
+          totalInvoiced: "Total Invoiced",
+          totalCollected: "Total Collected",
+          remainingUnbilled: "Remaining Unbilled",
+          trainings: "Trainings",
+          attendees: "Attendees",
+          seatUtilization: "Seat utilization",
+          attendanceRate: "Attendance rate",
+          satisfactionRate: "Satisfaction rate",
+          activeInstructors: "Active instructors",
+          completedOngoingPlanned: "{completed} completed / {ongoing} ongoing / {planned} planned",
+          completedOngoingUpcoming: "{completed} completed / {ongoing} ongoing / {upcoming} upcoming",
+          activeNow: "{active} active right now",
+          actualEstimatedSeats: "{actual} actual / {estimated} estimated seats",
+          attendedPossibleSlots: "{attended} attended / {possible} possible session slots",
+          feedbackEntries: "{count} feedback entries",
+          approvedInstructorsLive: "Approved instructors assigned to live work",
+          trainingsRunningToday: "Trainings running today",
+          upcomingNextSevenDays: "Upcoming in next 7 days",
+          completedLastSevenDays: "Completed in last 7 days",
+          progressOfTotal: "{completed} of {total}",
+          noItems: "No items found.",
+        };
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
-  const role = dashboardRole(params.role);
+  const platformRole = await getCurrentPlatformRole();
+  const canSeeFinancials = canViewFinancials(platformRole);
   const searchTerm = normalize(params.q);
   const categoryFilter = normalize(params.category);
   const reportingPage = normalizePage(params.page);
+  const packagePage = normalizePage(params.packagePage);
+  const coursePage = normalizePage(params.coursePage);
+  const poPage = normalizePage(params.poPage);
+  const courseSearch = normalize(params.courseQ).toLowerCase();
+  const poSearch = normalize(params.poQ).toLowerCase();
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -166,7 +250,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     participantCounts,
     runGroups,
     seatRows,
-    successGroups,
+    projectAttendanceSummary,
     evaluationRows,
     qualitySatisfactionRows,
     activeTrainerCount,
@@ -177,6 +261,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     recentlyCompletedRuns,
     reportingRows,
     projectSummary,
+    poFulfillment,
+    projectFinancialOverview,
+    projectQualityOverview,
+    dashboardPackages,
+    dashboardCourses,
     projectScopeRows,
     scopeDocumentCounts,
   ] = await Promise.all([
@@ -207,10 +296,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     db.courseRun.findMany({
       select: { plannedSeats: true, confirmedSeats: true },
     }),
-    db.attendanceRecord.groupBy({
-      by: ["attendanceStatus"],
-      _count: { _all: true },
-    }),
+    getProjectSessionAttendanceRate(),
     db.evaluation.findMany({
       select: { overallScore: true },
       where: { overallScore: { not: null } },
@@ -305,11 +391,58 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       orderBy: { endDate: "desc" },
       take: 8,
     }),
-    getProjectReportingRows(locale, {
-      q: searchTerm,
-      category: categoryFilter,
-    }),
+    canSeeFinancials
+      ? getProjectReportingRows(locale, {
+          q: searchTerm,
+          category: categoryFilter,
+        })
+      : Promise.resolve([]),
     getProjectSummary(),
+    getOverallPoFulfillment(),
+    canSeeFinancials ? getProjectFinancialOverview() : Promise.resolve(null),
+    getProjectQualityOverview(),
+    db.package.findMany({
+      orderBy: { code: "asc" },
+      include: {
+        courses: {
+          include: {
+            pricingRecords: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { finalUnitPriceWithoutTax: true },
+            },
+            runs: {
+              include: {
+                trainingEvaluations: {
+                  select: { evaluationType: true, rating: true },
+                },
+              },
+            },
+            scopeSelections: {
+              select: { estimatedSeats: true },
+            },
+          },
+        },
+      },
+    }),
+    db.course.findMany({
+      orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
+      include: {
+        package: {
+          select: { id: true, code: true, nameAr: true, nameEn: true },
+        },
+        runs: {
+          include: {
+            trainingEvaluations: {
+              select: { evaluationType: true, rating: true },
+            },
+          },
+        },
+        scopeSelections: {
+          select: { estimatedSeats: true },
+        },
+      },
+    }),
     db.projectScope.findMany({
       include: {
         selectedCourses: {
@@ -354,16 +487,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const allocatedSeats = seatRows.reduce((sum, item) => sum + (item.plannedSeats ?? 0), 0);
   const filledSeats = seatRows.reduce((sum, item) => sum + item.confirmedSeats, 0);
   const seatUtilization = ratio(filledSeats, allocatedSeats);
-  const successStatuses: AttendanceStatus[] = [
-    AttendanceStatus.PRESENT,
-    AttendanceStatus.LATE,
-    AttendanceStatus.PARTIAL,
-  ];
-  const totalAttendance = successGroups.reduce((sum, item) => sum + item._count._all, 0);
-  const successfulAttendance = successGroups
-    .filter((item) => successStatuses.includes(item.attendanceStatus))
-    .reduce((sum, item) => sum + item._count._all, 0);
-  const successRate = ratio(successfulAttendance, totalAttendance);
+  const successRate = projectAttendanceSummary.attendanceRate;
   const evaluationSatisfaction =
     evaluationRows.length > 0
       ? evaluationRows.reduce((sum, item) => sum + decimalToNumber(item.overallScore) * 20, 0) /
@@ -406,19 +530,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     .map(([month, count]) => ({ label: month, value: count }));
 
   const reportExportUrl = `/api/dashboard-report?${new URLSearchParams({
-    role,
     ...(searchTerm ? { q: searchTerm } : {}),
     ...(categoryFilter ? { category: categoryFilter } : {}),
   }).toString()}`;
   const categoryOptions = getReportingCategoryOptions(locale);
   const totalReportingPages = Math.max(
     1,
-    Math.ceil(reportingRows.length / REPORTING_PAGE_SIZE),
+    Math.ceil(reportingRows.length / DASHBOARD_TABLE_PAGE_SIZE),
   );
   const safeReportingPage = Math.min(reportingPage, totalReportingPages);
   const visibleReportingRows = reportingRows.slice(
-    (safeReportingPage - 1) * REPORTING_PAGE_SIZE,
-    safeReportingPage * REPORTING_PAGE_SIZE,
+    (safeReportingPage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safeReportingPage * DASHBOARD_TABLE_PAGE_SIZE,
   );
   const scopeDocumentCountById = new Map(
     scopeDocumentCounts.map((item) => [item.entityId, item._count._all]),
@@ -446,6 +569,143 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       documents: scopeDocumentCountById.get(scope.id) ?? 0,
     };
   });
+  const filteredProjectScopeSummaryRows = projectScopeSummaryRows.filter((scope) => {
+    if (!poSearch) return true;
+    return [scope.code, scope.name, scope.status]
+      .join(" ")
+      .toLowerCase()
+      .includes(poSearch);
+  });
+  const totalPoPages = Math.max(
+    1,
+    Math.ceil(filteredProjectScopeSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+  );
+  const safePoPage = Math.min(poPage, totalPoPages);
+  const visibleProjectScopeSummaryRows = filteredProjectScopeSummaryRows.slice(
+    (safePoPage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safePoPage * DASHBOARD_TABLE_PAGE_SIZE,
+  );
+
+  const completedTrainingCount = completedRuns;
+  const plannedTrainingCount = totalRuns;
+  const deliveredSeats = filledSeats;
+  const committedSeats = allocatedSeats;
+  const courseAttendanceRates = await Promise.all(
+    dashboardCourses.map(async (course) => ({
+      courseId: course.id,
+      attendanceRate: (await getCourseSessionAttendanceRate(course.id)).attendanceRate,
+    })),
+  );
+  const packageAttendanceRates = await Promise.all(
+    dashboardPackages.map(async (item) => ({
+      packageId: item.id,
+      attendanceRate: (await getPackageSessionAttendanceRate(item.id)).attendanceRate,
+    })),
+  );
+  const courseAttendanceById = new Map(
+    courseAttendanceRates.map((item) => [item.courseId, item.attendanceRate]),
+  );
+  const packageAttendanceById = new Map(
+    packageAttendanceRates.map((item) => [item.packageId, item.attendanceRate]),
+  );
+  const packageBreakdownRows = dashboardPackages.map((item) => {
+    const runs = item.courses.flatMap((course) => course.runs);
+    const plannedSeats = item.courses.reduce(
+      (sum, course) =>
+        sum +
+        course.scopeSelections.reduce(
+          (courseSum, selection) => courseSum + (selection.estimatedSeats ?? 0),
+          0,
+        ),
+      0,
+    );
+    const delivered = runs.reduce((sum, run) => sum + run.confirmedSeats, 0);
+    const completed = runs.filter((run) => completedRunStatuses.includes(run.status)).length;
+    const courseRatings = runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.COURSE)
+        .map((evaluation) => evaluation.rating),
+    );
+    const instructorRatings = runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.INSTRUCTOR)
+        .map((evaluation) => evaluation.rating),
+    );
+    const revenue = item.courses.reduce((sum, course) => {
+      const price = decimalToNumber(course.pricingRecords[0]?.finalUnitPriceWithoutTax);
+      const courseSeats = course.runs.reduce((seatSum, run) => seatSum + run.confirmedSeats, 0);
+      return sum + price * courseSeats;
+    }, 0);
+    const vendorCost = runs.reduce((sum, run) => sum + decimalToNumber(run.vendorCost), 0);
+
+    return {
+      id: item.id,
+      code: item.code,
+      name: item.nameEn || item.nameAr,
+      completed,
+      planned: runs.length,
+      delivered,
+      utilization: ratio(delivered, plannedSeats),
+      averageCourseRating: average(courseRatings),
+      averageInstructorRating: average(instructorRatings),
+      attendanceRate: packageAttendanceById.get(item.id) ?? 0,
+      revenue,
+      vendorCost,
+      marginPct: ratio(revenue - vendorCost, revenue),
+    };
+  });
+  const totalPackagePages = Math.max(
+    1,
+    Math.ceil(packageBreakdownRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+  );
+  const safePackagePage = Math.min(packagePage, totalPackagePages);
+  const visiblePackageBreakdownRows = packageBreakdownRows.slice(
+    (safePackagePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safePackagePage * DASHBOARD_TABLE_PAGE_SIZE,
+  );
+  const courseSummaryRows = dashboardCourses.map((course) => {
+    const plannedSeats = course.scopeSelections.reduce(
+      (sum, selection) => sum + (selection.estimatedSeats ?? 0),
+      0,
+    );
+    const delivered = course.runs.reduce((sum, run) => sum + run.confirmedSeats, 0);
+    const courseRatings = course.runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.COURSE)
+        .map((evaluation) => evaluation.rating),
+    );
+    const instructorRatings = course.runs.flatMap((run) =>
+      run.trainingEvaluations
+        .filter((evaluation) => evaluation.evaluationType === TrainingEvaluationType.INSTRUCTOR)
+        .map((evaluation) => evaluation.rating),
+    );
+
+    return {
+      id: course.id,
+      name: course.nameEn || course.nameAr,
+      packageName: course.package.nameEn || course.package.nameAr || course.package.code,
+      totalTrainings: course.runs.length,
+      plannedSeats,
+      delivered,
+      utilization: ratio(delivered, plannedSeats),
+      averageCourseRating: average(courseRatings),
+      averageInstructorRating: average(instructorRatings),
+      attendanceRate: courseAttendanceById.get(course.id) ?? 0,
+    };
+  });
+  const filteredCourseSummaryRows = courseSummaryRows.filter((row) => {
+    if (!courseSearch) return true;
+    return [row.name, row.packageName].join(" ").toLowerCase().includes(courseSearch);
+  });
+  const totalCoursePages = Math.max(
+    1,
+    Math.ceil(filteredCourseSummaryRows.length / DASHBOARD_TABLE_PAGE_SIZE),
+  );
+  const safeCoursePage = Math.min(coursePage, totalCoursePages);
+  const visibleCourseSummaryRows = filteredCourseSummaryRows.slice(
+    (safeCoursePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
+    safeCoursePage * DASHBOARD_TABLE_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-8">
@@ -455,8 +715,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <h1 className="section-title">{localeText.home.projectIndicatorsTitle}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={buildDashboardUrl({ role })} className="primary-button">
-            Refresh
+          <Link href={buildDashboardUrl({})} className="primary-button">
+            {homeUiText.refresh}
           </Link>
         </div>
       </section>
@@ -465,7 +725,263 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         localeText={localeText}
         numberLocale={numberLocale}
         projectSummary={projectSummary}
+        canSeeFinancials={canSeeFinancials}
       />
+
+      {canSeeFinancials && projectFinancialOverview ? (
+        <section className="panel-surface">
+          <div className="mb-5">
+            <p className="eyebrow">{dashboardText.financialEyebrow}</p>
+            <h2 className="section-title">{dashboardText.financialTitle}</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ReadOnlySummaryCard
+              label={dashboardText.totalRevenueRecognized}
+              value={formatCurrency(decimalToNumber(projectFinancialOverview.totals.revenue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={dashboardText.totalVendorCost}
+              value={formatCurrency(decimalToNumber(projectFinancialOverview.totals.vendorCost), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={dashboardText.overallGrossMargin}
+              value={formatPercent(projectFinancialOverview.totals.marginPct, numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={homeUiText.totalProjectValue}
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={homeUiText.totalInvoiced}
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={homeUiText.totalCollected}
+              value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={homeUiText.remainingUnbilled}
+              value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      <section className="panel-surface">
+        <div className="mb-5">
+          <p className="eyebrow">{dashboardText.deliveryEyebrow}</p>
+          <h2 className="section-title">{dashboardText.deliveryTitle}</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ReadOnlySummaryCard
+            label={dashboardText.baselineProgress}
+            value={formatPercent(decimalToNumber(projectSummary.baselineProgress), numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.actualProgress}
+            value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.trainingsPlannedCompleted}
+            value={`${formatNumber(plannedTrainingCount, numberLocale)} / ${formatNumber(completedTrainingCount, numberLocale)}`}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.seatsCommittedDelivered}
+            value={`${formatNumber(committedSeats, numberLocale)} / ${formatNumber(deliveredSeats, numberLocale)}`}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.overallPoFulfillment}
+            value={formatPercent(poFulfillment.fulfillmentPct, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.projectStartDate}
+            value={formatDate(projectSummary.startDate, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.expectedEndDate}
+            value={formatDate(projectSummary.expectedEndDate, numberLocale)}
+          />
+        </div>
+      </section>
+
+      <section className="panel-surface">
+        <div className="mb-5">
+          <p className="eyebrow">{dashboardText.qualityEyebrow}</p>
+          <h2 className="section-title">{dashboardText.qualityTitle}</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <ReadOnlySummaryCard
+            label={dashboardText.averageCourseRatingProject}
+            value={formatRating(projectQualityOverview.averageCourseRating, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.averageInstructorRatingProject}
+            value={formatRating(projectQualityOverview.averageInstructorRating, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.overallAttendanceRate}
+            value={formatPercent(projectAttendanceSummary.attendanceRate, numberLocale)}
+          />
+        </div>
+      </section>
+
+      <section className="panel-surface">
+        <div className="mb-5">
+          <p className="eyebrow">{dashboardText.packagesEyebrow}</p>
+          <h2 className="section-title">{dashboardText.packagePerformance}</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{dashboardText.package}</th>
+                <th>{dashboardText.trainingsCompletedPlanned}</th>
+                <th>{dashboardText.totalSeatsDelivered}</th>
+                <th>{dashboardText.seatUtilization}</th>
+                <th>{dashboardText.averageCourseRating}</th>
+                <th>{dashboardText.averageInstructorRating}</th>
+                <th>{dashboardText.attendanceRate}</th>
+                {canSeeFinancials ? (
+                  <>
+                    <th>{dashboardText.revenueByPackage}</th>
+                    <th>{dashboardText.vendorCostByPackage}</th>
+                    <th>{dashboardText.grossMarginByPackage}</th>
+                  </>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {visiblePackageBreakdownRows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <p className="latin-chip">{row.code}</p>
+                    <p className="mt-1 font-semibold text-[var(--ink-strong)]">{row.name}</p>
+                  </td>
+                  <td>{formatNumber(row.completed, numberLocale)} / {formatNumber(row.planned, numberLocale)}</td>
+                  <td>{formatNumber(row.delivered, numberLocale)}</td>
+                  <td>{formatPercent(row.utilization, numberLocale)}</td>
+                  <td>{formatRating(row.averageCourseRating, numberLocale)}</td>
+                  <td>{formatRating(row.averageInstructorRating, numberLocale)}</td>
+                  <td>{formatPercent(row.attendanceRate, numberLocale)}</td>
+                  {canSeeFinancials ? (
+                    <>
+                      <td>{formatCurrency(row.revenue, numberLocale)}</td>
+                      <td>{formatCurrency(row.vendorCost, numberLocale)}</td>
+                      <td>{formatPercent(row.marginPct, numberLocale)}</td>
+                    </>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <DashboardPagination
+          currentPage={safePackagePage}
+          totalPages={totalPackagePages}
+          numberLocale={numberLocale}
+          labels={localeText.pagination}
+          hrefForPage={(page) =>
+            buildDashboardUrl({
+              q: searchTerm,
+              category: categoryFilter,
+              page: safeReportingPage,
+              packagePage: page,
+              coursePage: safeCoursePage,
+              poPage: safePoPage,
+              courseQ: params.courseQ ?? "",
+              poQ: params.poQ ?? "",
+            })
+          }
+        />
+      </section>
+
+      {platformRole !== "CUSTOMER" ? (
+        <section className="panel-surface">
+          <div className="mb-5">
+            <p className="eyebrow">{dashboardText.coursesEyebrow}</p>
+            <h2 className="section-title">{dashboardText.coursePerformance}</h2>
+          </div>
+          <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <InstantSearchField
+              name="courseQ"
+              label={localeText.common.search}
+              defaultValue={params.courseQ ?? ""}
+              placeholder={localeText.common.searchPlaceholder}
+              pageParams={["coursePage"]}
+            />
+            <Link
+              href={buildDashboardUrl({
+                q: searchTerm,
+                category: categoryFilter,
+                page: safeReportingPage,
+                packagePage: safePackagePage,
+                poPage: safePoPage,
+                poQ: params.poQ ?? "",
+              })}
+              className="secondary-button self-end"
+            >
+              {localeText.common.reset}
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{dashboardText.courseName}</th>
+                  <th>{dashboardText.package}</th>
+                  <th>{dashboardText.totalTrainings}</th>
+                  <th>{dashboardText.seatsPlanned}</th>
+                  <th>{dashboardText.seatsDelivered}</th>
+                  <th>{dashboardText.utilization}</th>
+                  <th>{dashboardText.averageCourseRating}</th>
+                  <th>{dashboardText.averageInstructorRating}</th>
+                  <th>{dashboardText.attendanceRate}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleCourseSummaryRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <Link href={`/courses/${row.id}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
+                        {row.name}
+                      </Link>
+                    </td>
+                    <td>{row.packageName}</td>
+                    <td>{formatNumber(row.totalTrainings, numberLocale)}</td>
+                    <td>{formatNumber(row.plannedSeats, numberLocale)}</td>
+                    <td>{formatNumber(row.delivered, numberLocale)}</td>
+                    <td>{formatPercent(row.utilization, numberLocale)}</td>
+                    <td>{formatRating(row.averageCourseRating, numberLocale)}</td>
+                    <td>{formatRating(row.averageInstructorRating, numberLocale)}</td>
+                    <td>{formatPercent(row.attendanceRate, numberLocale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredCourseSummaryRows.length === 0 ? (
+              <p className="mt-4 text-sm text-[var(--ink-soft)]">{localeText.common.noResults}</p>
+            ) : null}
+          </div>
+          <DashboardPagination
+            currentPage={safeCoursePage}
+            totalPages={totalCoursePages}
+            numberLocale={numberLocale}
+            labels={localeText.pagination}
+            hrefForPage={(page) =>
+              buildDashboardUrl({
+                q: searchTerm,
+                category: categoryFilter,
+                page: safeReportingPage,
+                packagePage: safePackagePage,
+                coursePage: page,
+                poPage: safePoPage,
+                courseQ: params.courseQ ?? "",
+                poQ: params.poQ ?? "",
+              })
+            }
+          />
+        </section>
+      ) : null}
 
       <section className="panel-surface">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -473,7 +989,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="eyebrow">{localeText.projectScopes.summaryTitle}</p>
             <h2 className="section-title">{localeText.projectScopes.summaryTitle}</h2>
           </div>
-          <Link href="/project-structure" className="primary-button">
+          <Link href="/pos" className="primary-button">
             {localeText.projectScopes.viewDetails}
           </Link>
         </div>
@@ -482,6 +998,28 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             label={localeText.projectScopes.totalProjectScopes}
             value={formatNumber(projectScopeSummaryRows.length, numberLocale)}
           />
+        </div>
+        <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <InstantSearchField
+            name="poQ"
+            label={localeText.common.search}
+            defaultValue={params.poQ ?? ""}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["poPage"]}
+          />
+          <Link
+            href={buildDashboardUrl({
+              q: searchTerm,
+              category: categoryFilter,
+              page: safeReportingPage,
+              packagePage: safePackagePage,
+              coursePage: safeCoursePage,
+              courseQ: params.courseQ ?? "",
+            })}
+            className="secondary-button self-end"
+          >
+            {localeText.common.reset}
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="data-table">
@@ -498,7 +1036,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </tr>
             </thead>
             <tbody>
-              {projectScopeSummaryRows.map((scope) => (
+              {visibleProjectScopeSummaryRows.map((scope) => (
                 <tr key={scope.id}>
                   <td>
                     <div className="space-y-1">
@@ -513,7 +1051,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <td>{formatNumber(scope.participants, numberLocale)}</td>
                   <td>{formatNumber(scope.documents, numberLocale)}</td>
                   <td>
-                    <Link href={`/project-structure/scopes/${scope.id}`} className="secondary-button">
+                    <Link href={`/pos/${scope.id}`} className="secondary-button">
                       {localeText.projectScopes.viewDetails}
                     </Link>
                   </td>
@@ -526,7 +1064,28 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {localeText.projectScopes.noScopes}
             </p>
           ) : null}
+          {projectScopeSummaryRows.length > 0 && filteredProjectScopeSummaryRows.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--ink-soft)]">{localeText.common.noResults}</p>
+          ) : null}
         </div>
+        <DashboardPagination
+          currentPage={safePoPage}
+          totalPages={totalPoPages}
+          numberLocale={numberLocale}
+          labels={localeText.pagination}
+          hrefForPage={(page) =>
+            buildDashboardUrl({
+              q: searchTerm,
+              category: categoryFilter,
+              page: safeReportingPage,
+              packagePage: safePackagePage,
+              coursePage: safeCoursePage,
+              poPage: page,
+              courseQ: params.courseQ ?? "",
+              poQ: params.poQ ?? "",
+            })
+          }
+        />
       </section>
 
       <section className="panel-surface">
@@ -537,83 +1096,99 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             href="/courses"
-            title="Courses framework"
+            title={dashboardText.coursesFramework}
             value={formatNumber(totalCourses, numberLocale)}
-            detail={`${formatNumber(completedCourseIds.length, numberLocale)} completed / ${formatNumber(ongoingCourseIds.length, numberLocale)} ongoing / ${formatNumber(plannedCourseIds.length, numberLocale)} planned`}
+            detail={homeUiText.completedOngoingPlanned
+              .replace("{completed}", formatNumber(completedCourseIds.length, numberLocale))
+              .replace("{ongoing}", formatNumber(ongoingCourseIds.length, numberLocale))
+              .replace("{planned}", formatNumber(plannedCourseIds.length, numberLocale))}
           />
           <KpiCard
-            href="/course-runs"
-            title="Active Courses"
+            href="/trainings"
+            title={homeUiText.trainings}
             value={formatNumber(totalRuns, numberLocale)}
-            detail={`${formatNumber(completedRuns, numberLocale)} completed / ${formatNumber(ongoingRuns, numberLocale)} ongoing / ${formatNumber(upcomingRunsCount, numberLocale)} upcoming`}
+            detail={homeUiText.completedOngoingUpcoming
+              .replace("{completed}", formatNumber(completedRuns, numberLocale))
+              .replace("{ongoing}", formatNumber(ongoingRuns, numberLocale))
+              .replace("{upcoming}", formatNumber(upcomingRunsCount, numberLocale))}
           />
           <KpiCard
             href="/courses"
-            title="Participants"
+            title={homeUiText.attendees}
             value={formatNumber(allTimeTrainees, numberLocale)}
-            detail={`${formatNumber(activeTrainees, numberLocale)} active right now`}
+            detail={homeUiText.activeNow.replace("{active}", formatNumber(activeTrainees, numberLocale))}
           />
           <KpiCard
-            href="/course-runs"
-            title="Seat utilization"
+            href="/trainings"
+            title={homeUiText.seatUtilization}
             value={formatPercent(seatUtilization, numberLocale)}
-            detail={`${formatNumber(filledSeats, numberLocale)} filled / ${formatNumber(allocatedSeats, numberLocale)} allocated`}
+            detail={homeUiText.actualEstimatedSeats
+              .replace("{actual}", formatNumber(filledSeats, numberLocale))
+              .replace("{estimated}", formatNumber(allocatedSeats, numberLocale))}
           />
           <KpiCard
-            href="/course-runs"
-            title="Participant success rate"
+            href="/trainings"
+            title={homeUiText.attendanceRate}
             value={formatPercent(successRate, numberLocale)}
-            detail={`${formatNumber(successfulAttendance, numberLocale)} successful attendance entries`}
+            detail={homeUiText.attendedPossibleSlots
+              .replace("{attended}", formatNumber(projectAttendanceSummary.attendedSessions, numberLocale))
+              .replace("{possible}", formatNumber(projectAttendanceSummary.possibleSessions, numberLocale))}
           />
           <KpiCard
-            href="/course-runs"
-            title="Satisfaction rate"
+            href="/trainings"
+            title={homeUiText.satisfactionRate}
             value={formatPercent(satisfactionRate, numberLocale)}
-            detail={`${formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale)} feedback entries`}
+            detail={homeUiText.feedbackEntries.replace(
+              "{count}",
+              formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale),
+            )}
           />
           <KpiCard
-            href="/providers"
-            title="Active trainers"
+            href="/vendors"
+            title={homeUiText.activeInstructors}
             value={formatNumber(activeTrainerCount, numberLocale)}
-            detail="Approved trainers assigned to live work"
+            detail={homeUiText.approvedInstructorsLive}
           />
         </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <ActivityPanel title="Courses running today" items={todayRuns.map((run) => ({
-          href: `/course-runs/${run.id}`,
+        <ActivityPanel title={homeUiText.trainingsRunningToday} emptyText={homeUiText.noItems} items={todayRuns.map((run) => ({
+          href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"} / ${run.trainers[0]?.trainer.fullNameEn || run.trainers[0]?.trainer.fullNameAr || "-"}`,
         }))} />
-        <ActivityPanel title="Upcoming in next 7 days" items={upcomingRuns.map((run) => ({
-          href: `/course-runs/${run.id}`,
+        <ActivityPanel title={homeUiText.upcomingNextSevenDays} emptyText={homeUiText.noItems} items={upcomingRuns.map((run) => ({
+          href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${formatDate(run.startDate, numberLocale)} / ${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"}`,
         }))} />
-        <ActivityPanel title="Completed in last 7 days" items={recentlyCompletedRuns.map((run) => ({
-          href: `/course-runs/${run.id}`,
+        <ActivityPanel title={homeUiText.completedLastSevenDays} emptyText={homeUiText.noItems} items={recentlyCompletedRuns.map((run) => ({
+          href: `/trainings/${run.id}`,
           title: run.course.nameEn || run.course.nameAr,
           meta: `${formatDate(run.endDate, numberLocale)} / ${run.location?.nameEn || run.location?.nameAr || run.location?.city || "-"}`,
         }))} />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-          <ChartPanel title="Course completion by purchase order">
+        <ChartPanel title={dashboardText.poCompletionChart}>
           {scopeProgress.map((item) => (
             <ProgressRow
               key={item.code}
               label={item.name}
               value={item.percent}
-              detail={`${formatNumber(item.completed, numberLocale)} of ${formatNumber(item.total, numberLocale)}`}
+              detail={homeUiText.progressOfTotal
+                .replace("{completed}", formatNumber(item.completed, numberLocale))
+                .replace("{total}", formatNumber(item.total, numberLocale))}
             />
           ))}
         </ChartPanel>
-        <ChartPanel title="Monthly training activity">
-          <BarChart rows={monthlyChart} numberLocale={numberLocale} />
+        <ChartPanel title={dashboardText.monthlyTrainingActivity}>
+          <BarChart rows={monthlyChart} numberLocale={numberLocale} emptyText={homeUiText.noItems} />
         </ChartPanel>
       </section>
 
+      {canSeeFinancials ? (
       <section className="panel-surface">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -626,17 +1201,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
 
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_0.8fr_auto]">
-          <input type="hidden" name="role" value={role} />
-          <label className="field-shell">
-            <span className="field-label">{localeText.reporting.search}</span>
-            <input
-              name="q"
-              type="search"
-              defaultValue={searchTerm}
-              className="field-input"
-              placeholder={localeText.reporting.searchPlaceholder}
-            />
-          </label>
+          <InstantSearchField
+            label={localeText.reporting.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
           <label className="field-shell">
             <span className="field-label">{localeText.reporting.category}</span>
             <select name="category" defaultValue={categoryFilter} className="field-input">
@@ -648,7 +1218,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </label>
           <div className="flex flex-col gap-2 sm:flex-row xl:items-end">
             <button type="submit" className="primary-button">{localeText.reporting.apply}</button>
-            <Link href={buildDashboardUrl({ role })} className="secondary-button">{localeText.reporting.reset}</Link>
+            <Link href={buildDashboardUrl({})} className="secondary-button">{localeText.reporting.reset}</Link>
           </div>
         </form>
 
@@ -670,7 +1240,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {visibleReportingRows.map((row, index) => (
                 <tr key={row.id}>
                   <td className="latin-cell">
-                    {formatNumber((safeReportingPage - 1) * REPORTING_PAGE_SIZE + index + 1, numberLocale)}
+                    {formatNumber((safeReportingPage - 1) * DASHBOARD_TABLE_PAGE_SIZE + index + 1, numberLocale)}
                   </td>
                   <td>{row.categoryLabel}</td>
                   <td>{row.name}</td>
@@ -689,7 +1259,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
           ) : null}
         </div>
-        {reportingRows.length > REPORTING_PAGE_SIZE ? (
+        {reportingRows.length > DASHBOARD_TABLE_PAGE_SIZE ? (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">
               {localeText.pagination.pageIndicator
@@ -699,10 +1269,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: 1,
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage <= 1}
                 className={`pagination-link ${safeReportingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
@@ -711,10 +1283,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </Link>
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: Math.max(1, safeReportingPage - 1),
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage <= 1}
                 className={`pagination-link ${safeReportingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
@@ -730,10 +1304,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <Link
                     key={page}
                     href={buildDashboardUrl({
-                      role,
                       q: searchTerm,
                       category: categoryFilter,
                       page,
+                      packagePage: safePackagePage,
+                      coursePage: safeCoursePage,
+                      poPage: safePoPage,
                     })}
                     aria-current={page === safeReportingPage ? "page" : undefined}
                     className={`pagination-link ${page === safeReportingPage ? "pagination-link-active" : ""}`}
@@ -744,10 +1320,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               )}
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: Math.min(totalReportingPages, safeReportingPage + 1),
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage >= totalReportingPages}
                 className={`pagination-link ${safeReportingPage >= totalReportingPages ? "pointer-events-none opacity-50" : ""}`}
@@ -756,10 +1334,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </Link>
               <Link
                 href={buildDashboardUrl({
-                  role,
                   q: searchTerm,
                   category: categoryFilter,
                   page: totalReportingPages,
+                  packagePage: safePackagePage,
+                  coursePage: safeCoursePage,
+                  poPage: safePoPage,
                 })}
                 aria-disabled={safeReportingPage >= totalReportingPages}
                 className={`pagination-link ${safeReportingPage >= totalReportingPages ? "pointer-events-none opacity-50" : ""}`}
@@ -770,6 +1350,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         ) : null}
       </section>
+      ) : null}
     </div>
   );
 }
@@ -807,9 +1388,11 @@ function ProjectSummarySection({
   localeText,
   numberLocale,
   projectSummary,
+  canSeeFinancials,
 }: {
   localeText: ReturnType<typeof t>;
   numberLocale: string;
+  canSeeFinancials: boolean;
   projectSummary: {
     startDate: Date | null;
     expectedEndDate: Date | null;
@@ -851,22 +1434,26 @@ function ProjectSummarySection({
           value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
           percent={decimalToNumber(projectSummary.actualProgress)}
         />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.totalProjectValue}
-          value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
-        />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.totalProjectInvoices}
-          value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
-        />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.totalCollectedValue}
-          value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
-        />
-        <ReadOnlySummaryCard
-          label={localeText.projectOverview.remainingUnbilledValue}
-          value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
-        />
+        {canSeeFinancials ? (
+          <>
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.totalProjectValue}
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.totalProjectInvoices}
+              value={formatCurrency(decimalToNumber(projectSummary.totalProjectInvoices), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.totalCollectedValue}
+              value={formatCurrency(decimalToNumber(projectSummary.totalCollectedValue), numberLocale)}
+            />
+            <ReadOnlySummaryCard
+              label={localeText.projectOverview.remainingUnbilledValue}
+              value={formatCurrency(decimalToNumber(projectSummary.remainingUnbilledValue), numberLocale)}
+            />
+          </>
+        ) : null}
       </div>
     </section>
   );
@@ -908,12 +1495,88 @@ function ReadOnlyProgressCard({
   );
 }
 
+function DashboardPagination({
+  currentPage,
+  totalPages,
+  numberLocale,
+  labels,
+  hrefForPage,
+}: {
+  currentPage: number;
+  totalPages: number;
+  numberLocale: string;
+  labels: ReturnType<typeof t>["pagination"];
+  hrefForPage: (page: number) => string;
+}) {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm font-semibold text-[var(--ink-soft)]">
+        {labels.pageIndicator
+          .replace("{current}", formatNumber(currentPage, numberLocale))
+          .replace("{total}", formatNumber(totalPages, numberLocale))}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={hrefForPage(1)}
+          aria-disabled={currentPage <= 1}
+          className={`pagination-link ${currentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.first}
+        </Link>
+        <Link
+          href={hrefForPage(Math.max(1, currentPage - 1))}
+          aria-disabled={currentPage <= 1}
+          className={`pagination-link ${currentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.previous}
+        </Link>
+        {paginationPages(currentPage, totalPages).map((page, index) =>
+          page === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+              ...
+            </span>
+          ) : (
+            <Link
+              key={page}
+              href={hrefForPage(page)}
+              aria-current={page === currentPage ? "page" : undefined}
+              className={`pagination-link ${page === currentPage ? "pagination-link-active" : ""}`}
+            >
+              {formatNumber(page, numberLocale)}
+            </Link>
+          ),
+        )}
+        <Link
+          href={hrefForPage(Math.min(totalPages, currentPage + 1))}
+          aria-disabled={currentPage >= totalPages}
+          className={`pagination-link ${currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.next}
+        </Link>
+        <Link
+          href={hrefForPage(totalPages)}
+          aria-disabled={currentPage >= totalPages}
+          className={`pagination-link ${currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+        >
+          {labels.last}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function ActivityPanel({
   title,
   items,
+  emptyText,
 }: {
   title: string;
   items: Array<{ href: string; title: string; meta: string }>;
+  emptyText: string;
 }) {
   return (
     <section className="panel-surface">
@@ -924,7 +1587,7 @@ function ActivityPanel({
             <p className="font-semibold text-[var(--ink-strong)]">{item.title}</p>
             <p className="mt-1 text-sm text-[var(--ink-soft)]">{item.meta}</p>
           </Link>
-        )) : <p className="text-sm text-[var(--ink-soft)]">No items found.</p>}
+        )) : <p className="text-sm text-[var(--ink-soft)]">{emptyText}</p>}
       </div>
     </section>
   );
@@ -964,17 +1627,19 @@ function ProgressRow({
 function BarChart({
   rows,
   numberLocale,
+  emptyText,
   suffix = "",
   maxValue,
 }: {
   rows: Array<{ label: string; value: number }>;
   numberLocale: string;
+  emptyText: string;
   suffix?: string;
   maxValue?: number;
 }) {
   const max = maxValue ?? Math.max(...rows.map((row) => row.value), 1);
   if (rows.length === 0) {
-    return <p className="text-sm text-[var(--ink-soft)]">No items found.</p>;
+    return <p className="text-sm text-[var(--ink-soft)]">{emptyText}</p>;
   }
   return (
     <div className="grid min-h-[220px] grid-cols-[repeat(auto-fit,minmax(56px,1fr))] items-end gap-3">

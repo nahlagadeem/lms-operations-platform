@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
 import { getLocale, t } from "@/lib/locale";
+import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
 import {
   formatReportingDate,
   getProjectReportingRows,
@@ -18,6 +19,10 @@ function csvCell(value: string | number | null | undefined) {
 export async function GET(request: NextRequest) {
   if (!(await isAuthenticated())) {
     return NextResponse.redirect(new URL("/login", request.url), 303);
+  }
+
+  if (!canViewFinancials(await getCurrentPlatformRole())) {
+    return NextResponse.json({ message: "Forbidden." }, { status: 403 });
   }
 
   const locale = await getLocale();

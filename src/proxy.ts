@@ -1,20 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const AUTH_COOKIE_NAME = "lms_ops_auth";
+const RAW_PLATFORM_ROLE_COOKIE_VALUES = new Set([
+  "PROJECT_MANAGER",
+  "KEY_STAKEHOLDER",
+  "DATA_ENTRY",
+  "CUSTOMER",
+]);
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname === "/login";
-  const isAuthenticated = request.cookies.get(AUTH_COOKIE_NAME)?.value === "admin";
+  const sessionValue = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const hasSessionCookie =
+    Boolean(sessionValue) &&
+    !RAW_PLATFORM_ROLE_COOKIE_VALUES.has(sessionValue ?? "");
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-current-path", pathname);
 
-  if (!isAuthenticated && !isLoginPage) {
+  if (!hasSessionCookie && !isLoginPage) {
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  if (isAuthenticated && isLoginPage) {
-    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next({

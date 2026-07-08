@@ -61,12 +61,14 @@ type UpdateNominationStatusInput = {
   nominationId: string;
   courseRunId: string;
   nominationStatus: NominationStatus;
+  notes?: string;
 };
 
 type RecordAttendanceInput = {
-  courseRunId: string;
+  courseRunId?: string;
+  trainingSessionId?: string;
   participantId: string;
-  attendanceDate: Date;
+  attendanceDate?: Date;
   attendanceStatus: AttendanceStatus;
   notes: string;
 };
@@ -312,6 +314,7 @@ export async function updateNominationStatus(input: UpdateNominationStatusInput)
     data: {
       nominationStatus: input.nominationStatus,
       ...nominationConfirmationData(input.nominationStatus),
+      notes: input.notes === undefined ? undefined : input.notes || null,
       declineReason:
         input.nominationStatus === NominationStatus.DECLINED
           ? "Declined by operations"
@@ -323,6 +326,56 @@ export async function updateNominationStatus(input: UpdateNominationStatusInput)
 }
 
 export async function recordAttendance(input: RecordAttendanceInput) {
+  if (input.trainingSessionId) {
+    const session = await db.trainingSession.findUnique({
+      where: {
+        id: input.trainingSessionId,
+      },
+      select: {
+        id: true,
+        courseRunId: true,
+        sessionDate: true,
+      },
+    });
+
+    if (!session) {
+      throw new Error("Training session was not found.");
+    }
+
+    if (input.courseRunId && input.courseRunId !== session.courseRunId) {
+      throw new Error("Training session does not belong to the submitted training.");
+    }
+
+    await db.attendanceRecord.upsert({
+      where: {
+        trainingSessionId_participantId: {
+          trainingSessionId: session.id,
+          participantId: input.participantId,
+        },
+      },
+      update: {
+        courseRunId: session.courseRunId,
+        attendanceDate: session.sessionDate,
+        attendanceStatus: input.attendanceStatus,
+        notes: input.notes || null,
+        recordedAt: new Date(),
+      },
+      create: {
+        courseRunId: session.courseRunId,
+        trainingSessionId: session.id,
+        participantId: input.participantId,
+        attendanceDate: session.sessionDate,
+        attendanceStatus: input.attendanceStatus,
+        notes: input.notes || null,
+      },
+    });
+    return;
+  }
+
+  if (!input.courseRunId || !input.attendanceDate) {
+    throw new Error("Missing attendance training or date fields.");
+  }
+
   await db.attendanceRecord.upsert({
     where: {
       courseRunId_participantId_attendanceDate: {

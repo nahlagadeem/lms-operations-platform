@@ -1,19 +1,25 @@
 "use server";
 
-import { ProviderType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
-import * as providerService from "@/server/services/provider-service";
+import { VendorType } from "@/lib/brd-terminology";
+import {
+  assertPermission,
+  canCreateOperationalData,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
+import * as vendorService from "@/server/services/vendor-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function createProvider(formData: FormData) {
+export async function createVendor(formData: FormData) {
   await requireAuth();
+  assertPermission(await getCurrentPlatformRole(), canCreateOperationalData);
 
-  const providerType = normalizeText(formData.get("providerType")) as ProviderType;
+  const providerType = normalizeText(formData.get("providerType")) as VendorType;
   const nameAr = normalizeText(formData.get("nameAr"));
   const nameEn = normalizeText(formData.get("nameEn"));
   const country = normalizeText(formData.get("country"));
@@ -25,10 +31,10 @@ export async function createProvider(formData: FormData) {
   const notes = normalizeText(formData.get("notes"));
 
   if (!providerType || !nameAr) {
-    redirect("/providers?panel=create&error=missing-required");
+    redirect("/vendors?panel=create&error=missing-required");
   }
 
-  await providerService.createProvider({
+  await vendorService.createVendor({
     providerType,
     nameAr,
     nameEn,
@@ -41,6 +47,6 @@ export async function createProvider(formData: FormData) {
     notes,
   });
 
-  revalidatePath("/providers");
-  redirect("/providers");
+  revalidatePath("/vendors");
+  redirect("/vendors");
 }

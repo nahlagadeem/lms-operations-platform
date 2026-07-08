@@ -1,8 +1,22 @@
 import Link from "next/link";
-import { CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
-import { createCourseRun } from "@/app/course-runs/actions";
+import {
+  CourseRunStatus,
+  DeliveryMode,
+  NominationStatus,
+  Prisma,
+  TrainingCity,
+} from "@prisma/client";
+import { createTraining } from "@/app/course-runs/actions";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
+import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
+import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import {
+  canCreateOperationalData,
+  canManageFinancialFields,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 
 type CourseRunsPageProps = {
   searchParams?: Promise<{
@@ -10,9 +24,13 @@ type CourseRunsPageProps = {
     package?: string;
     status?: string;
     panel?: string;
+    sort?: string;
+    dir?: string;
+    page?: string;
   }>;
 };
 
+const TRAININGS_PAGE_SIZE = 10;
 const statusGroupsForPlanned = [
   CourseRunStatus.PLANNED,
   CourseRunStatus.APPROVAL_PENDING,
@@ -20,18 +38,17 @@ const statusGroupsForPlanned = [
   CourseRunStatus.CONFIRMED,
 ];
 
-const statusPriority: Record<CourseRunStatus, number> = {
-  ONGOING: 0,
-  CONFIRMED: 1,
-  OPEN_FOR_NOMINATION: 2,
-  APPROVAL_PENDING: 3,
-  PLANNED: 4,
-  DRAFT: 5,
-  POSTPONED: 6,
-  COMPLETED: 7,
-  CLOSED: 8,
-  CANCELED: 9,
-};
+const trainingListSortKeys = [
+  "code",
+  "course",
+  "estimatedSeats",
+  "actualSeats",
+  "location",
+  "duration",
+] as const;
+
+type TrainingListSortKey = (typeof trainingListSortKeys)[number];
+type SortDirection = "asc" | "desc";
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -41,43 +58,139 @@ function normalizeSingleValue(value?: string) {
   return value?.trim() || "";
 }
 
-function formatDateRange(
-  startDate: Date | null,
-  endDate: Date | null,
-  locale: string,
-  emptyLabel: string,
-) {
-  if (!startDate && !endDate) {
-    return emptyLabel;
-  }
-
-  const formatter = new Intl.DateTimeFormat(locale, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-
-  if (startDate && endDate) {
-    return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
-  }
-
-  return formatter.format(startDate ?? endDate!);
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
 function pageText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      addButton: "إضافة تشغيل جديد",
+      addButton: "إضافة تدريب جديد",
       toggleButton: "فتح نموذج الإضافة",
       close: "إغلاق",
     };
   }
 
   return {
-    addButton: "Add Course",
-    toggleButton: "Add Course",
+    addButton: "Add Training",
+    toggleButton: "Add Training",
     close: "Close",
   };
+}
+
+function normalizeSortKey(value?: string): TrainingListSortKey {
+  return trainingListSortKeys.includes(value as TrainingListSortKey)
+    ? (value as TrainingListSortKey)
+    : "code";
+}
+
+function normalizeSortDirection(value?: string): SortDirection {
+  return value === "desc" ? "desc" : "asc";
+}
+
+function compareNullableNumber(
+  left: number | null,
+  right: number | null,
+  direction: SortDirection,
+) {
+  if (left === null && right === null) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return direction === "asc" ? left - right : right - left;
+}
+
+function sortHref(
+  params: {
+    q: string;
+    package: string;
+    status: string;
+    sort: TrainingListSortKey;
+    dir: SortDirection;
+  },
+  key: TrainingListSortKey,
+) {
+  const nextDirection =
+    params.sort === key && params.dir === "asc" ? "desc" : "asc";
+  const query = new URLSearchParams();
+
+  if (params.q) query.set("q", params.q);
+  if (params.package) query.set("package", params.package);
+  if (params.status) query.set("status", params.status);
+  query.set("sort", key);
+  query.set("dir", nextDirection);
+
+  return `/trainings?${query.toString()}`;
+}
+
+function trainingsPageHref(params: {
+  q: string;
+  package: string;
+  status: string;
+  sort: TrainingListSortKey;
+  dir: SortDirection;
+  page: number;
+}) {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.package) query.set("package", params.package);
+  if (params.status) query.set("status", params.status);
+  query.set("sort", params.sort);
+  query.set("dir", params.dir);
+  if (params.page > 1) query.set("page", String(params.page));
+  return `/trainings?${query.toString()}`;
+}
+
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentDirection,
+  query,
+}: {
+  label: string;
+  sortKey: TrainingListSortKey;
+  currentSort: TrainingListSortKey;
+  currentDirection: SortDirection;
+  query: {
+    q: string;
+    package: string;
+    status: string;
+  };
+}) {
+  const isActive = currentSort === sortKey;
+  const indicator = isActive ? (currentDirection === "asc" ? " ↑" : " ↓") : "";
+
+  return (
+    <th>
+      <Link
+        href={sortHref({
+          ...query,
+          sort: currentSort,
+          dir: currentDirection,
+        }, sortKey)}
+        className="inline-flex items-center gap-1 text-inherit no-underline"
+      >
+        {label}
+        <span aria-hidden="true">{indicator}</span>
+      </Link>
+    </th>
+  );
 }
 
 export default async function CourseRunsPage({
@@ -92,6 +205,12 @@ export default async function CourseRunsPage({
   const searchTerm = normalizeSingleValue(params.q);
   const packageCode = normalizeSingleValue(params.package);
   const statusFilter = normalizeSingleValue(params.status) as CourseRunStatus | "";
+  const sortKey = normalizeSortKey(params.sort);
+  const sortDirection = normalizeSortDirection(params.dir);
+  const requestedPage = normalizePage(params.page);
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+  const canManageFinancials = canManageFinancialFields(platformRole);
 
   const whereClause: Prisma.CourseRunWhereInput = {
     status: statusFilter || undefined,
@@ -107,6 +226,8 @@ export default async function CourseRunsPage({
           { runCode: { contains: searchTerm, mode: "insensitive" } },
           { course: { nameAr: { contains: searchTerm, mode: "insensitive" } } },
           { course: { nameEn: { contains: searchTerm, mode: "insensitive" } } },
+          { provider: { nameAr: { contains: searchTerm, mode: "insensitive" } } },
+          { provider: { nameEn: { contains: searchTerm, mode: "insensitive" } } },
         ]
       : undefined,
   };
@@ -117,7 +238,8 @@ export default async function CourseRunsPage({
     ongoingRuns,
     completedRuns,
     packages,
-    courses,
+    purchaseOrderCourseEntries,
+    vendors,
     courseRuns,
   ] = await Promise.all([
     db.courseRun.count(),
@@ -142,17 +264,28 @@ export default async function CourseRunsPage({
       select: { id: true, code: true, nameAr: true, nameEn: true },
       orderBy: { code: "asc" },
     }),
-    db.course.findMany({
+    db.projectScopeCourse.findMany({
       select: {
         id: true,
-        courseCode: true,
-        nameAr: true,
-        nameEn: true,
-        package: {
-          select: { code: true, nameAr: true, nameEn: true },
+        estimatedSeats: true,
+        scope: {
+          select: { id: true, code: true, name: true, nameAr: true, nameEn: true },
+        },
+        course: {
+          select: {
+            id: true,
+            courseCode: true,
+            nameAr: true,
+            nameEn: true,
+            package: { select: { code: true } },
+          },
         },
       },
-      orderBy: [{ package: { code: "asc" } }, { courseCode: "asc" }],
+      orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
+    }),
+    db.provider.findMany({
+      select: { id: true, nameAr: true, nameEn: true },
+      orderBy: { nameAr: "asc" },
     }),
     db.courseRun.findMany({
       where: whereClause,
@@ -164,19 +297,88 @@ export default async function CourseRunsPage({
             },
           },
         },
+        projectScope: true,
+        projectScopeCourse: {
+          include: { course: true },
+        },
+        _count: {
+          select: { sessions: true },
+        },
+        nominations: {
+          select: { nominationStatus: true },
+        },
       },
       orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
-      take: 50,
     }),
   ]);
 
-  const prioritizedRuns = [...courseRuns].sort((left, right) => {
-    const statusDiff = statusPriority[left.status] - statusPriority[right.status];
-    if (statusDiff !== 0) return statusDiff;
-    const leftTime = left.startDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    const rightTime = right.startDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    return leftTime - rightTime;
-  });
+  const trainingRows = courseRuns
+    .map((run) => {
+      const training = getTrainingBusinessFields(run);
+      const estimatedSeats = run.projectScopeCourse?.estimatedSeats ?? null;
+      const actualSeats = run.nominations.filter(
+        (nomination) => nomination.nominationStatus === NominationStatus.CONFIRMED,
+      ).length;
+      const locationLabel = run.city
+        ? localeText.courseRuns.trainingCities[
+            run.city as keyof typeof localeText.courseRuns.trainingCities
+          ]
+        : "-";
+      const courseLabel =
+        locale === "ar"
+          ? run.course.nameAr || run.course.nameEn || run.course.courseCode
+          : run.course.nameEn || run.course.nameAr || run.course.courseCode;
+
+      return {
+        run,
+        training,
+        courseLabel,
+        estimatedSeats,
+        actualSeats,
+        locationLabel,
+        duration: run._count.sessions,
+      };
+    })
+    .sort((left, right) => {
+      if (sortKey === "estimatedSeats") {
+        return compareNullableNumber(left.estimatedSeats, right.estimatedSeats, sortDirection);
+      }
+
+      if (sortKey === "actualSeats") {
+        return sortDirection === "asc"
+          ? left.actualSeats - right.actualSeats
+          : right.actualSeats - left.actualSeats;
+      }
+
+      if (sortKey === "duration") {
+        return sortDirection === "asc"
+          ? left.duration - right.duration
+          : right.duration - left.duration;
+      }
+
+      const leftValue =
+        sortKey === "location"
+          ? left.locationLabel
+          : sortKey === "course"
+            ? left.courseLabel
+            : left.training.trainingCode;
+      const rightValue =
+        sortKey === "location"
+          ? right.locationLabel
+          : sortKey === "course"
+            ? right.courseLabel
+            : right.training.trainingCode;
+
+      return sortDirection === "asc"
+        ? leftValue.localeCompare(rightValue, locale)
+        : rightValue.localeCompare(leftValue, locale);
+    });
+  const totalTrainingPages = Math.max(1, Math.ceil(trainingRows.length / TRAININGS_PAGE_SIZE));
+  const safeTrainingPage = Math.min(requestedPage, totalTrainingPages);
+  const visibleTrainingRows = trainingRows.slice(
+    (safeTrainingPage - 1) * TRAININGS_PAGE_SIZE,
+    safeTrainingPage * TRAININGS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -187,12 +389,14 @@ export default async function CourseRunsPage({
             <h2 className="section-title">{localeText.courseRuns.title}</h2>
             <p className="section-copy">{localeText.courseRuns.description}</p>
           </div>
-          <Link
-            href="/course-runs?panel=create"
-            className="primary-button w-full sm:w-auto"
-          >
-            {uiText.addButton}
-          </Link>
+          {canCreate ? (
+            <Link
+              href="/trainings?panel=create"
+              className="primary-button w-full sm:w-auto"
+            >
+              {uiText.addButton}
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -213,16 +417,12 @@ export default async function CourseRunsPage({
         </div>
 
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.8fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{localeText.courseRuns.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={localeText.courseRuns.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
+          <InstantSearchField
+            label={localeText.courseRuns.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
 
           <label className="field-shell">
             <span className="field-label">{localeText.courseRuns.filterPackage}</span>
@@ -252,13 +452,13 @@ export default async function CourseRunsPage({
             <button type="submit" className="primary-button w-full sm:w-auto">
               {localeText.courseRuns.applyFilters}
             </button>
-            <Link href="/course-runs" className="secondary-button w-full sm:w-auto">
+            <Link href="/trainings" className="secondary-button w-full sm:w-auto">
               {localeText.courseRuns.resetFilters}
             </Link>
           </div>
         </form>
 
-        {prioritizedRuns.length === 0 ? (
+        {trainingRows.length === 0 ? (
           <div className="jawraa-subcard mt-6 border-dashed px-5 py-8">
             <h4 className="text-lg font-semibold text-[var(--ink-strong)]">
               {localeText.courseRuns.noRunsTitle}
@@ -272,17 +472,52 @@ export default async function CourseRunsPage({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>{localeText.courseRuns.runCode}</th>
-                  <th>{localeText.courseRuns.packageName}</th>
-                  <th>{localeText.courseRuns.courseName}</th>
-                  <th>{localeText.courseRuns.status}</th>
-                  <th>{localeText.courseRuns.dates}</th>
-                  <th>{localeText.courseRuns.mode}</th>
-                  <th>{localeText.courseRuns.seats}</th>
+                  <SortHeader
+                    label={localeText.courseRuns.runCode}
+                    sortKey="code"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.courseRuns.courseName}
+                    sortKey="course"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.courseRuns.seats}
+                    sortKey="estimatedSeats"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.projectScopes.actualSeats}
+                    sortKey="actualSeats"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.courseRuns.city}
+                    sortKey="location"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.projectScopes.duration}
+                    sortKey="duration"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                  />
                 </tr>
               </thead>
               <tbody>
-                {prioritizedRuns.map((run) => (
+                {visibleTrainingRows.map(({ run, training, courseLabel, estimatedSeats, actualSeats, locationLabel, duration }) => (
                   <tr
                     key={run.id}
                     className="cursor-pointer transition hover:bg-white"
@@ -290,60 +525,138 @@ export default async function CourseRunsPage({
                   >
                     <td className="latin-cell">
                       <Link
-                        href={`/course-runs/${run.id}`}
+                        href={`/trainings/${run.id}`}
                         className="block w-full font-semibold text-[var(--brand-ink)] no-underline"
                       >
-                        {run.runCode}
+                        {training.trainingCode}
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
-                        {run.course.package.nameEn || run.course.package.nameAr}
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {courseLabel}
                       </Link>
                     </td>
                     <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
-                        {run.course.nameEn || run.course.nameAr}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
-                        <span className="status-pill">
-                          {localeText.courseRunStatuses[run.status]}
-                        </span>
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
-                        {formatDateRange(
-                          run.startDate,
-                          run.endDate,
-                          numberLocale,
-                          localeText.courseRuns.noDates,
-                        )}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
-                        {localeText.deliveryModes[run.deliveryMode]}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/course-runs/${run.id}`} className="block w-full no-underline">
-                        {run.plannedSeats !== null
-                          ? formatNumber(run.plannedSeats, numberLocale)
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {estimatedSeats !== null
+                          ? formatNumber(estimatedSeats, numberLocale)
                           : "-"}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {formatNumber(actualSeats, numberLocale)}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {locationLabel}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {formatNumber(duration, numberLocale)}
                       </Link>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {trainingRows.length > TRAININGS_PAGE_SIZE ? (
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeTrainingPage, numberLocale))
+                    .replace("{total}", formatNumber(totalTrainingPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: 1,
+                    })}
+                    aria-disabled={safeTrainingPage <= 1}
+                    className={`pagination-link ${safeTrainingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: Math.max(1, safeTrainingPage - 1),
+                    })}
+                    aria-disabled={safeTrainingPage <= 1}
+                    className={`pagination-link ${safeTrainingPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeTrainingPage, totalTrainingPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={trainingsPageHref({
+                          q: searchTerm,
+                          package: packageCode,
+                          status: statusFilter,
+                          sort: sortKey,
+                          dir: sortDirection,
+                          page,
+                        })}
+                        aria-current={page === safeTrainingPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeTrainingPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: Math.min(totalTrainingPages, safeTrainingPage + 1),
+                    })}
+                    aria-disabled={safeTrainingPage >= totalTrainingPages}
+                    className={`pagination-link ${safeTrainingPage >= totalTrainingPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={trainingsPageHref({
+                      q: searchTerm,
+                      package: packageCode,
+                      status: statusFilter,
+                      sort: sortKey,
+                      dir: sortDirection,
+                      page: totalTrainingPages,
+                    })}
+                    aria-disabled={safeTrainingPage >= totalTrainingPages}
+                    className={`pagination-link ${safeTrainingPage >= totalTrainingPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </section>
 
-      {openPanel ? (
+      {openPanel && canCreate ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="jawraa-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -351,28 +664,91 @@ export default async function CourseRunsPage({
                 <p className="eyebrow">{localeText.courseRuns.createTitle}</p>
                 <h3 className="section-title">{uiText.toggleButton}</h3>
               </div>
-              <Link href="/course-runs" className="secondary-button">
+              <Link href="/trainings" className="secondary-button">
                 {uiText.close}
               </Link>
             </div>
 
             <p className="section-copy">{localeText.courseRuns.createDescription}</p>
 
-            <form action={createCourseRun} className="mt-6 space-y-4">
+            <form action={createTraining} className="mt-6 space-y-4">
               <label className="field-shell">
-                <span className="field-label">{localeText.courseRuns.course}</span>
-                <select name="courseId" className="field-input" defaultValue="">
+                <span className="field-label">{localeText.courseRuns.purchaseOrderCourseEntry}</span>
+                <select
+                  name="purchaseOrderCourseEntryId"
+                  className="field-input"
+                  defaultValue=""
+                  required
+                >
                   <option value="" disabled>
-                    {localeText.courseRuns.selectCourse}
+                    {localeText.courseRuns.selectPurchaseOrderCourseEntry}
                   </option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.courseCode} | {course.nameEn || course.nameAr} |{" "}
-                      {course.package.nameEn || course.package.nameAr}
+                  {purchaseOrderCourseEntries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {formatPurchaseOrderCode(entry.scope.code, locale)} |{" "}
+                      {formatPurchaseOrderTitle(entry.scope, locale)} |{" "}
+                      {entry.course.courseCode} | {entry.course.nameEn || entry.course.nameAr} |{" "}
+                      {localeText.courseRuns.plannedSeats}: {entry.estimatedSeats ?? "-"}
                     </option>
                   ))}
                 </select>
               </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.vendor}</span>
+                  <select name="vendorId" className="field-input" defaultValue="">
+                    <option value="">{localeText.courseRuns.chooseVendor}</option>
+                    {vendors.map((vendor) => (
+                      <option key={vendor.id} value={vendor.id}>
+                        {vendor.nameEn || vendor.nameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {canManageFinancials ? (
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.courseRuns.vendorCost}</span>
+                    <input
+                      type="number"
+                      name="vendorCost"
+                      step="0.01"
+                      min="0"
+                      className="field-input"
+                    />
+                  </label>
+                ) : null}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.city}</span>
+                  <select name="city" className="field-input" defaultValue="">
+                    <option value="">{localeText.courseRuns.selectCity}</option>
+                    {Object.values(TrainingCity).map((city) => (
+                      <option key={city} value={city}>
+                        {
+                          localeText.courseRuns.trainingCities[
+                            city as keyof typeof localeText.courseRuns.trainingCities
+                          ]
+                        }
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.daysHeld}</span>
+                  <input
+                    type="number"
+                    name="daysHeld"
+                    min="0"
+                    step="1"
+                    className="field-input"
+                  />
+                </label>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="field-shell">
@@ -417,17 +793,6 @@ export default async function CourseRunsPage({
                   <input type="date" name="endDate" className="field-input" />
                 </label>
               </div>
-
-              <label className="field-shell">
-                <span className="field-label">{localeText.courseRuns.plannedSeats}</span>
-                <input
-                  type="number"
-                  name="plannedSeats"
-                  min="0"
-                  step="1"
-                  className="field-input"
-                />
-              </label>
 
               <label className="field-shell">
                 <span className="field-label">{localeText.courseRuns.notes}</span>

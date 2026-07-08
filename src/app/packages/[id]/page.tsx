@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActiveStatus, DeliveryType, Prisma } from "@prisma/client";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 type PackageDetailPageProps = {
   params: Promise<{
@@ -54,10 +56,10 @@ function detailText(locale: "en" | "ar") {
   return {
     back: "Back to packages",
     title: "Package details",
-    description: "Review the courses, participant targets, and planning values for this package.",
+    description: "Review the courses, attendee targets, and planning values for this package.",
     courseList: "Courses in this package",
     courseCount: "Course count",
-    target: "Target participants",
+    target: "Target attendees",
     discountedValue: "Discounted value",
     code: "Code",
     category: "Category",
@@ -172,6 +174,8 @@ export default async function PackageDetailPage({
   const localeText = t(locale);
   const details = detailText(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const platformRole = await getCurrentPlatformRole();
+  const canSeeFinancials = canViewFinancials(platformRole);
   const searchTerm = normalizeSingleValue(query.q);
   const deliveryType = normalizeSingleValue(query.type) as DeliveryType | "";
   const currentPage = normalizePage(query.page);
@@ -276,10 +280,12 @@ export default async function PackageDetailPage({
           title={details.target}
           value={formatNumber(pkg.expectedTraineeCount ?? 0, numberLocale)}
         />
-        <MetricCard
-          title={details.discountedValue}
-          value={formatCurrency(pkg.discountedTotalAmount, numberLocale, details.unavailable)}
-        />
+        {canSeeFinancials ? (
+          <MetricCard
+            title={details.discountedValue}
+            value={formatCurrency(pkg.discountedTotalAmount, numberLocale, details.unavailable)}
+          />
+        ) : null}
       </section>
 
       <section className="panel-surface">
@@ -298,16 +304,12 @@ export default async function PackageDetailPage({
         </div>
 
         <form className="grid gap-4 xl:grid-cols-[1.3fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{details.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={details.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
+          <InstantSearchField
+            label={details.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
 
           <label className="field-shell">
             <span className="field-label">{details.type}</span>
@@ -356,7 +358,7 @@ export default async function PackageDetailPage({
                 <th>{details.category}</th>
                 <th>{details.type}</th>
                 <th>{details.duration}</th>
-                <th>{details.finalPrice}</th>
+                {canSeeFinancials ? <th>{details.finalPrice}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -401,15 +403,17 @@ export default async function PackageDetailPage({
                         })}
                       </Link>
                     </td>
-                    <td>
-                      <Link href={`/courses/${course.id}`} className="block w-full no-underline">
-                        {formatCurrency(
-                          latestPricing?.finalUnitPriceWithoutTax,
-                          numberLocale,
-                          details.unavailable,
-                        )}
-                      </Link>
-                    </td>
+                    {canSeeFinancials ? (
+                      <td>
+                        <Link href={`/courses/${course.id}`} className="block w-full no-underline">
+                          {formatCurrency(
+                            latestPricing?.finalUnitPriceWithoutTax,
+                            numberLocale,
+                            details.unavailable,
+                          )}
+                        </Link>
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}

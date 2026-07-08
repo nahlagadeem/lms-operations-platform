@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
@@ -8,12 +10,23 @@ import {
   deleteProjectScope,
   updateProjectScope,
 } from "@/app/project-structure/actions";
+import {
+  canCreateOperationalData,
+  canEditOperationalData,
+  canViewFinancials,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 
 type ProjectStructurePageProps = {
   searchParams?: Promise<{
+    q?: string;
     courseQ?: string;
+    page?: string;
   }>;
 };
+
+const PURCHASE_ORDERS_PAGE_SIZE = 10;
 
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -42,12 +55,52 @@ function normalizeSearch(value?: string) {
   return value?.trim() || "";
 }
 
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function purchaseOrdersPageHref(page: number, poSearch: string, courseSearch: string) {
+  const query = new URLSearchParams();
+  if (poSearch) query.set("q", poSearch);
+  if (courseSearch) query.set("courseQ", courseSearch);
+  if (page > 1) query.set("page", String(page));
+  const queryString = query.toString();
+  return queryString ? `/pos?${queryString}` : "/pos";
+}
+
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
+}
+
 export default async function ProjectStructurePage({ searchParams }: ProjectStructurePageProps) {
   const locale = await getLocale();
   const localeText = t(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
+  const poSearch = normalizeSearch(params.q);
+  const poSearchKey = poSearch.toLowerCase();
   const courseSearch = normalizeSearch(params.courseQ);
+  const requestedPage = normalizePage(params.page);
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+  const canEdit = canEditOperationalData(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
+
+  if (isCustomerCapacityOnly(platformRole)) {
+    redirect("/");
+  }
 
   const scopes = await db.projectScope.findMany({
     orderBy: { code: "asc" },
@@ -66,6 +119,9 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             include: {
               package: true,
             },
+          },
+          courseRuns: {
+            select: { confirmedSeats: true },
           },
         },
         orderBy: { sortOrder: "asc" },
@@ -107,6 +163,25 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
     },
     { packages: 0, courses: 0, budget: 0, invoiced: 0 },
   );
+  const filteredScopes = scopes.filter((scope) => {
+    if (!poSearchKey) return true;
+    return [
+      formatPurchaseOrderCode(scope.code, locale),
+      formatPurchaseOrderTitle(scope, locale),
+      scope.description,
+      scope.region,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(poSearchKey);
+  });
+  const totalScopePages = Math.max(1, Math.ceil(filteredScopes.length / PURCHASE_ORDERS_PAGE_SIZE));
+  const safeScopePage = Math.min(requestedPage, totalScopePages);
+  const visibleScopes = filteredScopes.slice(
+    (safeScopePage - 1) * PURCHASE_ORDERS_PAGE_SIZE,
+    safeScopePage * PURCHASE_ORDERS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -120,12 +195,14 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <a href="#add-project-scope" className="primary-button">
-              {localeText.projectScopes.addScope}
-            </a>
-            <Link href="/course-runs" className="secondary-button">
-              {localeText.projectScopes.activeRuns}
-            </Link>
+            {canCreate ? (
+              <a href="#add-project-scope" className="primary-button">
+                {localeText.projectScopes.addScope}
+              </a>
+            ) : null}
+          <Link href="/trainings" className="secondary-button">
+            {localeText.projectScopes.activeRuns}
+          </Link>
           </div>
         </div>
       </section>
@@ -134,35 +211,20 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
         <MetricCard title={localeText.projectScopes.totalProjectScopes} value={formatNumber(scopes.length, numberLocale)} />
         <MetricCard title={localeText.projectScopes.packages} value={formatNumber(totals.packages, numberLocale)} />
         <MetricCard title={localeText.projectScopes.courses} value={formatNumber(totals.courses, numberLocale)} />
-        <MetricCard
-          title={localeText.projectScopes.budget}
-          value={formatCurrency(new Prisma.Decimal(totals.budget), numberLocale)}
-        />
+        {canSeeFinancials ? (
+          <MetricCard
+            title={localeText.projectScopes.budget}
+            value={formatCurrency(new Prisma.Decimal(totals.budget), numberLocale)}
+          />
+        ) : null}
       </section>
 
-      <section id="add-project-scope" className="panel-surface">
+      {canCreate ? (
+        <section id="add-project-scope" className="panel-surface">
         <div className="mb-5">
           <p className="eyebrow">{localeText.projectScopes.addScope}</p>
           <h2 className="section-title">{localeText.projectScopes.addScope}</h2>
         </div>
-        <form className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.searchCourses}</span>
-            <input
-              name="courseQ"
-              type="search"
-              className="field-input"
-              defaultValue={courseSearch}
-              placeholder={localeText.projectScopes.searchCoursesPlaceholder}
-            />
-          </label>
-          <button type="submit" className="primary-button self-end">
-            {localeText.projectScopes.applySearch}
-          </button>
-          <Link href="/project-structure#add-project-scope" className="secondary-button self-end">
-            {localeText.projectScopes.clearSearch}
-          </Link>
-        </form>
         <form action={createProjectScope} className="grid gap-4 lg:grid-cols-2">
           <label className="field-shell">
             <span className="field-label">{localeText.projectScopes.code}</span>
@@ -214,6 +276,18 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           </label>
           <fieldset className="field-shell lg:col-span-2">
             <legend className="field-label">{localeText.projectScopes.bulkCourses}</legend>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+              <InstantSearchField
+                name="courseQ"
+                label={localeText.projectScopes.searchCourses}
+                defaultValue={courseSearch}
+                placeholder={localeText.projectScopes.searchCoursesPlaceholder}
+                pageParams={["page"]}
+              />
+              <Link href="/pos#add-project-scope" className="secondary-button self-end">
+                {localeText.projectScopes.clearSearch}
+              </Link>
+            </div>
             <div className="mt-3 grid max-h-[22rem] gap-3 overflow-y-auto rounded-[8px] border border-[rgba(17,17,17,0.1)] bg-white p-3 md:grid-cols-2 xl:grid-cols-3">
               {allCourses.map((course) => (
                 <label key={course.id} className="flex items-start gap-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] p-3 text-sm">
@@ -242,17 +316,44 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </button>
           </div>
         </form>
-      </section>
+        </section>
+      ) : null}
 
-      <section className="grid gap-4">
-        {scopes.map((scope) => {
+      <section className="panel-surface">
+        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          {courseSearch ? <input type="hidden" name="courseQ" value={courseSearch} /> : null}
+          <InstantSearchField
+            label={localeText.common.search}
+            defaultValue={poSearch}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
+          <Link
+            href={courseSearch ? `/pos?courseQ=${encodeURIComponent(courseSearch)}` : "/pos"}
+            className="secondary-button self-end"
+          >
+            {localeText.common.reset}
+          </Link>
+        </form>
+        <div className="mt-5 grid gap-4">
+          {visibleScopes.map((scope) => {
           const courseCount = scope.selectedCourses.length;
+          const totalEstimatedSeats = scope.selectedCourses.reduce(
+            (sum, entry) => sum + (entry.estimatedSeats ?? 0),
+            0,
+          );
+          const totalActualSeats = scope.selectedCourses.reduce(
+            (sum, entry) =>
+              sum +
+              entry.courseRuns.reduce((runSum, run) => runSum + run.confirmedSeats, 0),
+            0,
+          );
           const actual = progressValue(scope.actualCompletion);
 
           return (
             <div
               key={scope.id}
-              className="panel-surface"
+              className="jawraa-subcard p-5"
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -266,16 +367,26 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 </div>
                 <div className="flex flex-col items-start gap-2 sm:items-end">
                   <span className="status-pill">{scope.isActive ? localeText.projectScopes.active : localeText.projectScopes.inactive}</span>
-                  <Link href={`/project-structure/scopes/${scope.id}`} className="secondary-button">
+                  <Link href={`/pos/${scope.id}`} className="secondary-button">
                     {localeText.projectScopes.viewDetails}
                   </Link>
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <InfoBox label={localeText.projectScopes.packages} value={formatNumber(scope.packages.length, numberLocale)} />
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <InfoBox label={localeText.projectScopes.courses} value={formatNumber(courseCount, numberLocale)} />
-                <InfoBox label={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
+                <InfoBox
+                  label={localeText.projectScopes.estimatedSeats}
+                  value={formatNumber(totalEstimatedSeats, numberLocale)}
+                />
+                <InfoBox
+                  label={localeText.projectScopes.actualSeats}
+                  value={formatNumber(totalActualSeats, numberLocale)}
+                />
+                <InfoBox
+                  label={localeText.projectScopes.remainingSeats}
+                  value={formatNumber(totalEstimatedSeats - totalActualSeats, numberLocale)}
+                />
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -304,114 +415,177 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                   />
                 </div>
               </div>
-              <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
-                <details className="jawraa-subcard p-4">
-                  <summary className="cursor-pointer text-sm font-bold text-[var(--ink-strong)]">
-                    {localeText.projectScopes.editScope}
-                  </summary>
-                  <form action={updateProjectScope} className="mt-4 grid gap-4 lg:grid-cols-2">
+              {canEdit ? (
+                <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
+                  <details className="jawraa-subcard p-4">
+                    <summary className="cursor-pointer text-sm font-bold text-[var(--ink-strong)]">
+                      {localeText.projectScopes.editScope}
+                    </summary>
+                    <form action={updateProjectScope} className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <input type="hidden" name="id" value={scope.id} />
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.code}</span>
+                        <input name="code" className="field-input" required defaultValue={scope.code} />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.status}</span>
+                        <select
+                          name="status"
+                          className="field-input"
+                          defaultValue={scope.isActive ? "ACTIVE" : "INACTIVE"}
+                        >
+                          <option value="ACTIVE">{localeText.projectScopes.active}</option>
+                          <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
+                        </select>
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.nameAr}</span>
+                        <input
+                          name="nameAr"
+                          className="field-input"
+                          required
+                          dir="rtl"
+                          defaultValue={formatPurchaseOrderTitle(scope, "ar")}
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.nameEn}</span>
+                        <input
+                          name="nameEn"
+                          className="field-input"
+                          required
+                          dir="ltr"
+                          defaultValue={formatPurchaseOrderTitle(scope, "en")}
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.region}</span>
+                        <input name="region" className="field-input" defaultValue={scope.region || ""} />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.file}</span>
+                        <input
+                          name="file"
+                          type="file"
+                          className="field-input"
+                          accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.startDate}</span>
+                        <input
+                          name="startDate"
+                          type="date"
+                          className="field-input"
+                          defaultValue={formatInputDate(scope.startDate)}
+                        />
+                      </label>
+                      <label className="field-shell">
+                        <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
+                        <input
+                          name="expectedEndDate"
+                          type="date"
+                          className="field-input"
+                          defaultValue={formatInputDate(scope.expectedEndDate)}
+                        />
+                      </label>
+                      <label className="field-shell lg:col-span-2">
+                        <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
+                        <textarea
+                          name="description"
+                          rows={3}
+                          className="field-input min-h-[6rem] resize-y"
+                          defaultValue={scope.description || ""}
+                        />
+                      </label>
+                      <label className="field-shell lg:col-span-2">
+                        <span className="field-label">{localeText.projectScopes.notes}</span>
+                        <textarea
+                          name="notes"
+                          rows={3}
+                          className="field-input min-h-[6rem] resize-y"
+                          defaultValue={scope.notes || ""}
+                        />
+                      </label>
+                      <div className="lg:col-span-2">
+                        <button type="submit" className="primary-button">
+                          {localeText.projectScopes.saveScope}
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+                  <form action={deleteProjectScope} className="self-start">
                     <input type="hidden" name="id" value={scope.id} />
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.code}</span>
-                      <input name="code" className="field-input" required defaultValue={scope.code} />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.status}</span>
-                      <select
-                        name="status"
-                        className="field-input"
-                        defaultValue={scope.isActive ? "ACTIVE" : "INACTIVE"}
-                      >
-                        <option value="ACTIVE">{localeText.projectScopes.active}</option>
-                        <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
-                      </select>
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.nameAr}</span>
-                      <input
-                        name="nameAr"
-                        className="field-input"
-                        required
-                        dir="rtl"
-                        defaultValue={formatPurchaseOrderTitle(scope, "ar")}
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.nameEn}</span>
-                      <input
-                        name="nameEn"
-                        className="field-input"
-                        required
-                        dir="ltr"
-                        defaultValue={formatPurchaseOrderTitle(scope, "en")}
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.region}</span>
-                      <input name="region" className="field-input" defaultValue={scope.region || ""} />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.file}</span>
-                      <input
-                        name="file"
-                        type="file"
-                        className="field-input"
-                        accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.startDate}</span>
-                      <input
-                        name="startDate"
-                        type="date"
-                        className="field-input"
-                        defaultValue={formatInputDate(scope.startDate)}
-                      />
-                    </label>
-                    <label className="field-shell">
-                      <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
-                      <input
-                        name="expectedEndDate"
-                        type="date"
-                        className="field-input"
-                        defaultValue={formatInputDate(scope.expectedEndDate)}
-                      />
-                    </label>
-                    <label className="field-shell lg:col-span-2">
-                      <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
-                      <textarea
-                        name="description"
-                        rows={3}
-                        className="field-input min-h-[6rem] resize-y"
-                        defaultValue={scope.description || ""}
-                      />
-                    </label>
-                    <label className="field-shell lg:col-span-2">
-                      <span className="field-label">{localeText.projectScopes.notes}</span>
-                      <textarea
-                        name="notes"
-                        rows={3}
-                        className="field-input min-h-[6rem] resize-y"
-                        defaultValue={scope.notes || ""}
-                      />
-                    </label>
-                    <div className="lg:col-span-2">
-                      <button type="submit" className="primary-button">
-                        {localeText.projectScopes.saveScope}
-                      </button>
-                    </div>
+                    <button type="submit" className="secondary-button">
+                      {localeText.projectScopes.deleteScope}
+                    </button>
                   </form>
-                </details>
-                <form action={deleteProjectScope} className="self-start">
-                  <input type="hidden" name="id" value={scope.id} />
-                  <button type="submit" className="secondary-button">
-                    {localeText.projectScopes.deleteScope}
-                  </button>
-                </form>
-              </div>
+                </div>
+              ) : null}
             </div>
           );
-        })}
+          })}
+          {scopes.length > 0 && filteredScopes.length === 0 ? (
+            <div className="jawraa-subcard border-dashed p-5 text-sm text-[var(--ink-soft)]">
+              {localeText.common.noResults}
+            </div>
+          ) : null}
+        </div>
+        {filteredScopes.length > PURCHASE_ORDERS_PAGE_SIZE ? (
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-[var(--ink-soft)]">
+              {localeText.pagination.pageIndicator
+                .replace("{current}", formatNumber(safeScopePage, numberLocale))
+                .replace("{total}", formatNumber(totalScopePages, numberLocale))}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={purchaseOrdersPageHref(1, poSearch, courseSearch)}
+                aria-disabled={safeScopePage <= 1}
+                className={`pagination-link ${safeScopePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.first}
+              </Link>
+              <Link
+                href={purchaseOrdersPageHref(Math.max(1, safeScopePage - 1), poSearch, courseSearch)}
+                aria-disabled={safeScopePage <= 1}
+                className={`pagination-link ${safeScopePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.previous}
+              </Link>
+              {paginationPages(safeScopePage, totalScopePages).map((page, index) =>
+                page === "ellipsis" ? (
+                  <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                    ...
+                  </span>
+                ) : (
+                  <Link
+                    key={page}
+                    href={purchaseOrdersPageHref(page, poSearch, courseSearch)}
+                    aria-current={page === safeScopePage ? "page" : undefined}
+                    className={`pagination-link ${page === safeScopePage ? "pagination-link-active" : ""}`}
+                  >
+                    {formatNumber(page, numberLocale)}
+                  </Link>
+                ),
+              )}
+              <Link
+                href={purchaseOrdersPageHref(Math.min(totalScopePages, safeScopePage + 1), poSearch, courseSearch)}
+                aria-disabled={safeScopePage >= totalScopePages}
+                className={`pagination-link ${safeScopePage >= totalScopePages ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.next}
+              </Link>
+              <Link
+                href={purchaseOrdersPageHref(totalScopePages, poSearch, courseSearch)}
+                aria-disabled={safeScopePage >= totalScopePages}
+                className={`pagination-link ${safeScopePage >= totalScopePages ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.pagination.last}
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );

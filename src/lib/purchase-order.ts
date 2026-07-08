@@ -13,6 +13,7 @@ function looksLikeGenericScopeName(value: string) {
     lower.startsWith("project scope") ||
     lower.startsWith("purchase order") ||
     lower.startsWith("نطاق") ||
+    lower.startsWith("أمر الشراء") ||
     lower.startsWith("أمر شراء")
   );
 }
@@ -20,7 +21,7 @@ function looksLikeGenericScopeName(value: string) {
 function formatCodeSegment(code?: string | null) {
   const cleanCode = normalize(code);
   if (!cleanCode) return "";
-  if (/^(po|أمر شراء)\b/i.test(cleanCode)) return cleanCode;
+  if (/^(po|أمر الشراء|أمر شراء)\b/i.test(cleanCode)) return cleanCode;
   if (/^\d+$/.test(cleanCode)) return String(Number(cleanCode));
   return cleanCode;
 }
@@ -28,14 +29,14 @@ function formatCodeSegment(code?: string | null) {
 export function formatPurchaseOrderCode(code?: string | null, locale: Locale = "en") {
   const codeSegment = formatCodeSegment(code);
   if (!codeSegment) {
-    return locale === "ar" ? "أمر شراء" : "PO";
+    return locale === "ar" ? "أمر الشراء" : "PO";
   }
 
-  if (/^(po|أمر شراء)\b/i.test(codeSegment)) {
+  if (/^(po|أمر الشراء|أمر شراء)\b/i.test(codeSegment)) {
     return codeSegment;
   }
 
-  return `${locale === "ar" ? "أمر شراء" : "PO"} ${codeSegment}`;
+  return `${locale === "ar" ? "أمر الشراء" : "PO"} ${codeSegment}`;
 }
 
 export function formatPurchaseOrderTitle(
@@ -53,7 +54,7 @@ export function formatPurchaseOrderTitle(
       : normalize(input.nameEn || input.nameAr || input.name);
   const cleanName = rawName || normalize(input.code);
 
-  if (/^(po|أمر شراء)\b/i.test(cleanName)) {
+  if (/^(po|أمر الشراء|أمر شراء)\b/i.test(cleanName)) {
     return cleanName;
   }
 
@@ -61,5 +62,5 @@ export function formatPurchaseOrderTitle(
     return formatPurchaseOrderCode(input.code, locale);
   }
 
-  return `${locale === "ar" ? "أمر شراء" : "PO"} ${cleanName}`.trim();
+  return `${locale === "ar" ? "أمر الشراء" : "PO"} ${cleanName}`.trim();
 }

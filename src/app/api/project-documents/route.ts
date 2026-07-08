@@ -5,6 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentEntityType, DocumentType } from "@prisma/client";
 import { isAuthenticated } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  canEditOperationalData,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 import { saveDocumentUpload } from "@/server/services/document-upload-service";
 
 const projectDocumentTypes = new Set<DocumentEntityType>([
@@ -42,6 +46,9 @@ async function assertEntityExists(entityType: DocumentEntityType, entityId: stri
 export async function POST(request: NextRequest) {
   if (!(await isAuthenticated())) {
     return NextResponse.redirect(new URL("/login", request.url), 303);
+  }
+  if (!canEditOperationalData(await getCurrentPlatformRole())) {
+    return NextResponse.json({ message: "Forbidden." }, { status: 403 });
   }
 
   const contentType = request.headers.get("content-type") || "";
@@ -103,6 +110,9 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   if (!(await isAuthenticated())) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  }
+  if (!canEditOperationalData(await getCurrentPlatformRole())) {
+    return NextResponse.json({ message: "Forbidden." }, { status: 403 });
   }
 
   let payload: {

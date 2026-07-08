@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { LocationType, Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { createLocation } from "@/app/locations/actions";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
-import { getLocale } from "@/lib/locale";
+import { getLocale, t } from "@/lib/locale";
+import {
+  canCreateOperationalData,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
 
 type LocationsPageProps = {
   searchParams?: Promise<{
@@ -10,11 +17,47 @@ type LocationsPageProps = {
     type?: string;
     panel?: string;
     error?: string;
+    page?: string;
   }>;
 };
 
+const LOCATIONS_PAGE_SIZE = 10;
+
 function normalizeSingleValue(value?: string) {
   return value?.trim() || "";
+}
+
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function formatNumber(value: number, locale: string) {
+  return new Intl.NumberFormat(locale).format(value);
+}
+
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
+}
+
+function locationsPageHref(page: number, q: string, type: string) {
+  const query = new URLSearchParams();
+  if (q) query.set("q", q);
+  if (type) query.set("type", type);
+  if (page > 1) query.set("page", String(page));
+  const queryString = query.toString();
+  return queryString ? `/locations?${queryString}` : "/locations";
 }
 
 function pageText(locale: "en" | "ar") {
@@ -22,7 +65,7 @@ function pageText(locale: "en" | "ar") {
     return {
       eyebrow: "المواقع",
       title: "إدارة المواقع",
-      description: "إدارة مواقع التنفيذ والفروع والقاعات والخيارات الافتراضية أو الدولية المستخدمة في تشغيل الدورات.",
+      description: "إدارة مواقع التنفيذ والفروع والقاعات والخيارات الافتراضية أو الدولية المستخدمة في التدريبات.",
       addButton: "إضافة موقع",
       createTitle: "إضافة موقع جديد",
       close: "إغلاق",
@@ -36,7 +79,7 @@ function pageText(locale: "en" | "ar") {
       city: "المدينة",
       branch: "الفرع",
       capacity: "السعة",
-      linkedRuns: "التشغيلات المرتبطة",
+      linkedRuns: "التدريبات المرتبطة",
       noResults: "لا توجد مواقع مطابقة للفلاتر الحالية.",
       locationType: "نوع الموقع",
       nameAr: "الاسم بالعربية",
@@ -60,7 +103,7 @@ function pageText(locale: "en" | "ar") {
   return {
     eyebrow: "Locations",
     title: "Location management",
-    description: "Manage internal venues, external locations, online delivery, and international locations used for active courses.",
+    description: "Manage internal venues, external locations, online delivery, and international locations used for trainings.",
     addButton: "Add Location",
     createTitle: "Add Location",
     close: "Close",
@@ -75,7 +118,7 @@ function pageText(locale: "en" | "ar") {
     city: "City",
     branch: "Branch",
     capacity: "Capacity",
-    linkedRuns: "Active Courses",
+    linkedRuns: "Trainings",
     noResults: "No locations match these filters. Click Add Location to create one.",
     locationType: "Location type",
     nameAr: "Arabic name",
@@ -98,10 +141,20 @@ function pageText(locale: "en" | "ar") {
 
 export default async function LocationsPage({ searchParams }: LocationsPageProps) {
   const locale = await getLocale();
+  const localeText = t(locale);
   const text = pageText(locale);
+  const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const params = (await searchParams) ?? {};
+  const platformRole = await getCurrentPlatformRole();
+  const canCreate = canCreateOperationalData(platformRole);
+
+  if (isCustomerCapacityOnly(platformRole)) {
+    redirect("/");
+  }
+
   const searchTerm = normalizeSingleValue(params.q);
   const typeFilter = normalizeSingleValue(params.type) as LocationType | "";
+  const requestedPage = normalizePage(params.page);
   const openPanel = params.panel === "create" ? "create" : "";
   const showRequiredError = params.error === "missing-required";
   const missingRequiredMessage =
@@ -130,6 +183,12 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
     },
     orderBy: [{ createdAt: "desc" }],
   });
+  const totalPages = Math.max(1, Math.ceil(locations.length / LOCATIONS_PAGE_SIZE));
+  const safePage = Math.min(requestedPage, totalPages);
+  const visibleLocations = locations.slice(
+    (safePage - 1) * LOCATIONS_PAGE_SIZE,
+    safePage * LOCATIONS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -140,24 +199,22 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
             <h2 className="section-title">{text.title}</h2>
             <p className="section-copy">{text.description}</p>
           </div>
-          <Link href="/locations?panel=create" className="primary-button w-full sm:w-auto">
-            {text.addButton}
-          </Link>
+          {canCreate ? (
+            <Link href="/locations?panel=create" className="primary-button w-full sm:w-auto">
+              {text.addButton}
+            </Link>
+          ) : null}
         </div>
       </section>
 
       <section className="panel-surface">
         <form className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_auto]">
-          <label className="field-shell">
-            <span className="field-label">{text.search}</span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={searchTerm}
-              placeholder={text.searchPlaceholder}
-              className="field-input"
-            />
-          </label>
+          <InstantSearchField
+            label={text.search}
+            defaultValue={searchTerm}
+            placeholder={localeText.common.searchPlaceholder}
+            pageParams={["page"]}
+          />
 
           <label className="field-shell">
             <span className="field-label">{text.type}</span>
@@ -199,7 +256,7 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
                 </tr>
               </thead>
               <tbody>
-                {locations.map((location) => (
+                {visibleLocations.map((location) => (
                   <tr key={location.id}>
                     <td>{location.nameEn || location.nameAr}</td>
                     <td>{text.types[location.locationType]}</td>
@@ -211,11 +268,66 @@ export default async function LocationsPage({ searchParams }: LocationsPageProps
                 ))}
               </tbody>
             </table>
+            {locations.length > LOCATIONS_PAGE_SIZE ? (
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safePage, numberLocale))
+                    .replace("{total}", formatNumber(totalPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={locationsPageHref(1, searchTerm, typeFilter)}
+                    aria-disabled={safePage <= 1}
+                    className={`pagination-link ${safePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={locationsPageHref(Math.max(1, safePage - 1), searchTerm, typeFilter)}
+                    aria-disabled={safePage <= 1}
+                    className={`pagination-link ${safePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safePage, totalPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={locationsPageHref(page, searchTerm, typeFilter)}
+                        aria-current={page === safePage ? "page" : undefined}
+                        className={`pagination-link ${page === safePage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={locationsPageHref(Math.min(totalPages, safePage + 1), searchTerm, typeFilter)}
+                    aria-disabled={safePage >= totalPages}
+                    className={`pagination-link ${safePage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={locationsPageHref(totalPages, searchTerm, typeFilter)}
+                    aria-disabled={safePage >= totalPages}
+                    className={`pagination-link ${safePage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </section>
 
-      {openPanel ? (
+      {openPanel && canCreate ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="jawraa-card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">

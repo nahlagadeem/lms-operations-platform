@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActiveStatus, CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
-import { createCourseRun } from "@/app/course-runs/actions";
+import { createTraining } from "@/app/course-runs/actions";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import {
+  canCreateOperationalData,
+  canViewFinancials,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 
 type CourseDetailPageProps = {
   params: Promise<{
@@ -19,16 +24,16 @@ function detailText(locale: "en" | "ar") {
     return {
       title: "تفاصيل الدورة",
       description:
-        "هذه بطاقة الدورة الأساسية قبل التشغيل. راجع المعلومات ثم ابدأ نسخة تشغيلية وحدد حالتها وتفاصيلها التنفيذية.",
+        "هذه بطاقة الدورة الأساسية قبل التدريب. راجع المعلومات ثم أنشئ تدريبا وحدد حالته وتفاصيله التنفيذية.",
       back: "العودة إلى الدورات",
-      createRun: "إنشاء تشغيل للدورة",
-      createRunButton: "فتح إنشاء التشغيل",
+      createRun: "إنشاء تدريب",
+      createRunButton: "فتح إنشاء التدريب",
       close: "إغلاق",
       overview: "نظرة عامة",
-      planning: "التخطيط والتشغيل",
+      planning: "التخطيط والتدريب",
       pricing: "التسعير",
-      relatedRuns: "التشغيلات المرتبطة",
-      noRuns: "لا توجد تشغيلات مرتبطة بهذه الدورة حتى الآن.",
+      relatedRuns: "التدريبات المرتبطة",
+      noRuns: "لا توجد تدريبات مرتبطة بهذه الدورة حتى الآن.",
       descriptionLabel: "وصف الدورة",
       noDescription: "لا يوجد وصف متاح لهذه الدورة حالياً.",
       package: "الحزمة",
@@ -41,11 +46,11 @@ function detailText(locale: "en" | "ar") {
       activeStatus: "حالة السجل",
       attendance: "يتطلب حضور",
       certificate: "يتطلب شهادة",
-      providerRegistration: "يتطلب تسجيل جهة",
+      providerRegistration: "يتطلب تسجيل مورد",
       external: "تنفيذ خارجي",
       targetUse: "الاستخدام التشغيلي",
       startOperationalNote:
-        "يمكن من هذه الصفحة تحويل الدورة إلى تشغيل فعلي ثم استكمال المدرب والموقع والجدولة.",
+        "يمكن من هذه الصفحة إنشاء تدريب فعلي ثم استكمال المدرب والموقع والجدولة.",
       latestPrice: "السعر النهائي الحالي",
       originalPrice: "السعر الأصلي",
       discountAmount: "قيمة الخصم",
@@ -54,39 +59,39 @@ function detailText(locale: "en" | "ar") {
       unspecified: "غير محدد",
       yes: "نعم",
       no: "لا",
-      countRuns: "إجمالي التشغيلات",
+      countRuns: "إجمالي التدريبات",
       countOngoing: "الجارية",
       countCompleted: "المكتملة",
       createDescription:
-        "ابدأ تشغيل هذه الدورة مباشرة من هنا. يمكنك اعتبارها جارية الآن أو اختيار حالة تشغيل أخرى ثم متابعة التفاصيل.",
+        "أنشئ تدريبا لهذه الدورة مباشرة من هنا. يمكنك اعتباره جاريا الآن أو اختيار حالة أخرى ثم متابعة التفاصيل.",
       status: "الحالة",
       deliveryMode: "نمط التنفيذ",
       startDate: "تاريخ البداية",
       endDate: "تاريخ النهاية",
-      plannedSeats: "المقاعد المخططة",
+      plannedSeats: "المقاعد التقديرية",
       notes: "ملاحظات",
       notesPlaceholder: "ملاحظات تشغيلية داخلية",
-      startNow: "بدء التشغيل",
-      runCode: "كود التشغيل",
+      startNow: "إنشاء التدريب",
+      runCode: "رمز التدريب",
       dates: "التواريخ",
       noDates: "التواريخ غير محددة",
-      openRun: "فتح التشغيل",
+      openRun: "فتح التدريب",
     };
   }
 
   return {
     title: "Course details",
     description:
-      "Review course information, scheduling readiness, and related active courses.",
+      "Review course information, scheduling readiness, and related trainings.",
     back: "Back to courses",
-    createRun: "Add Active Course",
-    createRunButton: "Add Active Course",
+    createRun: "Add Training",
+    createRunButton: "Add Training",
     close: "Close",
     overview: "Course overview",
     planning: "Planning and operations",
     pricing: "Pricing snapshot",
-    relatedRuns: "Related active courses",
-    noRuns: "No active courses are linked to this course yet. Click Add Active Course to get started.",
+    relatedRuns: "Related Trainings",
+    noRuns: "No trainings are linked to this course yet. Click Add Training to get started.",
     descriptionLabel: "Course description",
     noDescription: "No description is available for this course yet.",
     package: "Package",
@@ -99,11 +104,11 @@ function detailText(locale: "en" | "ar") {
     activeStatus: "Course availability",
     attendance: "Attendance required",
     certificate: "Issue certificate",
-    providerRegistration: "Training provider registration",
+    providerRegistration: "Vendor registration",
     external: "External delivery",
     targetUse: "Operational use",
     startOperationalNote:
-      "From this page, add an active course, then complete the trainer, location, and schedule details.",
+      "From this page, add a training, then complete the instructor, location, and schedule details.",
     latestPrice: "Current final price",
     originalPrice: "Original price",
     discountAmount: "Discount amount",
@@ -112,23 +117,23 @@ function detailText(locale: "en" | "ar") {
     unspecified: "Unspecified",
     yes: "Yes",
     no: "No",
-    countRuns: "Total active courses",
+    countRuns: "Total trainings",
     countOngoing: "In progress",
     countCompleted: "Completed",
     createDescription:
-      "Add an active course directly from here. You can mark it as in progress immediately or choose another course status first.",
+      "Add a training directly from here. You can mark it as in progress immediately or choose another training status first.",
     status: "Status",
     deliveryMode: "Delivery mode",
     startDate: "Start date",
     endDate: "End date",
-    plannedSeats: "Planned seats",
+    plannedSeats: "Estimated Seats",
     notes: "Notes",
     notesPlaceholder: "Internal operational notes",
-    startNow: "Add Course",
-    runCode: "Course Session",
+    startNow: "Add Training",
+    runCode: "Training Code",
     dates: "Dates",
     noDates: "Dates not set",
-    openRun: "View Details",
+    openRun: "View Training",
   };
 }
 
@@ -221,6 +226,9 @@ export default async function CourseDetailPage({
   const localeText = t(locale);
   const details = detailText(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
+  const platformRole = await getCurrentPlatformRole();
+  const canCreateTraining = canCreateOperationalData(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
 
   const course = await db.course.findUnique({
     where: { id },
@@ -230,6 +238,10 @@ export default async function CourseDetailPage({
       pricingRecords: {
         orderBy: { createdAt: "desc" },
         take: 1,
+      },
+      scopeSelections: {
+        include: { scope: true },
+        orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
       },
       runs: {
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
@@ -291,9 +303,11 @@ export default async function CourseDetailPage({
             <p className="section-copy">{details.description}</p>
           </div>
 
-          <Link href={panelHref(course.id)} className="primary-button w-full sm:w-auto">
-            {details.createRun}
-          </Link>
+          {canCreateTraining ? (
+            <Link href={panelHref(course.id)} className="primary-button w-full sm:w-auto">
+              {details.createRun}
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -310,15 +324,17 @@ export default async function CourseDetailPage({
           title={details.countCompleted}
           value={formatNumber(completedRuns, numberLocale)}
         />
-        <MetricCard
-          title={details.latestPrice}
-          value={formatCurrency(
-            latestPricing?.finalUnitPriceWithoutTax,
-            latestPricing?.currencyCode || "SAR",
-            numberLocale,
-            details.unavailable,
-          )}
-        />
+        {canSeeFinancials ? (
+          <MetricCard
+            title={details.latestPrice}
+            value={formatCurrency(
+              latestPricing?.finalUnitPriceWithoutTax,
+              latestPricing?.currencyCode || "SAR",
+              numberLocale,
+              details.unavailable,
+            )}
+          />
+        ) : null}
       </section>
 
       <section className="grid gap-6 2xl:grid-cols-[1.05fr_0.95fr]">
@@ -357,7 +373,7 @@ export default async function CourseDetailPage({
                 course.runs.map((run) => (
                   <Link
                     key={run.id}
-                    href={`/course-runs/${run.id}`}
+                    href={`/trainings/${run.id}`}
                     className="jawraa-subcard block px-4 py-4 transition hover:shadow-[0_12px_28px_rgba(17,17,17,0.06)]"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -424,50 +440,52 @@ export default async function CourseDetailPage({
             </div>
           </div>
 
-          <div className="panel-surface">
-            <p className="eyebrow">{details.pricing}</p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <InfoCard
-                label={details.latestPrice}
-                value={formatCurrency(
-                  latestPricing?.finalUnitPriceWithoutTax,
-                  latestPricing?.currencyCode || "SAR",
-                  numberLocale,
-                  details.unavailable,
-                )}
-              />
-              <InfoCard
-                label={details.originalPrice}
-                value={formatCurrency(
-                  latestPricing?.originalUnitPriceWithoutTax,
-                  latestPricing?.currencyCode || "SAR",
-                  numberLocale,
-                  details.unavailable,
-                )}
-              />
-              <InfoCard
-                label={details.discountAmount}
-                value={formatCurrency(
-                  latestPricing?.discountAmount,
-                  latestPricing?.currencyCode || "SAR",
-                  numberLocale,
-                  details.unavailable,
-                )}
-              />
-              <InfoCard
-                label={details.discountPercentage}
-                value={
-                  latestPricing?.discountPercentage
-                    ? `${Number(latestPricing.discountPercentage) * 100}%`
-                    : details.unavailable
-                }
-              />
+          {canSeeFinancials ? (
+            <div className="panel-surface">
+              <p className="eyebrow">{details.pricing}</p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <InfoCard
+                  label={details.latestPrice}
+                  value={formatCurrency(
+                    latestPricing?.finalUnitPriceWithoutTax,
+                    latestPricing?.currencyCode || "SAR",
+                    numberLocale,
+                    details.unavailable,
+                  )}
+                />
+                <InfoCard
+                  label={details.originalPrice}
+                  value={formatCurrency(
+                    latestPricing?.originalUnitPriceWithoutTax,
+                    latestPricing?.currencyCode || "SAR",
+                    numberLocale,
+                    details.unavailable,
+                  )}
+                />
+                <InfoCard
+                  label={details.discountAmount}
+                  value={formatCurrency(
+                    latestPricing?.discountAmount,
+                    latestPricing?.currencyCode || "SAR",
+                    numberLocale,
+                    details.unavailable,
+                  )}
+                />
+                <InfoCard
+                  label={details.discountPercentage}
+                  value={
+                    latestPricing?.discountPercentage
+                      ? `${Number(latestPricing.discountPercentage) * 100}%`
+                      : details.unavailable
+                  }
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
-      {openPanel ? (
+      {openPanel && canCreateTraining ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/70 bg-white p-5 shadow-[0_30px_70px_rgba(10,25,35,0.35)] sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -482,8 +500,31 @@ export default async function CourseDetailPage({
 
             <p className="section-copy">{details.createDescription}</p>
 
-            <form action={createCourseRun} className="mt-6 space-y-4">
+              <form action={createTraining} className="mt-6 space-y-4">
               <input type="hidden" name="courseId" value={course.id} />
+
+              <label className="field-shell">
+                <span className="field-label">
+                  {localeText.courseRuns.purchaseOrderCourseEntry}
+                </span>
+                <select
+                  name="purchaseOrderCourseEntryId"
+                  className="field-input"
+                  defaultValue=""
+                  required
+                >
+                  <option value="" disabled>
+                    {localeText.courseRuns.selectPurchaseOrderCourseEntry}
+                  </option>
+                  {course.scopeSelections.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.scope.code} | {entry.scope.nameEn || entry.scope.nameAr || entry.scope.name} |{" "}
+                      {course.courseCode} | {course.nameEn || course.nameAr} |{" "}
+                      {localeText.courseRuns.plannedSeats}: {entry.estimatedSeats ?? "-"}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="field-shell">
@@ -528,17 +569,6 @@ export default async function CourseDetailPage({
                   <input type="date" name="endDate" className="field-input" />
                 </label>
               </div>
-
-              <label className="field-shell">
-                <span className="field-label">{details.plannedSeats}</span>
-                <input
-                  type="number"
-                  name="plannedSeats"
-                  min="0"
-                  step="1"
-                  className="field-input"
-                />
-              </label>
 
               <label className="field-shell">
                 <span className="field-label">{details.notes}</span>

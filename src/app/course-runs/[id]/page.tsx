@@ -1,17 +1,42 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound } from "next/navigation";
-import { DocumentEntityType, DocumentType } from "@prisma/client";
+import { DocumentEntityType, DocumentType, Prisma, TrainingCity } from "@prisma/client";
 import {
-  assignTrainerToCourseRun,
-  createParticipantAndNominate,
-  nominateExistingParticipant,
+  assignInstructorToTraining,
+  createAttendeeAndEnroll,
+  createTrainingSession,
+  enrollExistingAttendee,
   recordAttendance,
-  removeTrainerFromCourseRun,
-  updateCourseRun,
-  updateNominationStatus,
+  removeInstructorFromTraining,
+  upsertAttendeeEvaluation,
+  upsertCourseEvaluation,
+  upsertInstructorEvaluation,
+  updateEnrollmentStatus,
+  updateTrainingSession,
+  updateTraining,
 } from "@/app/course-runs/actions";
+import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
+import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
+import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import {
+  canEditOperationalData,
+  canManageFinancialFields,
+  canViewFinancials,
+  getCurrentPlatformRole,
+  isCustomerCapacityOnly,
+} from "@/lib/permissions";
+import {
+  getTrainingCapacity,
+  getTrainingSessionAttendanceRate,
+} from "@/server/services/capacity-service";
+import { getTrainingEnrollmentSummary } from "@/server/services/enrollment-service";
+import {
+  getAverageCourseRating,
+  getAverageInstructorRating,
+} from "@/server/services/training-evaluation-service";
+import { getTrainingFinancials } from "@/server/services/training-financial-service";
 
 type CourseRunDetailPageProps = {
   params: Promise<{
@@ -19,11 +44,121 @@ type CourseRunDetailPageProps = {
   }>;
   searchParams?: Promise<{
     panel?: string;
+    attendee?: string;
+    status?: string;
+    enrollmentPage?: string;
+    attendanceQ?: string;
+    attendancePage?: string;
+    attendanceView?: string;
+    completionQ?: string;
+    completionPage?: string;
+    completionView?: string;
+    evaluationPage?: string;
   }>;
 };
 
+const ENROLLMENTS_PAGE_SIZE = 10;
+const ATTENDANCE_PAGE_SIZE = 10;
+const COMPLETION_PAGE_SIZE = 10;
+const EVALUATIONS_PAGE_SIZE = 10;
+
 function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
+}
+
+function formatCurrency(
+  value: Prisma.Decimal | number | null | undefined,
+  locale: string,
+  unavailableLabel = "-",
+) {
+  if (value === null || value === undefined) {
+    return unavailableLabel;
+  }
+
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "SAR",
+    maximumFractionDigits: 2,
+  }).format(Number(value));
+}
+
+function formatAverageRating(value: number | null, locale: string) {
+  if (value === null) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function normalizePage(value?: string) {
+  const parsed = Number.parseInt(value || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function paginationPages(current: number, total: number) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+    .reduce<Array<number | "ellipsis">>((items, page) => {
+      const previous = items.at(-1);
+      if (typeof previous === "number" && page - previous > 1) {
+        items.push("ellipsis");
+      }
+      items.push(page);
+      return items;
+    }, []);
+}
+
+function enrollmentPageHref(
+  trainingId: string,
+  page: number,
+  attendee?: string,
+  status?: string,
+) {
+  const query = new URLSearchParams();
+  if (attendee) query.set("attendee", attendee);
+  if (status) query.set("status", status);
+  if (page > 1) query.set("enrollmentPage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
+}
+
+function attendancePageHref(
+  trainingId: string,
+  page: number,
+  attendanceQ?: string,
+  view?: string,
+) {
+  const query = new URLSearchParams();
+  if (attendanceQ) query.set("attendanceQ", attendanceQ);
+  if (view === "all") query.set("attendanceView", "all");
+  if (page > 1 && view !== "all") query.set("attendancePage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
+}
+
+function completionPageHref(
+  trainingId: string,
+  page: number,
+  completionQ?: string,
+  view?: string,
+) {
+  const query = new URLSearchParams();
+  if (completionQ) query.set("completionQ", completionQ);
+  if (view === "all") query.set("completionView", "all");
+  if (page > 1 && view !== "all") query.set("completionPage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
+}
+
+function evaluationPageHref(trainingId: string, page: number) {
+  const query = new URLSearchParams();
+  if (page > 1) query.set("evaluationPage", String(page));
+  const queryString = query.toString();
+  return queryString ? `/trainings/${trainingId}?${queryString}` : `/trainings/${trainingId}`;
 }
 
 function formatDateInput(value: Date | null) {
@@ -31,25 +166,33 @@ function formatDateInput(value: Date | null) {
   return value.toISOString().slice(0, 10);
 }
 
+function dateKey(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function attendanceCellKey(participantId: string, sessionId: string) {
+  return `${participantId}:${sessionId}`;
+}
+
 function detailText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      title: "تفاصيل التشغيل",
+      title: "تفاصيل التدريب",
       description:
-        "راجع معلومات التشغيل الحالية، ثم استخدم الأزرار العلوية لتعديل التشغيل أو إضافة مدرب أو إدارة الترشيحات.",
-      edit: "تعديل التشغيل",
-      editButton: "فتح تعديل التشغيل",
+        "راجع معلومات التدريب الحالية، ثم استخدم الأزرار العلوية لتعديل التدريب أو إضافة مدرب أو إدارة التسجيلات.",
+      edit: "تعديل التدريب",
+      editButton: "فتح تعديل التدريب",
       addTrainer: "إضافة مدرب",
       addTrainerButton: "فتح إضافة مدرب",
-      addNomination: "إضافة ترشيح",
-      addNominationButton: "فتح إضافة ترشيح",
+      addNomination: "إضافة تسجيل",
+      addNominationButton: "فتح إضافة تسجيل",
       addAttendance: "تسجيل حضور",
       addAttendanceButton: "فتح تسجيل الحضور",
       summary: "الملخص",
       progress: "مؤشرات التقدم",
-      provider: "الجهة المنفذة",
+      provider: "المورد",
       location: "الموقع",
-      chooseProvider: "اختر جهة",
+      chooseProvider: "اختر موردا",
       chooseLocation: "اختر موقع",
       save: "حفظ التعديلات",
       back: "العودة",
@@ -63,11 +206,11 @@ function detailText(locale: "en" | "ar") {
       primaryTrainer: "مدرب رئيسي",
       noTrainers: "لا يوجد مدربون مسندون حتى الآن",
       remove: "إزالة",
-      nominations: "الترشيحات",
-      currentNominations: "الترشيحات الحالية",
-      chooseParticipant: "اختر مستفيداً",
-      nominationStatus: "حالة الترشيح",
-      participantType: "نوع المستفيد",
+      nominations: "التسجيلات",
+      currentNominations: "التسجيلات الحالية",
+      chooseParticipant: "اختر أحد الحضور",
+      nominationStatus: "حالة التسجيل",
+      participantType: "نوع الحضور",
       participantNameAr: "الاسم بالعربية",
       participantNameEn: "الاسم بالإنجليزية",
       participantEmail: "البريد الإلكتروني",
@@ -75,17 +218,22 @@ function detailText(locale: "en" | "ar") {
       participantOrg: "الجهة",
       participantJobTitle: "المسمى الوظيفي",
       participantNationalId: "رقم الهوية / الإقامة",
-      existingParticipant: "ترشيح من سجل موجود",
-      quickCreateParticipant: "إضافة مستفيد جديد وترشيحه",
-      noNominations: "لا توجد ترشيحات حتى الآن",
-      saveNomination: "حفظ الترشيح",
-      createAndNominate: "إضافة وترشيح",
+      existingParticipant: "تسجيل حضور موجود",
+      quickCreateParticipant: "إضافة حضور جديد وتسجيله",
+      noNominations: "لا توجد تسجيلات حتى الآن",
+      saveNomination: "حفظ التسجيل",
+      createAndNominate: "إضافة وتسجيل",
       attendance: "الحضور",
       attendanceLog: "سجل الحضور",
+      seeAllAttendance: "عرض كل الحضور",
+      showPagedAttendance: "عرض الصفحات",
       noAttendance: "لا توجد سجلات حضور حتى الآن",
+      addEnrollmentsBeforeAttendance: "أضف الحضور إلى التدريب قبل تسجيل الحضور.",
+      notRecorded: "لم يسجل",
       attendanceDate: "تاريخ الحضور",
       attendanceStatus: "حالة الحضور",
-      chooseAttendee: "اختر متدرباً مرشحاً",
+      chooseAttendee: "اختر من الحضور المسجلين",
+      chooseSession: "اختر جلسة",
       saveAttendance: "حفظ الحضور",
       recordedAttendance: "الحضور المسجل",
       completion: "الاكتمال والأهلية",
@@ -93,12 +241,37 @@ function detailText(locale: "en" | "ar") {
       noCompletionData: "لا توجد بيانات حضور كافية لحساب الاكتمال حتى الآن",
       attendanceRate: "نسبة الحضور",
       attendedDays: "أيام الحضور",
+      attended: "حضر",
+      missed: "فاتته",
+      sessionAttendanceDetail: "تفاصيل حضور الجلسات",
       totalSessions: "إجمالي الجلسات",
       completionEligible: "مؤهل للاكتمال",
       certificateEligible: "مؤهل للشهادة",
-      completionRule: "يعتبر المتدرب مؤهلاً عند حضور 75% على الأقل من الجلسات المسجلة.",
-      eligibleCount: "المؤهلون",
+      completionRule: "يعتبر الحاضر مؤهلاً عند حضور 75% على الأقل من الجلسات المسجلة.",
+      eligibleCount: "الحضور المؤهلون",
+      sessions: "الجلسات",
+      sessionSchedule: "جدول الجلسات",
+      sessionDescription: "أضف أو عدل أيام التدريب دون تغيير حالة التدريب.",
+      sessionDate: "تاريخ الجلسة",
+      sessionNotes: "ملاحظات الجلسة",
+      addSession: "إضافة جلسة",
+      editSession: "تعديل الجلسة",
+      saveSession: "حفظ الجلسة",
+      noSessions: "لا توجد جلسات مضافة حتى الآن.",
+      addSessionsBeforeAttendance: "أضف جلسات التدريب أولا قبل تسجيل الحضور.",
       threshold: "حد الاكتمال",
+      capacityTitle: "سعة التدريب",
+      capacityDescription: "المقاعد التقديرية مقابل المقاعد المؤكدة لهذا التدريب.",
+      utilizationPct: "نسبة الاستغلال %",
+      remainingCapacity: "السعة المتبقية",
+      fullyBooked: "محجوز بالكامل",
+      overCapacityBy: "التجاوز بمقدار",
+      financialTitle: "المؤشرات المالية",
+      financialDescription: "الإيراد وتكلفة المورد وهامش الربح لهذا التدريب.",
+      vendorCost: "تكلفة المورد",
+      revenue: "الإيراد",
+      grossMargin: "هامش الربح",
+      marginPct: "هامش الربح %",
       documents: "المستندات",
       documentVault: "المستندات",
       documentVaultDescription: "ارفع واحفظ المستندات المتعلقة بهذا البرنامج التدريبي الجاري مثل الحضور والتقارير والشهادات والصور.",
@@ -106,56 +279,80 @@ function detailText(locale: "en" | "ar") {
       documentFile: "الملف",
       documentNotes: "وصف أو ملاحظات",
       uploadDocument: "رفع المستند",
-      noDocuments: "لا توجد مستندات مرفوعة لهذا التشغيل حتى الآن",
+      noDocuments: "لا توجد مستندات مرفوعة لهذا التدريب حتى الآن",
       download: "تحميل",
       fileSize: "حجم الملف",
       version: "الإصدار",
       attendanceRequired: "يتطلب حضور",
       certificateRequired: "يتطلب شهادة",
-      confirmedSeats: "المقاعد المؤكدة",
+      confirmedSeats: "المقاعد الفعلية",
+      vendor: "المورد",
+      city: "المدينة",
+      selectCity: "اختر المدينة",
+      daysHeld: "أيام التعاقد",
       yes: "نعم",
       no: "لا",
       close: "إغلاق",
-      plannedSeats: "المقاعد المخططة",
-      courseStatus: "حالة التشغيل",
+      plannedSeats: "المقاعد التقديرية",
+      courseStatus: "حالة التدريب",
+      enrollmentDate: "تاريخ التسجيل",
+      notes: "ملاحظات",
+      filterAttendee: "تصفية حسب الحضور",
+      filterEnrollmentStatus: "تصفية حسب حالة التسجيل",
+      allEnrollmentStatuses: "جميع حالات التسجيل",
+      totalEnrollments: "إجمالي التسجيلات",
+      confirmedEnrollments: "المؤكدة",
+      cancelledEnrollments: "الملغاة",
+      completedEnrollments: "المكتملة",
+      completionRate: "نسبة الإكمال %",
+      evaluationTitle: "تقييمات التدريب",
+      evaluationDescription: "قم بتسجيل تقييم للدورة أو المدرب أو المتدرب.",
+      noEvaluations: "لا توجد تقييمات مسجلة حتى الآن.",
+      courseEvaluation: "تقييم الدورة",
+      instructorEvaluation: "تقييم المدرب",
+      attendeeEvaluation: "تقييم المتدرب",
+      rating: "التقييم",
+      comments: "التعليقات",
+      averageCourseRating: "متوسط تقييم الدورة",
+      averageInstructorRating: "متوسط تقييم المدرب",
     };
   }
 
   return {
-    title: "Active Course Details",
+    title: "Training Details",
     description:
-      "Review the current delivery information first, then use the top actions to edit the delivery, add a trainer, or manage nominations.",
-    edit: "Edit Course",
-    editButton: "Edit Course",
-    addTrainer: "Add Trainer",
-    addTrainerButton: "Add Trainer",
-    addNomination: "Add Registration",
-    addNominationButton: "Add Registration",
+      "Review the current training information, then use the top actions to edit the training, add an instructor, or manage enrollments.",
+    edit: "Edit Training",
+    editButton: "Edit Training",
+    addTrainer: "Add Instructor",
+    addTrainerButton: "Add Instructor",
+    addNomination: "Add Enrollment",
+    addNominationButton: "Add Enrollment",
     addAttendance: "Add Attendance",
     addAttendanceButton: "Add Attendance",
     summary: "Summary",
     progress: "Progress indicators",
-    provider: "Training Provider",
+    provider: "Vendor",
     location: "Location",
-    chooseProvider: "Choose a training provider",
+    chooseProvider: "Choose a vendor",
     chooseLocation: "Choose a location",
     save: "Save Changes",
     back: "Back",
     notAssigned: "Not assigned yet",
     noNotes: "No notes provided",
-    trainerAssignments: "Trainer assignments",
-    currentTrainers: "Current trainers",
-    chooseTrainer: "Choose a trainer",
-    trainerRole: "Trainer role",
-    trainerRolePlaceholder: "Lead trainer or supporting trainer",
-    primaryTrainer: "Primary trainer",
-    noTrainers: "No trainers are assigned yet",
+    trainerAssignments: "Instructor assignments",
+    currentTrainers: "Current instructors",
+    chooseTrainer: "Choose an instructor",
+    trainerRole: "Instructor role",
+    trainerRolePlaceholder: "Lead instructor or supporting instructor",
+    primaryTrainer: "Primary instructor",
+    noTrainers: "No instructors are assigned yet",
     remove: "Remove",
-    nominations: "Registrations",
-    currentNominations: "Current Registrations",
-    chooseParticipant: "Choose a participant",
-    nominationStatus: "Registration status",
-    participantType: "Participant type",
+    nominations: "Enrollments",
+    currentNominations: "Current Enrollments",
+    chooseParticipant: "Choose an attendee",
+    nominationStatus: "Enrollment status",
+    participantType: "Attendee type",
     participantNameAr: "Arabic name",
     participantNameEn: "English name",
     participantEmail: "Email",
@@ -163,72 +360,160 @@ function detailText(locale: "en" | "ar") {
     participantOrg: "Organization",
     participantJobTitle: "Job title",
     participantNationalId: "National ID / Iqama",
-    existingParticipant: "Register an existing participant",
-    quickCreateParticipant: "Add a new participant and register",
-    noNominations: "No participants are registered yet. Click Add Registration to get started.",
-    saveNomination: "Save Registration",
-    createAndNominate: "Add and Register",
+    existingParticipant: "Enroll an existing attendee",
+    quickCreateParticipant: "Add a new attendee and enroll",
+    noNominations: "No attendees are enrolled yet. Click Add Enrollment to get started.",
+    saveNomination: "Save Enrollment",
+    createAndNominate: "Add and Enroll",
     attendance: "Attendance",
     attendanceLog: "Attendance log",
+    seeAllAttendance: "See all attendance",
+    showPagedAttendance: "Show paged list",
     noAttendance: "No attendance entries have been added yet. Click Add Attendance to get started.",
+    addEnrollmentsBeforeAttendance: "Enroll attendees before recording attendance.",
+    notRecorded: "Not recorded",
     attendanceDate: "Attendance date",
     attendanceStatus: "Attendance status",
-    chooseAttendee: "Choose a nominated attendee",
+    chooseAttendee: "Choose an enrolled attendee",
+    chooseSession: "Choose a session",
     saveAttendance: "Save attendance",
     recordedAttendance: "Attendance entries",
+    evaluationTitle: "Training evaluations",
+    evaluationDescription: "Record course, instructor, and attendee evaluations.",
+    noEvaluations: "No evaluations have been recorded yet.",
+    courseEvaluation: "Course evaluation",
+    instructorEvaluation: "Instructor evaluation",
+    attendeeEvaluation: "Attendee evaluation",
+    rating: "Rating",
+    comments: "Comments",
+    averageCourseRating: "Average Course Rating",
+    averageInstructorRating: "Average Instructor Rating",
     completion: "Completion and eligibility",
     completionSummary: "Completion summary",
     noCompletionData: "There is not enough attendance data to calculate completion yet",
     attendanceRate: "Attendance rate",
     attendedDays: "Attended days",
+    attended: "Attended",
+    missed: "Missed",
+    sessionAttendanceDetail: "Session attendance detail",
     totalSessions: "Total sessions",
     completionEligible: "Completion eligible",
     certificateEligible: "Ready to issue certificate",
-    completionRule: "A participant is ready to complete the course after attending at least 75% of the course sessions.",
-    eligibleCount: "Eligible participants",
-    threshold: "Completion threshold",
-    documents: "Documents",
+    completionRule: "An attendee is ready to complete the training after attending at least 75% of its sessions.",
+    eligibleCount: "Eligible attendees",
+    sessions: "Sessions",
+    sessionSchedule: "Session schedule",
+    sessionDescription: "Add or edit training days without changing the training lifecycle status.",
+    sessionDate: "Session date",
+    sessionNotes: "Session notes",
+    addSession: "Add Session",
+    editSession: "Edit Session",
+    saveSession: "Save Session",
+    noSessions: "No sessions have been added yet.",
+    addSessionsBeforeAttendance: "Add training sessions before recording attendance.",
+      threshold: "Completion threshold",
+      capacityTitle: "Training Capacity",
+      capacityDescription: "Estimated seats versus actual confirmed seats for this training.",
+      utilizationPct: "Utilization %",
+      remainingCapacity: "Remaining Capacity",
+      fullyBooked: "Fully Booked",
+      overCapacityBy: "Over Capacity by",
+      financialTitle: "Financial Indicators",
+      financialDescription: "Revenue, vendor cost, and gross margin for this training.",
+      vendorCost: "Vendor Cost",
+      revenue: "Revenue",
+      grossMargin: "Gross Margin",
+      marginPct: "Margin %",
+      documents: "Documents",
     documentVault: "Documents",
-    documentVaultDescription: "Upload files related to this active course, such as attendance sheets, reports, certificates, and photos.",
+    documentVaultDescription: "Upload training files such as attendance sheets, reports, certificates, and photos.",
     documentType: "Document type",
     documentFile: "File",
     documentNotes: "Description or notes",
     uploadDocument: "Upload File",
-    noDocuments: "No files have been uploaded for this active course yet.",
+    noDocuments: "No files have been uploaded for this training yet.",
     download: "Download",
     fileSize: "File size",
     version: "Version",
     attendanceRequired: "Attendance required",
     certificateRequired: "Issue certificate",
-    confirmedSeats: "Confirmed seats",
+    confirmedSeats: "Actual Seats",
+    vendor: "Vendor",
+    city: "City",
+    selectCity: "Select a city",
+    daysHeld: "Days Held",
     yes: "Yes",
     no: "No",
     close: "Close",
-    plannedSeats: "Planned seats",
-    courseStatus: "Course Status",
+    plannedSeats: "Estimated Seats",
+    courseStatus: "Training Status",
+    enrollmentDate: "Enrollment Date",
+    notes: "Notes",
+    filterAttendee: "Filter by attendee",
+    filterEnrollmentStatus: "Filter by enrollment status",
+    allEnrollmentStatuses: "All enrollment statuses",
+    totalEnrollments: "Total Enrollments",
+    confirmedEnrollments: "Confirmed",
+    cancelledEnrollments: "Cancelled",
+    completedEnrollments: "Completed",
+    completionRate: "Completion Rate %",
   };
 }
 
-function nominationStatusText(locale: "en" | "ar") {
+function enrollmentStatusText(locale: "en" | "ar") {
   if (locale === "ar") {
     return {
-      NOMINATED: "مرشح",
-      CONTACTED: "تم التواصل",
+      NOMINATED: "قيد الانتظار",
       CONFIRMED: "مؤكد",
-      DECLINED: "معتذر",
-      REPLACED: "مستبدل",
-      WITHDRAWN: "منسحب",
+      DECLINED: "ملغى",
+      WITHDRAWN: "مكتمل",
     } as const;
   }
 
   return {
-    NOMINATED: "Nominated",
-    CONTACTED: "Contacted",
+    NOMINATED: "Pending",
     CONFIRMED: "Confirmed",
-    DECLINED: "Declined",
-    REPLACED: "Replaced",
-    WITHDRAWN: "Withdrawn",
+    DECLINED: "Cancelled",
+    WITHDRAWN: "Completed",
   } as const;
+}
+
+function getEnrollmentDisplayStatus(status: string) {
+  switch (status) {
+    case "CONFIRMED":
+      return "CONFIRMED";
+    case "DECLINED":
+    case "REPLACED":
+      return "CANCELLED";
+    case "WITHDRAWN":
+      return "COMPLETED";
+    default:
+      return "PENDING";
+  }
+}
+
+function getEnrollmentEditValue(status: string) {
+  switch (status) {
+    case "CONFIRMED":
+      return "CONFIRMED";
+    case "DECLINED":
+    case "REPLACED":
+      return "DECLINED";
+    case "WITHDRAWN":
+      return "WITHDRAWN";
+    default:
+      return "NOMINATED";
+  }
+}
+
+function getEnrollmentStatusLabel(locale: "en" | "ar", status: string) {
+  const labels = enrollmentStatusText(locale);
+  const displayStatus = getEnrollmentDisplayStatus(status);
+
+  if (displayStatus === "CONFIRMED") return labels.CONFIRMED;
+  if (displayStatus === "CANCELLED") return labels.DECLINED;
+  if (displayStatus === "COMPLETED") return labels.WITHDRAWN;
+  return labels.NOMINATED;
 }
 
 function participantTypeText(locale: "en" | "ar") {
@@ -243,7 +528,7 @@ function participantTypeText(locale: "en" | "ar") {
   }
 
   return {
-    STUDENT: "Participant",
+    STUDENT: "Attendee",
     TEACHER: "Teacher",
     OWNER: "Owner",
     COORDINATOR: "Coordinator",
@@ -311,8 +596,8 @@ function formatFileSize(bytes: number | null, locale: string) {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
 }
 
-function panelHref(id: string, panel: "edit" | "trainer" | "nomination" | "attendance") {
-  return `/course-runs/${id}?panel=${panel}`;
+function panelHref(id: string, panel: "edit" | "instructor" | "enrollment") {
+  return `/trainings/${id}?panel=${panel}`;
 }
 
 export default async function CourseRunDetailPage({
@@ -321,11 +606,23 @@ export default async function CourseRunDetailPage({
 }: CourseRunDetailPageProps) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
+  const enrollmentSearch = (query.attendee ?? "").trim().toLowerCase();
+  const enrollmentSearchRaw = (query.attendee ?? "").trim();
+  const enrollmentStatusFilter = (query.status ?? "").trim();
+  const requestedEnrollmentPage = normalizePage(query.enrollmentPage);
+  const attendanceSearch = (query.attendanceQ ?? "").trim().toLowerCase();
+  const attendanceSearchRaw = (query.attendanceQ ?? "").trim();
+  const requestedAttendancePage = normalizePage(query.attendancePage);
+  const showAllAttendance = query.attendanceView === "all";
+  const completionSearch = (query.completionQ ?? "").trim().toLowerCase();
+  const completionSearchRaw = (query.completionQ ?? "").trim();
+  const requestedCompletionPage = normalizePage(query.completionPage);
+  const showAllCompletion = query.completionView === "all";
+  const requestedEvaluationPage = normalizePage(query.evaluationPage);
   const openPanel =
     query.panel === "edit" ||
-    query.panel === "trainer" ||
-    query.panel === "nomination" ||
-    query.panel === "attendance"
+    query.panel === "instructor" ||
+    query.panel === "enrollment"
       ? query.panel
       : "";
   const locale = await getLocale();
@@ -333,8 +630,22 @@ export default async function CourseRunDetailPage({
   const details = detailText(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const completionThreshold = 0.75;
+  const platformRole = await getCurrentPlatformRole();
+  const canEditOps = canEditOperationalData(platformRole);
+  const canManageFinancials = canManageFinancialFields(platformRole);
+  const canSeeFinancials = canViewFinancials(platformRole);
+  const customerOnly = isCustomerCapacityOnly(platformRole);
 
-  const [run, documents, providers, locations, trainers, participants] = await Promise.all([
+  const [
+    run,
+    documents,
+    providers,
+    locations,
+    trainers,
+    participants,
+    purchaseOrderCourseEntries,
+    enrollmentSummary,
+  ] = await Promise.all([
     db.courseRun.findUnique({
       where: { id },
       include: {
@@ -343,6 +654,10 @@ export default async function CourseRunDetailPage({
             package: true,
             category: true,
           },
+        },
+        projectScope: true,
+        projectScopeCourse: {
+          include: { course: true, scope: true },
         },
         provider: true,
         location: true,
@@ -363,7 +678,17 @@ export default async function CourseRunDetailPage({
             participant: true,
           },
           orderBy: [{ attendanceDate: "desc" }, { recordedAt: "desc" }],
-          take: 20,
+        },
+        sessions: {
+          orderBy: { sessionDate: "asc" },
+        },
+        trainingEvaluations: {
+          include: {
+            participant: true,
+            subjectInstructor: true,
+            evaluatorInstructor: true,
+          },
+          orderBy: [{ evaluationType: "asc" }, { updatedAt: "desc" }],
         },
         _count: {
           select: {
@@ -408,62 +733,191 @@ export default async function CourseRunDetailPage({
       orderBy: { fullNameAr: "asc" },
       take: 300,
     }),
+    db.projectScopeCourse.findMany({
+      include: { scope: true, course: true },
+      orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
+    }),
+    getTrainingEnrollmentSummary(id),
   ]);
 
   if (!run) notFound();
 
-  const attendanceByParticipant = new Map<
+  const training = getTrainingBusinessFields(run);
+  const selectedPurchaseOrderCourseEntryId =
+    run.projectScopeCourseId ||
+    purchaseOrderCourseEntries.find(
+      (entry) =>
+        entry.scopeId === run.projectScopeId && entry.courseId === run.courseId,
+    )?.id ||
+    "";
+  const [trainingFinancials, averageCourseRating, averageInstructorRating] = await Promise.all([
+    getTrainingFinancials(run.id),
+    getAverageCourseRating(run.id),
+    getAverageInstructorRating(run.id),
+  ]);
+  const trainingCapacity = getTrainingCapacity({
+    plannedSeats: run.plannedSeats,
+    confirmedSeats: run.confirmedSeats,
+  });
+  const attendanceSummary = await getTrainingSessionAttendanceRate(run.id);
+  const totalSessionCount = run.sessions.length;
+  const latestAttendanceByParticipant = new Map<
     string,
-    {
-      participantId: string;
-      participantName: string;
-      presentCount: number;
-      totalSessions: number;
-      attendanceRate: number;
-      completionEligible: boolean;
-      certificateEligible: boolean;
-    }
+    (typeof run.attendanceRecords)[number]
   >();
 
   for (const record of run.attendanceRecords) {
-    const participantId = record.participantId;
-    const existing = attendanceByParticipant.get(participantId) ?? {
-      participantId,
-      participantName: record.participant.fullNameEn || record.participant.fullNameAr,
-      presentCount: 0,
-      totalSessions: 0,
-      attendanceRate: 0,
-      completionEligible: false,
-      certificateEligible: false,
-    };
-
-    existing.totalSessions += 1;
-
-    if (record.attendanceStatus === "PRESENT" || record.attendanceStatus === "PARTIAL") {
-      existing.presentCount += 1;
+    if (!latestAttendanceByParticipant.has(record.participantId)) {
+      latestAttendanceByParticipant.set(record.participantId, record);
     }
-
-    attendanceByParticipant.set(participantId, existing);
   }
 
-  const completionRows = Array.from(attendanceByParticipant.values())
-    .map((item) => {
+  const attendanceSessionIdByDate = new Map(
+    run.sessions.map((session) => [dateKey(session.sessionDate), session.id]),
+  );
+  const attendanceByCell = new Map<string, (typeof run.attendanceRecords)[number]>();
+
+  for (const record of run.attendanceRecords) {
+    const sessionId =
+      record.trainingSessionId ?? attendanceSessionIdByDate.get(dateKey(record.attendanceDate));
+
+    if (!sessionId) {
+      continue;
+    }
+
+    const cellKey = attendanceCellKey(record.participantId, sessionId);
+    if (!attendanceByCell.has(cellKey)) {
+      attendanceByCell.set(cellKey, record);
+    }
+  }
+
+  const completionRows = run.nominations
+    .filter((nomination) => {
+      const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
+      return status === "PENDING" || status === "CONFIRMED";
+    })
+    .map((nomination) => {
+      const presentCount = run.sessions.reduce((count, session) => {
+        const record = attendanceByCell.get(
+          attendanceCellKey(nomination.participantId, session.id),
+        );
+        return record?.attendanceStatus === "PRESENT" ? count + 1 : count;
+      }, 0);
       const attendanceRate =
-        item.totalSessions > 0 ? item.presentCount / item.totalSessions : 0;
+        totalSessionCount > 0 ? presentCount / totalSessionCount : 0;
+      const sessionDetails = run.sessions.map((session) => {
+        const record = attendanceByCell.get(
+          attendanceCellKey(nomination.participantId, session.id),
+        );
+
+        return {
+          sessionId: session.id,
+          sessionDate: session.sessionDate,
+          attended: record?.attendanceStatus === "PRESENT",
+        };
+      });
       const completionEligible = attendanceRate >= completionThreshold;
       const certificateEligible =
         run.certificateRequired && completionEligible ? true : !run.certificateRequired;
 
       return {
-        ...item,
+        participantId: nomination.participantId,
+        participantName:
+          nomination.participant.fullNameEn || nomination.participant.fullNameAr,
+        presentCount,
+        totalSessions: totalSessionCount,
         attendanceRate,
+        sessionDetails,
         completionEligible,
         certificateEligible,
       };
     })
+    .filter((row) => row.totalSessions > 0)
     .sort((left, right) => right.attendanceRate - left.attendanceRate);
 
   const eligibleCount = completionRows.filter((item) => item.completionEligible).length;
+  const filteredCompletionRows = completionRows.filter((row) =>
+    !completionSearch || row.participantName.toLowerCase().includes(completionSearch),
+  );
+  const totalCompletionPages = Math.max(
+    1,
+    Math.ceil(filteredCompletionRows.length / COMPLETION_PAGE_SIZE),
+  );
+  const safeCompletionPage = Math.min(requestedCompletionPage, totalCompletionPages);
+  const visibleCompletionRows = showAllCompletion
+    ? filteredCompletionRows
+    : filteredCompletionRows.slice(
+        (safeCompletionPage - 1) * COMPLETION_PAGE_SIZE,
+        safeCompletionPage * COMPLETION_PAGE_SIZE,
+      );
+
+  const filteredEnrollments = run.nominations.filter((nomination) => {
+    const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
+    const participantSearch = [
+      nomination.participant.fullNameAr,
+      nomination.participant.fullNameEn,
+      nomination.participant.email,
+      nomination.participant.organizationName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    const attendeeMatches = !enrollmentSearch || participantSearch.includes(enrollmentSearch);
+    const statusMatches =
+      !enrollmentStatusFilter || enrollmentStatusFilter === status;
+
+    return attendeeMatches && statusMatches;
+  });
+  const totalEnrollmentPages = Math.max(
+    1,
+    Math.ceil(filteredEnrollments.length / ENROLLMENTS_PAGE_SIZE),
+  );
+  const safeEnrollmentPage = Math.min(requestedEnrollmentPage, totalEnrollmentPages);
+  const visibleEnrollments = filteredEnrollments.slice(
+    (safeEnrollmentPage - 1) * ENROLLMENTS_PAGE_SIZE,
+    safeEnrollmentPage * ENROLLMENTS_PAGE_SIZE,
+  );
+
+  const attendanceGridEnrollments = run.nominations.filter((nomination) => {
+    const status = getEnrollmentDisplayStatus(nomination.nominationStatus);
+    return status === "PENDING" || status === "CONFIRMED";
+  });
+  const filteredAttendanceGridEnrollments = attendanceGridEnrollments.filter((nomination) => {
+    if (!attendanceSearch) return true;
+
+    const participantSearch = [
+      nomination.participant.fullNameAr,
+      nomination.participant.fullNameEn,
+      nomination.participant.email,
+      nomination.participant.organizationName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return participantSearch.includes(attendanceSearch);
+  });
+  const totalAttendancePages = Math.max(
+    1,
+    Math.ceil(filteredAttendanceGridEnrollments.length / ATTENDANCE_PAGE_SIZE),
+  );
+  const safeAttendancePage = Math.min(requestedAttendancePage, totalAttendancePages);
+  const visibleAttendanceGridEnrollments = showAllAttendance
+    ? filteredAttendanceGridEnrollments
+    : filteredAttendanceGridEnrollments.slice(
+        (safeAttendancePage - 1) * ATTENDANCE_PAGE_SIZE,
+        safeAttendancePage * ATTENDANCE_PAGE_SIZE,
+      );
+  const totalEvaluationPages = Math.max(
+    1,
+    Math.ceil(run.trainingEvaluations.length / EVALUATIONS_PAGE_SIZE),
+  );
+  const safeEvaluationPage = Math.min(requestedEvaluationPage, totalEvaluationPages);
+  const visibleTrainingEvaluations = run.trainingEvaluations.slice(
+    (safeEvaluationPage - 1) * EVALUATIONS_PAGE_SIZE,
+    safeEvaluationPage * EVALUATIONS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -471,7 +925,7 @@ export default async function CourseRunDetailPage({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Link
-              href="/course-runs"
+              href="/trainings"
               className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
             >
               <span aria-hidden="true">←</span>
@@ -479,34 +933,30 @@ export default async function CourseRunDetailPage({
             </Link>
             <p className="eyebrow">{details.title}</p>
             <h2 className="section-title">
-              {run.runCode} | {run.course.nameEn || run.course.nameAr}
+              {training.trainingCode} | {run.course.nameEn || run.course.nameAr}
             </h2>
             <p className="section-copy">{details.description}</p>
           </div>
 
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-            <Link href={panelHref(run.id, "edit")} className="primary-button min-w-fit whitespace-nowrap px-4 text-center text-sm">
-              {details.edit}
-            </Link>
-            <Link
-              href={panelHref(run.id, "trainer")}
-              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
-            >
-              {details.addTrainer}
-            </Link>
-            <Link
-              href={panelHref(run.id, "nomination")}
-              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
-            >
-              {details.addNomination}
-            </Link>
-            <Link
-              href={panelHref(run.id, "attendance")}
-              className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
-            >
-              {details.addAttendance}
-            </Link>
-          </div>
+          {canEditOps ? (
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+              <Link href={panelHref(run.id, "edit")} className="primary-button min-w-fit whitespace-nowrap px-4 text-center text-sm">
+                {details.edit}
+              </Link>
+              <Link
+                href={panelHref(run.id, "instructor")}
+                className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
+              >
+                {details.addTrainer}
+              </Link>
+              <Link
+                href={panelHref(run.id, "enrollment")}
+                className="secondary-button min-w-fit whitespace-nowrap px-4 text-center text-sm"
+              >
+                {details.addNomination}
+              </Link>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -528,6 +978,22 @@ export default async function CourseRunDetailPage({
                 value={`${run.course.courseCode} | ${run.course.nameEn || run.course.nameAr}`}
               />
               <InfoCard
+                label={localeText.courseRuns.purchaseOrder}
+                value={
+                  run.projectScope
+                    ? `${formatPurchaseOrderCode(run.projectScope.code, locale)} | ${formatPurchaseOrderTitle(run.projectScope, locale)}`
+                    : details.notAssigned
+                }
+              />
+              <InfoCard
+                label={localeText.courseRuns.purchaseOrderCourseEntry}
+                value={
+                  run.projectScopeCourse
+                    ? `${run.projectScopeCourse.course.courseCode} | ${run.projectScopeCourse.course.nameEn || run.projectScopeCourse.course.nameAr}`
+                    : details.notAssigned
+                }
+              />
+              <InfoCard
                 label={localeText.courseRuns.mode}
                 value={localeText.deliveryModes[run.deliveryMode]}
               />
@@ -539,6 +1005,12 @@ export default async function CourseRunDetailPage({
                 label={details.location}
                 value={run.location?.nameEn || run.location?.nameAr || details.notAssigned}
               />
+              {canSeeFinancials && trainingFinancials ? (
+                <InfoCard
+                  label={details.vendorCost}
+                  value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
+                />
+              ) : null}
             </div>
 
             <div className="jawraa-subcard mt-5 p-4">
@@ -551,59 +1023,219 @@ export default async function CourseRunDetailPage({
             </div>
           </div>
 
-          <div className="panel-surface">
+          {!customerOnly ? (
+            <div className="panel-surface">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="eyebrow">{details.nominations}</p>
                 <h3 className="section-title">{details.currentNominations}</h3>
               </div>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={`/api/trainings/${run.id}/enrollments/export`}
+                  className="secondary-button"
+                >
+                  {localeText.buttons.exportExcel}
+                </a>
+                <Link href={panelHref(run.id, "enrollment")} className="secondary-button">
+                  {details.addNominationButton}
+                </Link>
+              </div>
             </div>
 
+            <form className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr_auto]">
+              <label className="field-shell">
+                <span className="field-label">{details.filterAttendee}</span>
+                <input
+                  type="search"
+                  name="attendee"
+                  defaultValue={query.attendee ?? ""}
+                  className="field-input"
+                  placeholder={details.filterAttendee}
+                />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{details.filterEnrollmentStatus}</span>
+                <select name="status" defaultValue={enrollmentStatusFilter} className="field-input">
+                  <option value="">{details.allEnrollmentStatuses}</option>
+                  <option value="PENDING">{enrollmentStatusText(locale).NOMINATED}</option>
+                  <option value="CONFIRMED">{enrollmentStatusText(locale).CONFIRMED}</option>
+                  <option value="CANCELLED">{enrollmentStatusText(locale).DECLINED}</option>
+                  <option value="COMPLETED">{enrollmentStatusText(locale).WITHDRAWN}</option>
+                </select>
+              </label>
+              <div className="flex items-end gap-2">
+                <button type="submit" className="primary-button w-full sm:w-auto">
+                  {localeText.courseRuns.applyFilters}
+                </button>
+              </div>
+            </form>
+
             <div className="mt-5 space-y-3">
-              {run.nominations.length === 0 ? (
+              {filteredEnrollments.length === 0 ? (
                 <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noNominations}
                 </div>
               ) : (
-                run.nominations.map((nomination) => (
-                  <div
-                    key={nomination.id}
-                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--ink-strong)]">
-                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--ink-soft)]">
-                        {nomination.participant.email ||
-                          nomination.participant.organizationName ||
-                          participantTypeText(locale)[nomination.participant.participantType]}
-                      </p>
-                    </div>
+                visibleEnrollments.map((nomination) => {
+                  const latestAttendance = latestAttendanceByParticipant.get(nomination.participantId);
+                  const attendanceLabel = latestAttendance
+                    ? attendanceStatusText(locale)[latestAttendance.attendanceStatus]
+                    : details.noAttendance;
+                  const enrollmentDate = new Intl.DateTimeFormat(numberLocale, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  }).format(nomination.nominatedAt);
 
-                    <form action={updateNominationStatus} className="w-full sm:w-auto">
-                      <input type="hidden" name="courseRunId" value={run.id} />
-                      <input type="hidden" name="nominationId" value={nomination.id} />
-                      <select
-                        name="nominationStatus"
-                        defaultValue={nomination.nominationStatus}
-                        className="field-input min-w-[14rem]"
-                      >
-                        {Object.entries(nominationStatusText(locale)).map(([key, label]) => (
-                          <option key={key} value={key}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className="secondary-button mt-2 w-full sm:w-auto">
-                        {details.save}
-                      </button>
-                    </form>
-                  </div>
-                ))
+                  return (
+                    <div key={nomination.id} className="jawraa-subcard px-4 py-4">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_0.8fr_0.8fr_auto] lg:items-start">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                            {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                            {nomination.participant.email ||
+                              nomination.participant.organizationName ||
+                              participantTypeText(locale)[nomination.participant.participantType]}
+                          </p>
+                          {nomination.notes ? (
+                            <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
+                              {nomination.notes}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <InfoCard
+                          label={details.nominationStatus}
+                          value={getEnrollmentStatusLabel(locale, nomination.nominationStatus)}
+                        />
+
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                          <InfoCard label={details.enrollmentDate} value={enrollmentDate} />
+                          <InfoCard label={details.attendanceStatus} value={attendanceLabel} />
+                        </div>
+
+                        {canEditOps ? (
+                          <details className="lg:justify-self-end">
+                            <summary className="secondary-button cursor-pointer list-none text-center">
+                              {details.edit}
+                            </summary>
+                            <form action={updateEnrollmentStatus} className="mt-4 min-w-[min(22rem,80vw)] space-y-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] bg-white p-4">
+                              <input type="hidden" name="trainingId" value={run.id} />
+                              <input type="hidden" name="enrollmentId" value={nomination.id} />
+                              <label className="field-shell">
+                                <span className="field-label">{details.nominationStatus}</span>
+                                <select
+                                  name="enrollmentStatus"
+                                  defaultValue={getEnrollmentEditValue(nomination.nominationStatus)}
+                                  className="field-input"
+                                >
+                                  <option value="NOMINATED">{enrollmentStatusText(locale).NOMINATED}</option>
+                                  <option value="CONFIRMED">{enrollmentStatusText(locale).CONFIRMED}</option>
+                                  <option value="DECLINED">{enrollmentStatusText(locale).DECLINED}</option>
+                                  <option value="WITHDRAWN">{enrollmentStatusText(locale).WITHDRAWN}</option>
+                                </select>
+                              </label>
+                              <label className="field-shell">
+                                <span className="field-label">{details.notes}</span>
+                                <textarea
+                                  name="notes"
+                                  rows={3}
+                                  defaultValue={nomination.notes ?? ""}
+                                  className="field-input min-h-[5rem] resize-y"
+                                />
+                              </label>
+                              <button type="submit" className="secondary-button w-full sm:w-auto">
+                                {details.saveNomination}
+                              </button>
+                            </form>
+                          </details>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
-          </div>
+            {filteredEnrollments.length > ENROLLMENTS_PAGE_SIZE ? (
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeEnrollmentPage, numberLocale))
+                    .replace("{total}", formatNumber(totalEnrollmentPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={enrollmentPageHref(run.id, 1, enrollmentSearchRaw, enrollmentStatusFilter)}
+                    aria-disabled={safeEnrollmentPage <= 1}
+                    className={`pagination-link ${safeEnrollmentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={enrollmentPageHref(
+                      run.id,
+                      Math.max(1, safeEnrollmentPage - 1),
+                      enrollmentSearchRaw,
+                      enrollmentStatusFilter,
+                    )}
+                    aria-disabled={safeEnrollmentPage <= 1}
+                    className={`pagination-link ${safeEnrollmentPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeEnrollmentPage, totalEnrollmentPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`enrollment-ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={enrollmentPageHref(
+                          run.id,
+                          page,
+                          enrollmentSearchRaw,
+                          enrollmentStatusFilter,
+                        )}
+                        aria-current={page === safeEnrollmentPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeEnrollmentPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={enrollmentPageHref(
+                      run.id,
+                      Math.min(totalEnrollmentPages, safeEnrollmentPage + 1),
+                      enrollmentSearchRaw,
+                      enrollmentStatusFilter,
+                    )}
+                    aria-disabled={safeEnrollmentPage >= totalEnrollmentPages}
+                    className={`pagination-link ${safeEnrollmentPage >= totalEnrollmentPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={enrollmentPageHref(
+                      run.id,
+                      totalEnrollmentPages,
+                      enrollmentSearchRaw,
+                      enrollmentStatusFilter,
+                    )}
+                    aria-disabled={safeEnrollmentPage >= totalEnrollmentPages}
+                    className={`pagination-link ${safeEnrollmentPage >= totalEnrollmentPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+            </div>
+          ) : null}
 
           <div className="panel-surface">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -611,36 +1243,298 @@ export default async function CourseRunDetailPage({
                 <p className="eyebrow">{details.attendance}</p>
                 <h3 className="section-title">{details.attendanceLog}</h3>
               </div>
+              {filteredAttendanceGridEnrollments.length > ATTENDANCE_PAGE_SIZE ? (
+                <Link
+                  href={
+                    showAllAttendance
+                      ? attendancePageHref(run.id, 1, attendanceSearchRaw)
+                      : attendancePageHref(run.id, 1, attendanceSearchRaw, "all")
+                  }
+                  className="secondary-button"
+                >
+                  {showAllAttendance ? details.showPagedAttendance : details.seeAllAttendance}
+                </Link>
+              ) : null}
+              <a
+                href={`/api/trainings/${run.id}/attendance/export`}
+                className="secondary-button"
+              >
+                {localeText.buttons.exportExcel}
+              </a>
             </div>
 
+            {run.sessions.length === 0 ? (
+              <div className="mt-5 jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                {details.addSessionsBeforeAttendance}
+              </div>
+            ) : attendanceGridEnrollments.length === 0 ? (
+              <div className="mt-5 jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                {details.addEnrollmentsBeforeAttendance}
+              </div>
+            ) : (
+              <>
+                <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <InstantSearchField
+                    name="attendanceQ"
+                    label={details.filterAttendee}
+                    defaultValue={attendanceSearchRaw}
+                    placeholder={details.filterAttendee}
+                    pageParams={["attendancePage"]}
+                  />
+                  <Link href={`/trainings/${run.id}`} className="secondary-button self-end">
+                    {localeText.common.reset}
+                  </Link>
+                </div>
+                {filteredAttendanceGridEnrollments.length === 0 ? (
+                  <div className="mt-5 jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                    {localeText.common.noResults}
+                  </div>
+                ) : (
+                  <div className="mt-5 overflow-x-auto">
+                    <table className="data-table min-w-[48rem]">
+                      <thead>
+                        <tr>
+                          <th>{details.chooseAttendee}</th>
+                          {run.sessions.map((session) => (
+                            <th key={session.id}>
+                              {new Intl.DateTimeFormat(numberLocale, {
+                                month: "short",
+                                day: "numeric",
+                              }).format(session.sessionDate)}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleAttendanceGridEnrollments.map((nomination) => (
+                      <tr key={nomination.id}>
+                        <td>
+                          <div className="min-w-[12rem]">
+                            <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                              {nomination.participant.fullNameEn ||
+                                nomination.participant.fullNameAr}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                              {getEnrollmentStatusLabel(locale, nomination.nominationStatus)}
+                            </p>
+                          </div>
+                        </td>
+                        {run.sessions.map((session) => {
+                          const record = attendanceByCell.get(
+                            attendanceCellKey(nomination.participantId, session.id),
+                          );
+                          const currentStatus = record?.attendanceStatus;
+                          const statusLabel = currentStatus
+                            ? attendanceStatusText(locale)[currentStatus]
+                            : details.notRecorded;
+
+                          return (
+                            <td key={session.id}>
+                              {canEditOps ? (
+                                <form action={recordAttendance} className="min-w-[9rem] space-y-2">
+                                  <input type="hidden" name="trainingId" value={run.id} />
+                                  <input
+                                    type="hidden"
+                                    name="attendeeId"
+                                    value={nomination.participantId}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="trainingSessionId"
+                                    value={session.id}
+                                  />
+                                  <input type="hidden" name="notes" value={record?.notes ?? ""} />
+                                  <select
+                                    name="attendanceStatus"
+                                    defaultValue={currentStatus ?? "PRESENT"}
+                                    className="field-input"
+                                  >
+                                    <option value="PRESENT">
+                                      {attendanceStatusText(locale).PRESENT}
+                                    </option>
+                                    <option value="ABSENT">
+                                      {attendanceStatusText(locale).ABSENT}
+                                    </option>
+                                  </select>
+                                  <button type="submit" className="secondary-button w-full">
+                                    {details.saveAttendance}
+                                  </button>
+                                  <p className="text-xs text-[var(--ink-soft)]">{statusLabel}</p>
+                                </form>
+                              ) : (
+                                <span className="status-pill">{statusLabel}</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {!showAllAttendance &&
+                filteredAttendanceGridEnrollments.length > ATTENDANCE_PAGE_SIZE ? (
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                      {localeText.pagination.pageIndicator
+                        .replace("{current}", formatNumber(safeAttendancePage, numberLocale))
+                        .replace("{total}", formatNumber(totalAttendancePages, numberLocale))}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={attendancePageHref(run.id, 1, attendanceSearchRaw)}
+                        aria-disabled={safeAttendancePage <= 1}
+                        className={`pagination-link ${safeAttendancePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.first}
+                      </Link>
+                      <Link
+                        href={attendancePageHref(
+                          run.id,
+                          Math.max(1, safeAttendancePage - 1),
+                          attendanceSearchRaw,
+                        )}
+                        aria-disabled={safeAttendancePage <= 1}
+                        className={`pagination-link ${safeAttendancePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.previous}
+                      </Link>
+                      {paginationPages(safeAttendancePage, totalAttendancePages).map((page, index) =>
+                        page === "ellipsis" ? (
+                          <span key={`attendance-ellipsis-${index}`} className="pagination-ellipsis">
+                            ...
+                          </span>
+                        ) : (
+                          <Link
+                            key={page}
+                            href={attendancePageHref(run.id, page, attendanceSearchRaw)}
+                            aria-current={page === safeAttendancePage ? "page" : undefined}
+                            className={`pagination-link ${page === safeAttendancePage ? "pagination-link-active" : ""}`}
+                          >
+                            {formatNumber(page, numberLocale)}
+                          </Link>
+                        ),
+                      )}
+                      <Link
+                        href={attendancePageHref(
+                          run.id,
+                          Math.min(totalAttendancePages, safeAttendancePage + 1),
+                          attendanceSearchRaw,
+                        )}
+                        aria-disabled={safeAttendancePage >= totalAttendancePages}
+                        className={`pagination-link ${safeAttendancePage >= totalAttendancePages ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.next}
+                      </Link>
+                      <Link
+                        href={attendancePageHref(run.id, totalAttendancePages, attendanceSearchRaw)}
+                        aria-disabled={safeAttendancePage >= totalAttendancePages}
+                        className={`pagination-link ${safeAttendancePage >= totalAttendancePages ? "pointer-events-none opacity-50" : ""}`}
+                      >
+                        {localeText.pagination.last}
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
+
+          <div className="panel-surface">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="eyebrow">{details.sessions}</p>
+                <h3 className="section-title">{details.sessionSchedule}</h3>
+                <p className="section-copy">{details.sessionDescription}</p>
+              </div>
+              <div className="min-w-[9rem]">
+                <ProgressCard
+                  label={details.totalSessions}
+                  value={formatNumber(totalSessionCount, numberLocale)}
+                  tone="teal"
+                />
+              </div>
+            </div>
+
+            {canEditOps ? (
+              <form action={createTrainingSession} className="mt-5 grid gap-4 xl:grid-cols-[0.8fr_1.2fr_auto]">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <label className="field-shell">
+                  <span className="field-label">{details.sessionDate}</span>
+                  <input type="date" name="sessionDate" className="field-input" required />
+                </label>
+                <label className="field-shell">
+                  <span className="field-label">{details.sessionNotes}</span>
+                  <input
+                    type="text"
+                    name="notes"
+                    className="field-input"
+                    placeholder={details.sessionNotes}
+                  />
+                </label>
+                <div className="flex items-end">
+                  <button type="submit" className="primary-button w-full sm:w-auto">
+                    {details.addSession}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
             <div className="mt-5 space-y-3">
-              {run.attendanceRecords.length === 0 ? (
+              {run.sessions.length === 0 ? (
                 <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
-                  {details.noAttendance}
+                  {details.noSessions}
                 </div>
               ) : (
-                run.attendanceRecords.map((record) => (
-                  <div
-                    key={record.id}
-                    className="jawraa-subcard flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--ink-strong)]">
-                        {record.participant.fullNameEn || record.participant.fullNameAr}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--ink-soft)]">
-                        {new Intl.DateTimeFormat(numberLocale, {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        }).format(record.attendanceDate)}
-                      </p>
-                    </div>
+                run.sessions.map((session) => (
+                  <div key={session.id} className="jawraa-subcard px-4 py-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                          {new Intl.DateTimeFormat(numberLocale, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          }).format(session.sessionDate)}
+                        </p>
+                        {session.notes ? (
+                          <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
+                            {session.notes}
+                          </p>
+                        ) : null}
+                      </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="status-pill">
-                        {attendanceStatusText(locale)[record.attendanceStatus]}
-                      </span>
+                      {canEditOps ? (
+                        <form action={updateTrainingSession} className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[0.8fr_1fr_auto]">
+                          <input type="hidden" name="trainingId" value={run.id} />
+                          <input type="hidden" name="sessionId" value={session.id} />
+                          <label className="field-shell">
+                            <span className="field-label">{details.sessionDate}</span>
+                            <input
+                              type="date"
+                              name="sessionDate"
+                              className="field-input"
+                              defaultValue={formatDateInput(session.sessionDate)}
+                              required
+                            />
+                          </label>
+                          <label className="field-shell">
+                            <span className="field-label">{details.sessionNotes}</span>
+                            <input
+                              type="text"
+                              name="notes"
+                              className="field-input"
+                              defaultValue={session.notes ?? ""}
+                            />
+                          </label>
+                          <div className="flex items-end">
+                            <button type="submit" className="secondary-button w-full sm:w-auto">
+                              {details.saveSession}
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
                     </div>
                   </div>
                 ))
@@ -654,6 +1548,24 @@ export default async function CourseRunDetailPage({
                 <p className="eyebrow">{details.completion}</p>
                 <h3 className="section-title">{details.completionSummary}</h3>
               </div>
+              {filteredCompletionRows.length > COMPLETION_PAGE_SIZE ? (
+                <Link
+                  href={
+                    showAllCompletion
+                      ? completionPageHref(run.id, 1, completionSearchRaw)
+                      : completionPageHref(run.id, 1, completionSearchRaw, "all")
+                  }
+                  className="secondary-button"
+                >
+                  {showAllCompletion ? details.showPagedAttendance : details.seeAllAttendance}
+                </Link>
+              ) : null}
+              <a
+                href={`/api/trainings/${run.id}/completion/export`}
+                className="secondary-button"
+              >
+                {localeText.buttons.exportExcel}
+              </a>
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -680,13 +1592,30 @@ export default async function CourseRunDetailPage({
               </p>
             </div>
 
+            <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <InstantSearchField
+                name="completionQ"
+                label={details.filterAttendee}
+                defaultValue={completionSearchRaw}
+                placeholder={details.filterAttendee}
+                pageParams={["completionPage"]}
+              />
+              <Link href={`/trainings/${run.id}`} className="secondary-button self-end">
+                {localeText.common.reset}
+              </Link>
+            </div>
+
             <div className="mt-5 space-y-3">
               {completionRows.length === 0 ? (
                 <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
                   {details.noCompletionData}
                 </div>
+              ) : filteredCompletionRows.length === 0 ? (
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                  {localeText.common.noResults}
+                </div>
               ) : (
-                completionRows.map((row) => (
+                visibleCompletionRows.map((row) => (
                   <div
                     key={row.participantId}
                     className="jawraa-subcard px-4 py-4"
@@ -729,10 +1658,98 @@ export default async function CourseRunDetailPage({
                         value={row.certificateEligible ? details.yes : details.no}
                       />
                     </div>
+
+                    <div className="mt-4 border-t border-[var(--line)] pt-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink-soft)]">
+                        {details.sessionAttendanceDetail}
+                      </p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {row.sessionDetails.map((sessionDetail) => (
+                          <div
+                            key={sessionDetail.sessionId}
+                            className="flex items-center justify-between gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm"
+                          >
+                            <span className="font-medium text-[var(--ink-strong)]">
+                              {new Intl.DateTimeFormat(numberLocale, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              }).format(sessionDetail.sessionDate)}
+                            </span>
+                            <span className="status-pill">
+                              {sessionDetail.attended ? details.attended : details.missed}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ))
               )}
             </div>
+            {!showAllCompletion && filteredCompletionRows.length > COMPLETION_PAGE_SIZE ? (
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeCompletionPage, numberLocale))
+                    .replace("{total}", formatNumber(totalCompletionPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={completionPageHref(run.id, 1, completionSearchRaw)}
+                    aria-disabled={safeCompletionPage <= 1}
+                    className={`pagination-link ${safeCompletionPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={completionPageHref(
+                      run.id,
+                      Math.max(1, safeCompletionPage - 1),
+                      completionSearchRaw,
+                    )}
+                    aria-disabled={safeCompletionPage <= 1}
+                    className={`pagination-link ${safeCompletionPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeCompletionPage, totalCompletionPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`completion-ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={completionPageHref(run.id, page, completionSearchRaw)}
+                        aria-current={page === safeCompletionPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeCompletionPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={completionPageHref(
+                      run.id,
+                      Math.min(totalCompletionPages, safeCompletionPage + 1),
+                      completionSearchRaw,
+                    )}
+                    aria-disabled={safeCompletionPage >= totalCompletionPages}
+                    className={`pagination-link ${safeCompletionPage >= totalCompletionPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={completionPageHref(run.id, totalCompletionPages, completionSearchRaw)}
+                    aria-disabled={safeCompletionPage >= totalCompletionPages}
+                    className={`pagination-link ${safeCompletionPage >= totalCompletionPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="panel-surface">
@@ -770,13 +1787,15 @@ export default async function CourseRunDetailPage({
                       ) : null}
                     </div>
 
-                    <form action={removeTrainerFromCourseRun}>
-                      <input type="hidden" name="courseRunId" value={run.id} />
-                      <input type="hidden" name="trainerId" value={assignment.trainerId} />
-                      <button type="submit" className="secondary-button w-full sm:w-auto">
-                        {details.remove}
-                      </button>
-                    </form>
+                    {canEditOps ? (
+                      <form action={removeInstructorFromTraining}>
+                        <input type="hidden" name="trainingId" value={run.id} />
+                        <input type="hidden" name="instructorId" value={assignment.trainerId} />
+                        <button type="submit" className="secondary-button w-full sm:w-auto">
+                          {details.remove}
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 ))
               )}
@@ -788,59 +1807,487 @@ export default async function CourseRunDetailPage({
           <div className="panel-surface">
             <p className="eyebrow">{details.progress}</p>
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              <ProgressCard
-                label={details.attendanceRequired}
-                value={run.attendanceRequired ? details.yes : details.no}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.certificateRequired}
-                value={run.certificateRequired ? details.yes : details.no}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.trainerAssignments}
-                value={formatNumber(run.trainers.length, numberLocale)}
-                tone="ink"
-              />
-              <ProgressCard
-                label={details.nominations}
-                value={formatNumber(run._count.nominations, numberLocale)}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.documents}
-                value={formatNumber(documents.length, numberLocale)}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.recordedAttendance}
-                value={formatNumber(run._count.attendanceRecords, numberLocale)}
-                tone="teal"
-              />
-              <ProgressCard
-                label={details.plannedSeats}
-                value={
-                  run.plannedSeats !== null
-                    ? formatNumber(run.plannedSeats, numberLocale)
-                    : "-"
-                }
-                tone="ink"
-              />
-              <ProgressCard
-                label={details.confirmedSeats}
-                value={formatNumber(run.confirmedSeats, numberLocale)}
-                tone="sand"
-              />
-              <ProgressCard
-                label={details.courseStatus}
-                value={localeText.courseRunStatuses[run.status]}
-                tone="teal"
-              />
+              {customerOnly ? (
+                <>
+                  <ProgressCard
+                    label={details.plannedSeats}
+                    value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.confirmedSeats}
+                    value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.utilizationPct}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      trainingCapacity.utilizationPct,
+                    )}%`}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.remainingCapacity}
+                    value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.fullyBooked}
+                    value={trainingCapacity.fullyBooked ? details.yes : details.no}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.overCapacityBy}
+                    value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
+                    tone="teal"
+                  />
+                </>
+              ) : (
+                <>
+                  <ProgressCard
+                    label={details.attendanceRequired}
+                    value={run.attendanceRequired ? details.yes : details.no}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.certificateRequired}
+                    value={run.certificateRequired ? details.yes : details.no}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.trainerAssignments}
+                    value={formatNumber(run.trainers.length, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.totalEnrollments}
+                    value={formatNumber(enrollmentSummary.totalEnrollments, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.confirmedEnrollments}
+                    value={formatNumber(enrollmentSummary.confirmedEnrollments, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.cancelledEnrollments}
+                    value={formatNumber(enrollmentSummary.cancelledEnrollments, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.completedEnrollments}
+                    value={formatNumber(enrollmentSummary.completedEnrollments, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.completionRate}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      enrollmentSummary.completionRate,
+                    )}%`}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.documents}
+                    value={formatNumber(documents.length, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.recordedAttendance}
+                    value={formatNumber(run._count.attendanceRecords, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.plannedSeats}
+                    value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.confirmedSeats}
+                    value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.utilizationPct}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      trainingCapacity.utilizationPct,
+                    )}%`}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.remainingCapacity}
+                    value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.fullyBooked}
+                    value={trainingCapacity.fullyBooked ? details.yes : details.no}
+                    tone="sand"
+                  />
+                  <ProgressCard
+                    label={details.overCapacityBy}
+                    value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
+                    tone="teal"
+                  />
+                  <ProgressCard
+                    label={details.attendanceRate}
+                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                      attendanceSummary.attendanceRate,
+                    )}%`}
+                    tone="ink"
+                  />
+                  <ProgressCard
+                    label={details.courseStatus}
+                    value={localeText.courseRunStatuses[run.status]}
+                    tone="teal"
+                  />
+                </>
+              )}
             </div>
           </div>
 
-          <div className="panel-surface">
+          {canSeeFinancials && trainingFinancials ? (
+            <div className="panel-surface">
+              <p className="eyebrow">{details.financialTitle}</p>
+              <h3 className="section-title">{details.financialTitle}</h3>
+              <p className="section-copy">{details.financialDescription}</p>
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <ProgressCard
+                  label={details.vendorCost}
+                  value={formatCurrency(trainingFinancials.vendorCost, numberLocale)}
+                  tone="ink"
+                />
+                <ProgressCard
+                  label={details.revenue}
+                  value={formatCurrency(trainingFinancials.revenue, numberLocale)}
+                  tone="sand"
+                />
+                <ProgressCard
+                  label={details.grossMargin}
+                  value={formatCurrency(trainingFinancials.grossMargin, numberLocale)}
+                  tone="teal"
+                />
+                <ProgressCard
+                  label={details.marginPct}
+                  value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                    trainingFinancials.marginPct,
+                  )}%`}
+                  tone="ink"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {canEditOps ? (
+            <div className="panel-surface">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="eyebrow">{details.evaluationTitle}</p>
+                  <h3 className="section-title">{details.evaluationTitle}</h3>
+                  <p className="section-copy">{details.evaluationDescription}</p>
+                </div>
+                <a
+                  href={`/api/trainings/${run.id}/evaluations/export`}
+                  className="secondary-button"
+                >
+                  {localeText.buttons.exportExcel}
+                </a>
+              </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <ProgressCard
+                label={details.averageCourseRating}
+                value={formatAverageRating(averageCourseRating, numberLocale)}
+                tone="teal"
+              />
+              <ProgressCard
+                label={details.averageInstructorRating}
+                value={formatAverageRating(averageInstructorRating, numberLocale)}
+                tone="sand"
+              />
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {run.trainingEvaluations.length === 0 ? (
+                <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                  {details.noEvaluations}
+                </div>
+              ) : (
+                visibleTrainingEvaluations.map((evaluation) => {
+                  const subjectInstructorName =
+                    evaluation.subjectInstructor?.fullNameEn ||
+                    evaluation.subjectInstructor?.fullNameAr ||
+                    "";
+                  const evaluatorInstructorName =
+                    evaluation.evaluatorInstructor?.fullNameEn ||
+                    evaluation.evaluatorInstructor?.fullNameAr ||
+                    "";
+
+                  return (
+                    <div key={evaluation.id} className="jawraa-subcard px-4 py-4">
+                      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.7fr_1fr]">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                            {evaluation.participant.fullNameEn ||
+                              evaluation.participant.fullNameAr}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                            {evaluation.participant.email || evaluation.evaluationType}
+                          </p>
+                        </div>
+                        <InfoCard
+                          label={details.rating}
+                          value={`${evaluation.rating} / 5`}
+                        />
+                        <div className="text-sm leading-6 text-[var(--ink-soft)]">
+                          <p className="font-semibold text-[var(--ink-strong)]">
+                            {evaluation.evaluationType === "COURSE"
+                              ? details.courseEvaluation
+                              : evaluation.evaluationType === "INSTRUCTOR"
+                                ? details.instructorEvaluation
+                                : details.attendeeEvaluation}
+                          </p>
+                          {subjectInstructorName ? (
+                            <p>{details.chooseTrainer}: {subjectInstructorName}</p>
+                          ) : null}
+                          {evaluatorInstructorName ? (
+                            <p>{details.chooseTrainer}: {evaluatorInstructorName}</p>
+                          ) : null}
+                          {evaluation.comments ? (
+                            <p className="mt-2">{evaluation.comments}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {run.trainingEvaluations.length > EVALUATIONS_PAGE_SIZE ? (
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-[var(--ink-soft)]">
+                  {localeText.pagination.pageIndicator
+                    .replace("{current}", formatNumber(safeEvaluationPage, numberLocale))
+                    .replace("{total}", formatNumber(totalEvaluationPages, numberLocale))}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={evaluationPageHref(run.id, 1)}
+                    aria-disabled={safeEvaluationPage <= 1}
+                    className={`pagination-link ${safeEvaluationPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.first}
+                  </Link>
+                  <Link
+                    href={evaluationPageHref(run.id, Math.max(1, safeEvaluationPage - 1))}
+                    aria-disabled={safeEvaluationPage <= 1}
+                    className={`pagination-link ${safeEvaluationPage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.previous}
+                  </Link>
+                  {paginationPages(safeEvaluationPage, totalEvaluationPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`evaluation-ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <Link
+                        key={page}
+                        href={evaluationPageHref(run.id, page)}
+                        aria-current={page === safeEvaluationPage ? "page" : undefined}
+                        className={`pagination-link ${page === safeEvaluationPage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(page, numberLocale)}
+                      </Link>
+                    ),
+                  )}
+                  <Link
+                    href={evaluationPageHref(
+                      run.id,
+                      Math.min(totalEvaluationPages, safeEvaluationPage + 1),
+                    )}
+                    aria-disabled={safeEvaluationPage >= totalEvaluationPages}
+                    className={`pagination-link ${safeEvaluationPage >= totalEvaluationPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.next}
+                  </Link>
+                  <Link
+                    href={evaluationPageHref(run.id, totalEvaluationPages)}
+                    aria-disabled={safeEvaluationPage >= totalEvaluationPages}
+                    className={`pagination-link ${safeEvaluationPage >= totalEvaluationPages ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    {localeText.pagination.last}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-6 grid gap-6 xl:grid-cols-3">
+              <form action={upsertCourseEvaluation} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <div>
+                  <p className="eyebrow">{details.courseEvaluation}</p>
+                </div>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseAttendee}</span>
+                  <select name="attendeeId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseAttendee}
+                    </option>
+                    {run.nominations.map((nomination) => (
+                      <option key={nomination.participantId} value={nomination.participantId}>
+                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.rating}</span>
+                  <select name="rating" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.rating}
+                    </option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.comments}</span>
+                  <textarea name="comments" rows={4} className="field-input min-h-[7rem] resize-y" />
+                </label>
+
+                <button type="submit" className="secondary-button w-full sm:w-auto">
+                  {details.courseEvaluation}
+                </button>
+              </form>
+
+              <form action={upsertInstructorEvaluation} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <div>
+                  <p className="eyebrow">{details.instructorEvaluation}</p>
+                </div>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseAttendee}</span>
+                  <select name="attendeeId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseAttendee}
+                    </option>
+                    {run.nominations.map((nomination) => (
+                      <option key={nomination.participantId} value={nomination.participantId}>
+                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseTrainer}</span>
+                  <select name="subjectInstructorId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseTrainer}
+                    </option>
+                    {run.trainers.map((assignment) => (
+                      <option key={assignment.trainerId} value={assignment.trainerId}>
+                        {assignment.trainer.fullNameEn || assignment.trainer.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.rating}</span>
+                  <select name="rating" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.rating}
+                    </option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.comments}</span>
+                  <textarea name="comments" rows={4} className="field-input min-h-[7rem] resize-y" />
+                </label>
+
+                <button type="submit" className="secondary-button w-full sm:w-auto">
+                  {details.instructorEvaluation}
+                </button>
+              </form>
+
+              <form action={upsertAttendeeEvaluation} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
+                <div>
+                  <p className="eyebrow">{details.attendeeEvaluation}</p>
+                </div>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseTrainer}</span>
+                  <select name="evaluatorInstructorId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseTrainer}
+                    </option>
+                    {run.trainers.map((assignment) => (
+                      <option key={assignment.trainerId} value={assignment.trainerId}>
+                        {assignment.trainer.fullNameEn || assignment.trainer.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.chooseAttendee}</span>
+                  <select name="attendeeId" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.chooseAttendee}
+                    </option>
+                    {run.nominations.map((nomination) => (
+                      <option key={nomination.participantId} value={nomination.participantId}>
+                        {nomination.participant.fullNameEn || nomination.participant.fullNameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.rating}</span>
+                  <select name="rating" className="field-input" defaultValue="" required>
+                    <option value="" disabled>
+                      {details.rating}
+                    </option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-shell">
+                  <span className="field-label">{details.comments}</span>
+                  <textarea name="comments" rows={4} className="field-input min-h-[7rem] resize-y" />
+                </label>
+
+                <button type="submit" className="secondary-button w-full sm:w-auto">
+                  {details.attendeeEvaluation}
+                </button>
+              </form>
+            </div>
+
+            </div>
+          ) : null}
+
+          {canEditOps ? (
+            <div className="panel-surface">
             <div>
               <p className="eyebrow">{details.documentVault}</p>
               <h3 className="section-title">{details.documents}</h3>
@@ -854,7 +2301,7 @@ export default async function CourseRunDetailPage({
               className="mt-5 space-y-4"
             >
               <input type="hidden" name="courseRunId" value={run.id} />
-              <input type="hidden" name="returnPath" value={`/course-runs/${run.id}`} />
+              <input type="hidden" name="returnPath" value={`/trainings/${run.id}`} />
 
               <div className="grid gap-4 xl:grid-cols-3">
                 <label className="field-shell">
@@ -934,11 +2381,12 @@ export default async function CourseRunDetailPage({
                 ))
               )}
             </div>
-          </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
-      {openPanel ? (
+      {openPanel && canEditOps ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/70 bg-white p-5 shadow-[0_30px_70px_rgba(10,25,35,0.35)] sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -946,28 +2394,52 @@ export default async function CourseRunDetailPage({
                 <p className="eyebrow">
                   {openPanel === "edit"
                     ? details.edit
-                    : openPanel === "trainer"
+                    : openPanel === "instructor"
                       ? details.addTrainer
                       : details.addNomination}
                 </p>
                 <h3 className="section-title">
                   {openPanel === "edit"
                     ? details.editButton
-                    : openPanel === "trainer"
+                    : openPanel === "instructor"
                       ? details.addTrainerButton
-                      : openPanel === "nomination"
+                      : openPanel === "enrollment"
                         ? details.addNominationButton
                         : details.addAttendanceButton}
                 </h3>
               </div>
-              <Link href={`/course-runs/${run.id}`} className="secondary-button">
+              <Link href={`/trainings/${run.id}`} className="secondary-button">
                 {details.close}
               </Link>
             </div>
 
             {openPanel === "edit" ? (
-              <form action={updateCourseRun} className="space-y-4">
-                <input type="hidden" name="courseRunId" value={run.id} />
+              <form action={updateTraining} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
+
+                <input
+                  type="hidden"
+                  name="purchaseOrderCourseEntryId"
+                  value={selectedPurchaseOrderCourseEntryId}
+                />
+                <div className="field-shell">
+                  <span className="field-label">
+                    {localeText.courseRuns.purchaseOrderCourseEntry}
+                  </span>
+                  <div className="field-input bg-[var(--surface-soft)] text-[var(--ink-soft)]">
+                    {run.projectScopeCourse ? (
+                      <>
+                        {formatPurchaseOrderCode(run.projectScopeCourse.scope.code, locale)} |{" "}
+                        {formatPurchaseOrderTitle(run.projectScopeCourse.scope, locale)} |{" "}
+                        {run.projectScopeCourse.course.courseCode} |{" "}
+                        {run.projectScopeCourse.course.nameEn ||
+                          run.projectScopeCourse.course.nameAr}
+                      </>
+                    ) : (
+                      localeText.courseRuns.selectPurchaseOrderCourseEntry
+                    )}
+                  </div>
+                </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
@@ -1023,7 +2495,7 @@ export default async function CourseRunDetailPage({
                   <label className="field-shell">
                     <span className="field-label">{details.provider}</span>
                     <select
-                      name="providerId"
+                      name="vendorId"
                       className="field-input"
                       defaultValue={run.providerId || ""}
                     >
@@ -1053,17 +2525,55 @@ export default async function CourseRunDetailPage({
                   </label>
                 </div>
 
-                <label className="field-shell">
-                  <span className="field-label">{localeText.courseRuns.plannedSeats}</span>
-                  <input
-                    type="number"
-                    name="plannedSeats"
-                    min="0"
-                    step="1"
-                    className="field-input"
-                    defaultValue={run.plannedSeats ?? ""}
-                  />
-                </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {canManageFinancials ? (
+                    <label className="field-shell">
+                      <span className="field-label">{details.vendorCost}</span>
+                      <input
+                        type="number"
+                        name="vendorCost"
+                        step="0.01"
+                        min="0"
+                        className="field-input"
+                        defaultValue={
+                          run.vendorCost !== null && run.vendorCost !== undefined
+                            ? Number(run.vendorCost)
+                            : ""
+                        }
+                      />
+                    </label>
+                  ) : null}
+
+                  <label className="field-shell">
+                    <span className="field-label">{details.daysHeld}</span>
+                    <input
+                      type="number"
+                      name="daysHeld"
+                      min="0"
+                      step="1"
+                      className="field-input"
+                      defaultValue={run.daysHeld ?? ""}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="field-shell">
+                    <span className="field-label">{details.city}</span>
+                    <select name="city" className="field-input" defaultValue={run.city || ""}>
+                      <option value="">{details.selectCity}</option>
+                      {Object.values(TrainingCity).map((city) => (
+                        <option key={city} value={city}>
+                          {
+                            localeText.courseRuns.trainingCities[
+                              city as keyof typeof localeText.courseRuns.trainingCities
+                            ]
+                          }
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
 
                 <label className="field-shell">
                   <span className="field-label">{localeText.courseRuns.notes}</span>
@@ -1079,13 +2589,13 @@ export default async function CourseRunDetailPage({
                   {details.save}
                 </button>
               </form>
-            ) : openPanel === "trainer" ? (
-              <form action={assignTrainerToCourseRun} className="space-y-4">
-                <input type="hidden" name="courseRunId" value={run.id} />
+            ) : openPanel === "instructor" ? (
+              <form action={assignInstructorToTraining} className="space-y-4">
+                <input type="hidden" name="trainingId" value={run.id} />
 
                 <label className="field-shell">
                   <span className="field-label">{details.addTrainer}</span>
-                  <select name="trainerId" className="field-input" defaultValue="">
+                  <select name="instructorId" className="field-input" defaultValue="">
                     <option value="" disabled>
                       {details.chooseTrainer}
                     </option>
@@ -1116,10 +2626,10 @@ export default async function CourseRunDetailPage({
                   {details.addTrainer}
                 </button>
               </form>
-            ) : openPanel === "nomination" ? (
+            ) : openPanel === "enrollment" ? (
               <div className="space-y-6">
-                <form action={nominateExistingParticipant} className="space-y-4">
-                  <input type="hidden" name="courseRunId" value={run.id} />
+                <form action={enrollExistingAttendee} className="space-y-4">
+                  <input type="hidden" name="trainingId" value={run.id} />
 
                   <div>
                     <p className="eyebrow">{details.existingParticipant}</p>
@@ -1127,7 +2637,7 @@ export default async function CourseRunDetailPage({
 
                   <label className="field-shell">
                     <span className="field-label">{details.chooseParticipant}</span>
-                    <select name="participantId" className="field-input" defaultValue="">
+                    <select name="attendeeId" className="field-input" defaultValue="">
                       <option value="" disabled>
                         {details.chooseParticipant}
                       </option>
@@ -1143,11 +2653,11 @@ export default async function CourseRunDetailPage({
                     <label className="field-shell">
                       <span className="field-label">{details.nominationStatus}</span>
                       <select
-                        name="nominationStatus"
+                        name="enrollmentStatus"
                         className="field-input"
                         defaultValue="NOMINATED"
                       >
-                        {Object.entries(nominationStatusText(locale)).map(([key, label]) => (
+                        {Object.entries(enrollmentStatusText(locale)).map(([key, label]) => (
                           <option key={key} value={key}>
                             {label}
                           </option>
@@ -1173,8 +2683,8 @@ export default async function CourseRunDetailPage({
 
                 <div className="h-px bg-[var(--line-soft)]" />
 
-                <form action={createParticipantAndNominate} className="space-y-4">
-                  <input type="hidden" name="courseRunId" value={run.id} />
+                <form action={createAttendeeAndEnroll} className="space-y-4">
+                  <input type="hidden" name="trainingId" value={run.id} />
 
                   <div>
                     <p className="eyebrow">{details.quickCreateParticipant}</p>
@@ -1184,7 +2694,7 @@ export default async function CourseRunDetailPage({
                     <label className="field-shell">
                       <span className="field-label">{details.participantType}</span>
                       <select
-                        name="participantType"
+                        name="attendeeType"
                         className="field-input"
                         defaultValue="STUDENT"
                       >
@@ -1199,11 +2709,11 @@ export default async function CourseRunDetailPage({
                     <label className="field-shell">
                       <span className="field-label">{details.nominationStatus}</span>
                       <select
-                        name="nominationStatus"
+                        name="enrollmentStatus"
                         className="field-input"
                         defaultValue="NOMINATED"
                       >
-                        {Object.entries(nominationStatusText(locale)).map(([key, label]) => (
+                        {Object.entries(enrollmentStatusText(locale)).map(([key, label]) => (
                           <option key={key} value={key}>
                             {label}
                           </option>
@@ -1268,13 +2778,17 @@ export default async function CourseRunDetailPage({
                   </button>
                 </form>
               </div>
+            ) : run.sessions.length === 0 ? (
+              <div className="jawraa-subcard border-dashed px-4 py-4 text-sm text-[var(--ink-soft)]">
+                {details.addSessionsBeforeAttendance}
+              </div>
             ) : (
               <form action={recordAttendance} className="space-y-4">
-                <input type="hidden" name="courseRunId" value={run.id} />
+                <input type="hidden" name="trainingId" value={run.id} />
 
                 <label className="field-shell">
                   <span className="field-label">{details.chooseAttendee}</span>
-                  <select name="participantId" className="field-input" defaultValue="">
+                  <select name="attendeeId" className="field-input" defaultValue="">
                     <option value="" disabled>
                       {details.chooseAttendee}
                     </option>
@@ -1288,8 +2802,21 @@ export default async function CourseRunDetailPage({
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
-                    <span className="field-label">{details.attendanceDate}</span>
-                    <input type="date" name="attendanceDate" className="field-input" />
+                    <span className="field-label">{details.sessionDate}</span>
+                    <select name="trainingSessionId" className="field-input" defaultValue="" required>
+                      <option value="" disabled>
+                        {details.chooseSession}
+                      </option>
+                      {run.sessions.map((session) => (
+                        <option key={session.id} value={session.id}>
+                          {new Intl.DateTimeFormat(numberLocale, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          }).format(session.sessionDate)}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="field-shell">

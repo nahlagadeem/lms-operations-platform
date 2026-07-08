@@ -3,6 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertPermission,
+  canCreateOperationalData,
+  canEditOperationalData,
+  getCurrentPlatformRole,
+} from "@/lib/permissions";
 import * as projectScopeService from "@/server/services/project-scope-service";
 
 function normalizeText(value: FormDataEntryValue | null) {
@@ -13,6 +19,12 @@ function parseOptionalDate(value: string) {
   if (!value) return null;
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseOptionalInt(value: string) {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function parseScopeForm(formData: FormData) {
@@ -50,18 +62,32 @@ function parseScopeForm(formData: FormData) {
   };
 }
 
+async function requireOperationalCreationAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canCreateOperationalData);
+  return role;
+}
+
+async function requireOperationalEditAccess() {
+  const role = await getCurrentPlatformRole();
+  assertPermission(role, canEditOperationalData);
+  return role;
+}
+
 export async function createProjectScope(formData: FormData) {
   await requireAuth();
+  await requireOperationalCreationAccess();
 
   const createdScope = await projectScopeService.createProjectScope(parseScopeForm(formData));
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  redirect(`/project-structure/scopes/${createdScope.id}`);
+  revalidatePath("/pos");
+  redirect(`/pos/${createdScope.id}`);
 }
 
 export async function updateProjectScope(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = normalizeText(formData.get("id"));
   if (!id) {
@@ -74,12 +100,13 @@ export async function updateProjectScope(formData: FormData) {
   });
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  revalidatePath(`/project-structure/scopes/${id}`);
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${id}`);
 }
 
 export async function deleteProjectScope(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const id = normalizeText(formData.get("id"));
   if (!id) {
@@ -89,11 +116,12 @@ export async function deleteProjectScope(formData: FormData) {
   await projectScopeService.deleteProjectScope(id);
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
+  revalidatePath("/pos");
 }
 
 export async function assignProjectScopeCourses(formData: FormData) {
   await requireAuth();
+  await requireOperationalCreationAccess();
 
   const scopeId = normalizeText(formData.get("scopeId"));
   if (!scopeId) {
@@ -108,12 +136,13 @@ export async function assignProjectScopeCourses(formData: FormData) {
   await projectScopeService.replaceProjectScopeCourses(scopeId, courseIds);
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  revalidatePath(`/project-structure/scopes/${scopeId}`);
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${scopeId}`);
 }
 
 export async function removeProjectScopeCourse(formData: FormData) {
   await requireAuth();
+  await requireOperationalEditAccess();
 
   const scopeId = normalizeText(formData.get("scopeId"));
   const courseId = normalizeText(formData.get("courseId"));
@@ -124,6 +153,31 @@ export async function removeProjectScopeCourse(formData: FormData) {
   await projectScopeService.removeProjectScopeCourse(scopeId, courseId);
 
   revalidatePath("/");
-  revalidatePath("/project-structure");
-  revalidatePath(`/project-structure/scopes/${scopeId}`);
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${scopeId}`);
+}
+
+export async function updatePurchaseOrderCourseEntryEstimatedSeats(formData: FormData) {
+  await requireAuth();
+  await requireOperationalEditAccess();
+
+  const purchaseOrderId = normalizeText(formData.get("purchaseOrderId"));
+  const purchaseOrderCourseEntryId = normalizeText(
+    formData.get("purchaseOrderCourseEntryId"),
+  );
+  const estimatedSeats = parseOptionalInt(normalizeText(formData.get("estimatedSeats")));
+  if (!purchaseOrderId || !purchaseOrderCourseEntryId) {
+    throw new Error("PO and Course Entry are required.");
+  }
+
+  await projectScopeService.updatePurchaseOrderCourseEntryEstimatedSeats(
+    purchaseOrderId,
+    purchaseOrderCourseEntryId,
+    estimatedSeats,
+  );
+
+  revalidatePath("/");
+  revalidatePath("/pos");
+  revalidatePath(`/pos/${purchaseOrderId}`);
+  revalidatePath("/trainings");
 }

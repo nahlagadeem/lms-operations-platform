@@ -6,7 +6,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HeaderNavLink } from "@/components/header-nav-link";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { isAuthenticated } from "@/lib/auth";
 import { getDirection, getLocale, t } from "@/lib/locale";
+import { getCurrentPlatformRole, isCustomerCapacityOnly } from "@/lib/permissions";
 import "./globals.css";
 
 const AUTH_COOKIE_NAME = "lms_ops_auth";
@@ -26,7 +28,7 @@ const latinFont = IBM_Plex_Sans({
 export const metadata: Metadata = {
   title: "JAWRAA",
   description:
-    "Training project dashboard for courses, participants, providers, locations, and reports.",
+    "Training services management platform for courses, trainings, attendees, vendors, locations, and reports.",
   icons: {
     icon: "/jawraa-logo.svg",
     shortcut: "/jawraa-logo.svg",
@@ -59,25 +61,35 @@ export default async function RootLayout({
   const direction = getDirection(locale);
   const localeText = t(locale);
   const isLoginPage = currentPath === "/login";
-  const cookieStore = await cookies();
-  const isAuthenticated = cookieStore.get(AUTH_COOKIE_NAME)?.value === "admin";
+  const authenticated = await isAuthenticated();
+  const platformRole = await getCurrentPlatformRole();
+  const customerOnly = isCustomerCapacityOnly(platformRole);
 
-  if (currentPath && !isAuthenticated && !isLoginPage) {
+  if (currentPath && !authenticated && !isLoginPage) {
     redirect("/login");
   }
 
-  if (currentPath && isAuthenticated && isLoginPage) {
+  if (currentPath && authenticated && isLoginPage) {
     redirect("/");
   }
 
-  const navigationItems = [
-    { href: "/", label: localeText.nav.home },
-    { href: "/packages", label: localeText.nav.packages },
-    { href: "/project-structure", label: localeText.nav.projectScope },
-    { href: "/courses", label: localeText.nav.courses },
-    { href: "/course-runs", label: localeText.nav.courseRuns },
-    { href: "/project-details", label: localeText.nav.projectDetails },
-  ];
+  const navigationItems = customerOnly
+    ? [
+        { href: "/", label: localeText.nav.home },
+        { href: "/trainings", label: localeText.nav.courseRuns },
+        { href: "/courses", label: localeText.nav.courses },
+        { href: "/packages", label: localeText.nav.packages },
+      ]
+    : [
+        { href: "/", label: localeText.nav.home },
+        { href: "/trainings", label: localeText.nav.courseRuns },
+        { href: "/courses", label: localeText.nav.courses },
+        { href: "/packages", label: localeText.nav.packages },
+        { href: "/pos", label: localeText.nav.projectScope },
+        { href: "/providers", label: localeText.nav.providers },
+        { href: "/locations", label: localeText.nav.locations },
+        { href: "/project-details", label: localeText.nav.projectDetails },
+      ];
 
   return (
     <html

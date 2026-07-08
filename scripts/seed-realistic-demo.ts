@@ -9,6 +9,7 @@ import {
   LocationType,
   NominationStatus,
   ParticipantType,
+  PlatformRole,
   Prisma,
   ProviderType,
   ReportStatus,
@@ -16,6 +17,42 @@ import {
   VerificationStatus,
 } from "@prisma/client";
 import { db } from "../src/lib/db";
+
+const DEMO_PASSWORD = "test1234";
+const DEMO_USERS = [
+  {
+    fullName: "JAWRAA Demo Admin",
+    email: "admin@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.SUPER_ADMIN,
+    platformRole: PlatformRole.PROJECT_MANAGER,
+    department: "Project Office",
+  },
+  {
+    fullName: "Demo Key Stakeholder",
+    email: "stakeholder@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.REPORTING_ANALYST,
+    platformRole: PlatformRole.KEY_STAKEHOLDER,
+    department: "Leadership Office",
+  },
+  {
+    fullName: "Demo Data Entry",
+    email: "dataentry@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.OPERATIONS_COORDINATOR,
+    platformRole: PlatformRole.DATA_ENTRY,
+    department: "Operations",
+  },
+  {
+    fullName: "Demo Customer",
+    email: "customer@jawraa.demo",
+    password: DEMO_PASSWORD,
+    role: UserRole.VIEWER,
+    platformRole: PlatformRole.CUSTOMER,
+    department: "Customer",
+  },
+] as const;
 
 const projectScopes = [
   {
@@ -223,15 +260,17 @@ async function main() {
   }
   const packagesWithCourses = packages.filter((pkg) => pkg.courses.length > 0);
 
-  const admin = await db.appUser.create({
-    data: {
-      fullName: "JAWRAA Demo Admin",
-      email: "admin@jawraa.demo",
-      role: UserRole.SUPER_ADMIN,
-      department: "Project Office",
+  const demoUsers = await db.appUser.createManyAndReturn({
+    data: DEMO_USERS.map(({ password: _password, ...user }) => ({
+      ...user,
       lastLoginAt: new Date(),
-    },
+    })),
   });
+  const admin = demoUsers.find((user) => user.email === "admin@jawraa.demo");
+
+  if (!admin) {
+    throw new Error("Demo admin user was not seeded.");
+  }
 
   const scopeIds = new Map<string, string>();
   for (const scope of projectScopes) {
@@ -412,7 +451,7 @@ async function main() {
         courseCardStatus: index < 2 ? CourseCardStatus.APPROVED : status === CourseRunStatus.COMPLETED ? CourseCardStatus.SUBMITTED : CourseCardStatus.DRAFT,
         approvalStatus,
         ownerUserId: admin.id,
-        notes: approvalStatus === ApprovalStatus.REJECTED ? "Trainer bio not attached - please resubmit" : `${course.nameEn || course.nameAr} scheduled under the project contract.`,
+        notes: approvalStatus === ApprovalStatus.REJECTED ? "Instructor bio not attached - please resubmit" : `${course.nameEn || course.nameAr} scheduled under the project contract.`,
       },
     });
 
@@ -420,7 +459,7 @@ async function main() {
       data: {
         courseRunId: run.id,
         trainerId: trainers.get(fit.trainer)!,
-        role: "Lead trainer",
+        role: "Lead instructor",
         isPrimary: true,
       },
     });
@@ -484,16 +523,16 @@ async function main() {
           dueDate: addDays(endDate, 3),
           summary: `${course.nameEn || course.nameAr} completed with ${attended} of ${registered} participants meeting attendance requirements. Satisfaction averaged ${satisfaction.toFixed(1)} out of 5.`,
           satisfactionRate: decimal((satisfaction / 5) * 100),
-          issuesFound: attended < registered ? "A small number of participants missed the session." : "No major issues.",
-          actionsTaken: "Attendance and feedback were reviewed with the provider.",
+          issuesFound: attended < registered ? "A small number of attendees missed the training." : "No major issues.",
+          actionsTaken: "Attendance and feedback were reviewed with the vendor.",
         },
       });
 
       const docs = [
         [DocumentType.ATTENDANCE_SHEET, "Attendance Sheet", "xlsx"],
         [DocumentType.OTHER, "Signed Sign-in List", "pdf"],
-        [DocumentType.QUALITY_REPORT, "Trainer Evaluation Form", "pdf"],
-        [DocumentType.FINAL_REPORT, "Participant Feedback Summary", "pdf"],
+        [DocumentType.QUALITY_REPORT, "Instructor Evaluation Form", "pdf"],
+        [DocumentType.FINAL_REPORT, "Attendee Feedback Summary", "pdf"],
         [DocumentType.CERTIFICATE_TEMPLATE, "Certificate Copies", "pdf"],
       ] as const;
 
@@ -542,8 +581,8 @@ async function main() {
   }
 
   const riskRows = [
-    ["Low participant registration for Dammam sessions", "Medium probability, High impact, Open"],
-    ["Trainer availability conflict in Q2", "Low probability, Medium impact, Open"],
+    ["Low attendee enrollment for Dammam trainings", "Medium probability, High impact, Open"],
+    ["Instructor availability conflict in Q2", "Low probability, Medium impact, Open"],
     ["Budget overrun on international certifications", "Medium probability, High impact, Open"],
   ];
   for (const [index, [title, notes]] of riskRows.entries()) {
@@ -566,7 +605,7 @@ async function main() {
 
   const issueRows = [
     ["PMP session rescheduled due to venue unavailability", "Resolved, closed last month"],
-    ["3 participants dropped from Leadership program without replacement", "Open, being handled"],
+    ["3 attendees withdrew from the Leadership program without replacement", "Open, being handled"],
   ];
   for (const [index, [title, notes]] of issueRows.entries()) {
     await db.document.create({
