@@ -330,7 +330,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             course: {
               select: {
                 runs: {
-                  select: { status: true },
+                  select: {
+                    status: true,
+                  },
                 },
               },
             },
@@ -447,13 +449,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       include: {
         selectedCourses: {
           include: {
+            courseRuns: {
+              select: {
+                id: true,
+                confirmedSeats: true,
+              },
+            },
             course: {
-              include: {
-                runs: {
-                  where: { status: { in: liveRunStatuses } },
-                  include: {
-                    trainers: { select: { trainerId: true } },
-                    nominations: { select: { participantId: true } },
+              select: {
+                id: true,
+                courseCode: true,
+                nameAr: true,
+                nameEn: true,
+                package: {
+                  select: {
+                    code: true,
+                    nameAr: true,
+                    nameEn: true,
                   },
                 },
               },
@@ -546,32 +558,45 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const scopeDocumentCountById = new Map(
     scopeDocumentCounts.map((item) => [item.entityId, item._count._all]),
   );
-  const projectScopeSummaryRows = projectScopeRows.map((scope) => {
-    const activeRuns = scope.selectedCourses.flatMap((selection) => selection.course.runs);
-    const trainerIds = new Set(
-      activeRuns.flatMap((run) => run.trainers.map((trainer) => trainer.trainerId)),
-    );
-    const participantIds = new Set(
-      activeRuns.flatMap((run) =>
-        run.nominations.map((nomination) => nomination.participantId),
-      ),
-    );
+  const projectScopeSummaryRows = projectScopeRows.flatMap((scope) =>
+    scope.selectedCourses.map((selection) => {
+      const estimatedSeats = selection.estimatedSeats ?? 0;
+      const actualSeats = selection.courseRuns.reduce(
+        (sum, run) => sum + run.confirmedSeats,
+        0,
+      );
+      const remainingSeats = estimatedSeats - actualSeats;
+      const statusFlag =
+        actualSeats > estimatedSeats
+          ? localeText.projectScopes.overageFlag
+          : actualSeats < estimatedSeats
+            ? localeText.projectScopes.shortfallFlag
+            : "-";
 
-    return {
-      id: scope.id,
+      return {
+        id: selection.id,
+        scopeId: scope.id,
       code: formatPurchaseOrderCode(scope.code, locale),
       name: formatPurchaseOrderTitle(scope, locale),
-      status: scope.isActive ? localeText.projectScopes.active : localeText.projectScopes.inactive,
-      courses: scope.selectedCourses.length,
-      activeRuns: activeRuns.length,
-      trainers: trainerIds.size,
-      participants: participantIds.size,
-      documents: scopeDocumentCountById.get(scope.id) ?? 0,
-    };
-  });
-  const filteredProjectScopeSummaryRows = projectScopeSummaryRows.filter((scope) => {
+        courseId: selection.course.id,
+        courseName: selection.course.nameEn || selection.course.nameAr,
+        packageName:
+          selection.course.package.nameEn ||
+          selection.course.package.nameAr ||
+          selection.course.package.code,
+        estimatedSeats,
+        actualSeats,
+        remainingSeats,
+        fulfillmentPct: ratio(actualSeats, estimatedSeats),
+        linkedTrainings: selection.courseRuns.length,
+        statusFlag,
+        documents: scopeDocumentCountById.get(scope.id) ?? 0,
+      };
+    }),
+  );
+  const filteredProjectScopeSummaryRows = projectScopeSummaryRows.filter((row) => {
     if (!poSearch) return true;
-    return [scope.code, scope.name, scope.status]
+    return [row.code, row.name, row.courseName, row.packageName, row.statusFlag]
       .join(" ")
       .toLowerCase()
       .includes(poSearch);
@@ -983,21 +1008,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       ) : null}
 
+      {platformRole !== "CUSTOMER" ? (
       <section className="panel-surface">
-        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="eyebrow">{localeText.projectScopes.summaryTitle}</p>
-            <h2 className="section-title">{localeText.projectScopes.summaryTitle}</h2>
-          </div>
-          <Link href="/pos" className="primary-button">
-            {localeText.projectScopes.viewDetails}
-          </Link>
-        </div>
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ReadOnlySummaryCard
-            label={localeText.projectScopes.totalProjectScopes}
-            value={formatNumber(projectScopeSummaryRows.length, numberLocale)}
-          />
+        <div className="mb-5">
+          <p className="eyebrow">{localeText.projectScopes.summaryTitle}</p>
+          <h2 className="section-title">{localeText.projectScopes.summaryTitle}</h2>
         </div>
         <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           <InstantSearchField
@@ -1026,32 +1041,40 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <thead>
               <tr>
                 <th>{localeText.projectScopes.scope}</th>
-                <th>{localeText.projectScopes.status}</th>
-                <th>{localeText.projectScopes.courses}</th>
-                <th>{localeText.projectScopes.activeRuns}</th>
-                <th>{localeText.projectScopes.trainers}</th>
-                <th>{localeText.projectScopes.participants}</th>
-                <th>{localeText.projectScopes.documents}</th>
+                <th>{dashboardText.courseName}</th>
+                <th>{dashboardText.package}</th>
+                <th>{localeText.projectScopes.estimatedSeats}</th>
+                <th>{localeText.projectScopes.actualSeats}</th>
+                <th>{localeText.projectScopes.remainingSeats}</th>
+                <th>{localeText.projectScopes.fulfillmentPct}</th>
+                <th>{localeText.projectScopes.linkedTrainings}</th>
+                <th>{localeText.projectScopes.statusFlag}</th>
                 <th>{localeText.projectScopes.viewDetails}</th>
               </tr>
             </thead>
             <tbody>
-              {visibleProjectScopeSummaryRows.map((scope) => (
-                <tr key={scope.id}>
+              {visibleProjectScopeSummaryRows.map((row) => (
+                <tr key={row.id}>
                   <td>
                     <div className="space-y-1">
-                      <p className="latin-chip">{scope.code}</p>
-                      <p className="font-semibold text-[var(--ink-strong)]">{scope.name}</p>
+                      <p className="latin-chip">{row.code}</p>
+                      <p className="font-semibold text-[var(--ink-strong)]">{row.name}</p>
                     </div>
                   </td>
-                  <td><span className="status-pill">{scope.status}</span></td>
-                  <td>{formatNumber(scope.courses, numberLocale)}</td>
-                  <td>{formatNumber(scope.activeRuns, numberLocale)}</td>
-                  <td>{formatNumber(scope.trainers, numberLocale)}</td>
-                  <td>{formatNumber(scope.participants, numberLocale)}</td>
-                  <td>{formatNumber(scope.documents, numberLocale)}</td>
                   <td>
-                    <Link href={`/pos/${scope.id}`} className="secondary-button">
+                    <Link href={`/courses/${row.courseId}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
+                      {row.courseName}
+                    </Link>
+                  </td>
+                  <td>{row.packageName}</td>
+                  <td>{formatNumber(row.estimatedSeats, numberLocale)}</td>
+                  <td>{formatNumber(row.actualSeats, numberLocale)}</td>
+                  <td>{formatNumber(row.remainingSeats, numberLocale)}</td>
+                  <td>{formatPercent(row.fulfillmentPct, numberLocale)}</td>
+                  <td>{formatNumber(row.linkedTrainings, numberLocale)}</td>
+                  <td><span className="status-pill">{row.statusFlag}</span></td>
+                  <td>
+                    <Link href={`/pos/${row.scopeId}`} className="secondary-button">
                       {localeText.projectScopes.viewDetails}
                     </Link>
                   </td>
@@ -1087,6 +1110,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           }
         />
       </section>
+      ) : null}
 
       <section className="panel-surface">
         <div className="mb-5">
