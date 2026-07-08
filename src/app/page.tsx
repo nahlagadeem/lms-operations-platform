@@ -774,14 +774,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <ReadOnlySummaryCard
-            label={dashboardText.baselineProgress}
-            value={formatPercent(decimalToNumber(projectSummary.baselineProgress), numberLocale)}
-          />
-          <ReadOnlySummaryCard
-            label={dashboardText.actualProgress}
-            value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
-          />
-          <ReadOnlySummaryCard
             label={dashboardText.trainingsPlannedCompleted}
             value={`${formatNumber(plannedTrainingCount, numberLocale)} / ${formatNumber(completedTrainingCount, numberLocale)}`}
           />
@@ -800,6 +792,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <ReadOnlySummaryCard
             label={dashboardText.expectedEndDate}
             value={formatDate(projectSummary.expectedEndDate, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.baselineProgress}
+            value={formatPercent(decimalToNumber(projectSummary.baselineProgress), numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={dashboardText.actualProgress}
+            value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
           />
         </div>
       </section>
