@@ -25,7 +25,7 @@ export function t(locale: Locale) {
 
 const englishText = {
   nav: {
-    home: "Home",
+    home: "Dashboard",
     projectScope: "POs",
     packages: "Packages",
     courses: "Courses",
@@ -369,7 +369,7 @@ const englishText = {
     capacityTitle: "Training Capacity",
     capacityDescription: "Estimated seats versus actual confirmed seats for this training.",
     notes: "Notes",
-    notesPlaceholder: "Internal team notes",
+    notesPlaceholder: "Team notes",
     createAction: "Add Training",
     listTitle: "Trainings",
     listDescription: "Review trainings, then filter them by package, status, or keyword.",
@@ -510,7 +510,7 @@ const arabicText = {
     noResults: "لا توجد نتائج مطابقة للبحث.",
   },
   nav: {
-    home: "الرئيسية",
+    home: "لوحة التحكم",
     projectScope: "أوامر الشراء",
     packages: "الحزم",
     courses: "الدورات",

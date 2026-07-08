@@ -77,18 +77,17 @@ export default async function RootLayout({
     ? [
         { href: "/", label: localeText.nav.home },
         { href: "/trainings", label: localeText.nav.courseRuns },
-        { href: "/courses", label: localeText.nav.courses },
         { href: "/packages", label: localeText.nav.packages },
+        { href: "/courses", label: localeText.nav.courses },
       ]
     : [
         { href: "/", label: localeText.nav.home },
-        { href: "/trainings", label: localeText.nav.courseRuns },
-        { href: "/courses", label: localeText.nav.courses },
-        { href: "/packages", label: localeText.nav.packages },
         { href: "/pos", label: localeText.nav.projectScope },
-        { href: "/providers", label: localeText.nav.providers },
-        { href: "/locations", label: localeText.nav.locations },
+        { href: "/trainings", label: localeText.nav.courseRuns },
         { href: "/project-details", label: localeText.nav.projectDetails },
+        { href: "/packages", label: localeText.nav.packages },
+        { href: "/courses", label: localeText.nav.courses },
+        { href: "/providers", label: localeText.nav.providers },
       ];
 
   return (

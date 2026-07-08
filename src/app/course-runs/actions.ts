@@ -14,7 +14,7 @@ import {
   assertPermission,
   canCreateOperationalData,
   canEditOperationalData,
-  canManageFinancialFields,
+  canManageTrainingVendorCost,
   getCurrentPlatformRole,
 } from "@/lib/permissions";
 import * as trainingEvaluationService from "@/server/services/training-evaluation-service";
@@ -95,7 +95,7 @@ export async function createTraining(formData: FormData) {
     throw new Error("Please choose a PO Course Entry and try again.");
   }
 
-  if (vendorCostValue && !canManageFinancialFields(role)) {
+  if (vendorCostValue && !canManageTrainingVendorCost(role)) {
     throw new Error("You are not allowed to modify financial fields.");
   }
 
@@ -103,7 +103,7 @@ export async function createTraining(formData: FormData) {
     purchaseOrderCourseEntryId,
     expectedCourseId: expectedCourseId || undefined,
     vendorId: vendorId || undefined,
-      vendorCost: vendorCostValue && canManageFinancialFields(role) ? vendorCost : null,
+    vendorCost: vendorCostValue && canManageTrainingVendorCost(role) ? vendorCost : null,
     city,
     daysHeld,
     deliveryMode,
@@ -122,7 +122,7 @@ export async function createTraining(formData: FormData) {
 export async function updateTraining(formData: FormData) {
   await requireAuth();
   const role = await requireOperationalAccess();
-  const canManageFinancials = canManageFinancialFields(role);
+  const canManageTrainingCost = canManageTrainingVendorCost(role);
 
   const trainingId = normalizeText(formData.get("trainingId"));
   let purchaseOrderCourseEntryId = normalizeText(
@@ -156,7 +156,7 @@ export async function updateTraining(formData: FormData) {
   purchaseOrderCourseEntryId =
     purchaseOrderCourseEntryId || existingTraining.projectScopeCourseId || "";
 
-  const vendorCost = canManageFinancials
+  const vendorCost = canManageTrainingCost
     ? submittedVendorCost
     : existingTraining.vendorCost === null
       ? null

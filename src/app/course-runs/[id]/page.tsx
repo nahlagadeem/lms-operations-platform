@@ -22,7 +22,7 @@ import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import {
   canEditOperationalData,
-  canManageFinancialFields,
+  canManageTrainingVendorCost,
   canViewFinancials,
   getCurrentPlatformRole,
   isCustomerCapacityOnly,
@@ -632,7 +632,7 @@ export default async function CourseRunDetailPage({
   const completionThreshold = 0.75;
   const platformRole = await getCurrentPlatformRole();
   const canEditOps = canEditOperationalData(platformRole);
-  const canManageFinancials = canManageFinancialFields(platformRole);
+  const canManageTrainingCost = canManageTrainingVendorCost(platformRole);
   const canSeeFinancials = canViewFinancials(platformRole);
   const customerOnly = isCustomerCapacityOnly(platformRole);
 
@@ -2526,7 +2526,7 @@ export default async function CourseRunDetailPage({
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {canManageFinancials ? (
+                  {canManageTrainingCost ? (
                     <label className="field-shell">
                       <span className="field-label">{details.vendorCost}</span>
                       <input

@@ -103,7 +103,7 @@ function pageText(locale: "en" | "ar") {
   return {
     eyebrow: "Locations",
     title: "Location management",
-    description: "Manage internal venues, external locations, online delivery, and international locations used for trainings.",
+    description: "Manage venues, online delivery options, and international locations used for trainings.",
     addButton: "Add Location",
     createTitle: "Add Location",
     close: "Close",
@@ -131,7 +131,7 @@ function pageText(locale: "en" | "ar") {
     save: "Add Location",
     empty: "Not available",
     types: {
-      INTERNAL_VENUE: "Internal venue",
+      INTERNAL_VENUE: "Company venue",
       EXTERNAL_VENUE: "External venue",
       ONLINE: "Online",
       INTERNATIONAL: "International",

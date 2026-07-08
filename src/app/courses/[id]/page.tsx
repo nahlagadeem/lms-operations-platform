@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ActiveStatus, CourseRunStatus, DeliveryMode, Prisma } from "@prisma/client";
-import { createTraining } from "@/app/course-runs/actions";
+import { ActiveStatus, CourseRunStatus, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import {
-  canCreateOperationalData,
   canViewFinancials,
   getCurrentPlatformRole,
 } from "@/lib/permissions";
@@ -14,9 +12,6 @@ type CourseDetailPageProps = {
   params: Promise<{
     id: string;
   }>;
-  searchParams?: Promise<{
-    panel?: string;
-  }>;
 };
 
 function detailText(locale: "en" | "ar") {
@@ -24,11 +19,8 @@ function detailText(locale: "en" | "ar") {
     return {
       title: "تفاصيل الدورة",
       description:
-        "هذه بطاقة الدورة الأساسية قبل التدريب. راجع المعلومات ثم أنشئ تدريبا وحدد حالته وتفاصيله التنفيذية.",
+        "هذه بطاقة الدورة الأساسية. راجع معلومات الدورة والتدريبات المرتبطة بها.",
       back: "العودة إلى الدورات",
-      createRun: "إنشاء تدريب",
-      createRunButton: "فتح إنشاء التدريب",
-      close: "إغلاق",
       overview: "نظرة عامة",
       planning: "التخطيط والتدريب",
       pricing: "التسعير",
@@ -50,7 +42,7 @@ function detailText(locale: "en" | "ar") {
       external: "تنفيذ خارجي",
       targetUse: "الاستخدام التشغيلي",
       startOperationalNote:
-        "يمكن من هذه الصفحة إنشاء تدريب فعلي ثم استكمال المدرب والموقع والجدولة.",
+        "تعرض هذه الصفحة جاهزية الدورة ومعلوماتها التشغيلية والتدريبات المرتبطة بها.",
       latestPrice: "السعر النهائي الحالي",
       originalPrice: "السعر الأصلي",
       discountAmount: "قيمة الخصم",
@@ -62,16 +54,6 @@ function detailText(locale: "en" | "ar") {
       countRuns: "إجمالي التدريبات",
       countOngoing: "الجارية",
       countCompleted: "المكتملة",
-      createDescription:
-        "أنشئ تدريبا لهذه الدورة مباشرة من هنا. يمكنك اعتباره جاريا الآن أو اختيار حالة أخرى ثم متابعة التفاصيل.",
-      status: "الحالة",
-      deliveryMode: "نمط التنفيذ",
-      startDate: "تاريخ البداية",
-      endDate: "تاريخ النهاية",
-      plannedSeats: "المقاعد التقديرية",
-      notes: "ملاحظات",
-      notesPlaceholder: "ملاحظات تشغيلية داخلية",
-      startNow: "إنشاء التدريب",
       runCode: "رمز التدريب",
       dates: "التواريخ",
       noDates: "التواريخ غير محددة",
@@ -84,14 +66,11 @@ function detailText(locale: "en" | "ar") {
     description:
       "Review course information, scheduling readiness, and related trainings.",
     back: "Back to courses",
-    createRun: "Add Training",
-    createRunButton: "Add Training",
-    close: "Close",
     overview: "Course overview",
     planning: "Planning and operations",
     pricing: "Pricing snapshot",
     relatedRuns: "Related Trainings",
-    noRuns: "No trainings are linked to this course yet. Click Add Training to get started.",
+    noRuns: "No trainings are linked to this course yet.",
     descriptionLabel: "Course description",
     noDescription: "No description is available for this course yet.",
     package: "Package",
@@ -108,7 +87,7 @@ function detailText(locale: "en" | "ar") {
     external: "External delivery",
     targetUse: "Operational use",
     startOperationalNote:
-      "From this page, add a training, then complete the instructor, location, and schedule details.",
+      "This page shows course readiness, operational information, and related trainings.",
     latestPrice: "Current final price",
     originalPrice: "Original price",
     discountAmount: "Discount amount",
@@ -120,16 +99,6 @@ function detailText(locale: "en" | "ar") {
     countRuns: "Total trainings",
     countOngoing: "In progress",
     countCompleted: "Completed",
-    createDescription:
-      "Add a training directly from here. You can mark it as in progress immediately or choose another training status first.",
-    status: "Status",
-    deliveryMode: "Delivery mode",
-    startDate: "Start date",
-    endDate: "End date",
-    plannedSeats: "Estimated Seats",
-    notes: "Notes",
-    notesPlaceholder: "Internal operational notes",
-    startNow: "Add Training",
     runCode: "Training Code",
     dates: "Dates",
     noDates: "Dates not set",
@@ -211,23 +180,15 @@ function courseAvailabilityText(status: ActiveStatus, details: { unavailable: st
   return details.unavailable;
 }
 
-function panelHref(id: string) {
-  return `/courses/${id}?panel=create-run`;
-}
-
 export default async function CourseDetailPage({
   params,
-  searchParams,
 }: CourseDetailPageProps) {
   const { id } = await params;
-  const query = (await searchParams) ?? {};
-  const openPanel = query.panel === "create-run";
   const locale = await getLocale();
   const localeText = t(locale);
   const details = detailText(locale);
   const numberLocale = locale === "ar" ? "ar-SA" : "en-US";
   const platformRole = await getCurrentPlatformRole();
-  const canCreateTraining = canCreateOperationalData(platformRole);
   const canSeeFinancials = canViewFinancials(platformRole);
 
   const course = await db.course.findUnique({
@@ -302,12 +263,6 @@ export default async function CourseDetailPage({
             </h2>
             <p className="section-copy">{details.description}</p>
           </div>
-
-          {canCreateTraining ? (
-            <Link href={panelHref(course.id)} className="primary-button w-full sm:w-auto">
-              {details.createRun}
-            </Link>
-          ) : null}
         </div>
       </section>
 
@@ -484,109 +439,6 @@ export default async function CourseDetailPage({
           ) : null}
         </div>
       </section>
-
-      {openPanel && canCreateTraining ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,25,35,0.55)] p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-white/70 bg-white p-5 shadow-[0_30px_70px_rgba(10,25,35,0.35)] sm:p-6">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <p className="eyebrow">{details.createRun}</p>
-                <h3 className="section-title">{details.createRunButton}</h3>
-              </div>
-              <Link href={`/courses/${course.id}`} className="secondary-button">
-                {details.close}
-              </Link>
-            </div>
-
-            <p className="section-copy">{details.createDescription}</p>
-
-              <form action={createTraining} className="mt-6 space-y-4">
-              <input type="hidden" name="courseId" value={course.id} />
-
-              <label className="field-shell">
-                <span className="field-label">
-                  {localeText.courseRuns.purchaseOrderCourseEntry}
-                </span>
-                <select
-                  name="purchaseOrderCourseEntryId"
-                  className="field-input"
-                  defaultValue=""
-                  required
-                >
-                  <option value="" disabled>
-                    {localeText.courseRuns.selectPurchaseOrderCourseEntry}
-                  </option>
-                  {course.scopeSelections.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.scope.code} | {entry.scope.nameEn || entry.scope.nameAr || entry.scope.name} |{" "}
-                      {course.courseCode} | {course.nameEn || course.nameAr} |{" "}
-                      {localeText.courseRuns.plannedSeats}: {entry.estimatedSeats ?? "-"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="field-shell">
-                  <span className="field-label">{details.status}</span>
-                  <select
-                    name="status"
-                    className="field-input"
-                    defaultValue={CourseRunStatus.ONGOING}
-                  >
-                    {Object.entries(localeText.courseRunStatuses).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field-shell">
-                  <span className="field-label">{details.deliveryMode}</span>
-                  <select
-                    name="deliveryMode"
-                    className="field-input"
-                    defaultValue={DeliveryMode.IN_PERSON}
-                  >
-                    {Object.entries(localeText.deliveryModes).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="field-shell">
-                  <span className="field-label">{details.startDate}</span>
-                  <input type="date" name="startDate" className="field-input" />
-                </label>
-
-                <label className="field-shell">
-                  <span className="field-label">{details.endDate}</span>
-                  <input type="date" name="endDate" className="field-input" />
-                </label>
-              </div>
-
-              <label className="field-shell">
-                <span className="field-label">{details.notes}</span>
-                <textarea
-                  name="notes"
-                  rows={5}
-                  placeholder={details.notesPlaceholder}
-                  className="field-input min-h-[8rem] resize-y"
-                />
-              </label>
-
-              <button type="submit" className="primary-button w-full sm:w-auto">
-                {details.startNow}
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

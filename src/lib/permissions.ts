@@ -61,6 +61,10 @@ export function canManageFinancialFields(role: PlatformRole | null | undefined) 
   return role === PrismaPlatformRole.PROJECT_MANAGER;
 }
 
+export function canManageTrainingVendorCost(role: PlatformRole | null | undefined) {
+  return role === PrismaPlatformRole.PROJECT_MANAGER || role === PrismaPlatformRole.DATA_ENTRY;
+}
+
 export function isCustomerCapacityOnly(role: PlatformRole | null | undefined) {
   return role === PrismaPlatformRole.CUSTOMER;
 }
