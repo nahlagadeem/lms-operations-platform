@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "import:catalog": "tsx scripts/import-course-catalog.ts",
+    "seed:demo-clean": "tsx scripts/reset-demo-clean.ts",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",
