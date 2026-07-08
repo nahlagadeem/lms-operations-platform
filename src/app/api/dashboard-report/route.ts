@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
 import { getLocale, t } from "@/lib/locale";
 import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
+import { buildDashboardWorkbook } from "@/server/services/dashboard-export-service";
 import {
   formatReportingDate,
   getProjectReportingRows,
@@ -27,6 +28,22 @@ export async function GET(request: NextRequest) {
 
   const locale = await getLocale();
   const labels = t(locale);
+  const exportType = normalize(request.nextUrl.searchParams.get("type"));
+
+  if (exportType === "home") {
+    const workbook = await buildDashboardWorkbook(locale);
+    const fileName = locale === "ar" ? "لوحة-التحكم" : "home-dashboard";
+
+    return new NextResponse(new Uint8Array(workbook), {
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${fileName}-${new Date().toISOString().slice(0, 10)}.xlsx`)}`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   const search = request.nextUrl.searchParams;
   const rows = await getProjectReportingRows(locale, {
     q: normalize(search.get("q")),

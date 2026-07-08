@@ -39,6 +39,8 @@ type HomePageProps = {
 };
 
 const DASHBOARD_TABLE_PAGE_SIZE = 10;
+const SHOW_DASHBOARD_COURSE_PERFORMANCE = false;
+const SHOW_DASHBOARD_REPORTING = false;
 
 const plannedRunStatuses: CourseRunStatus[] = [
   CourseRunStatus.DRAFT,
@@ -545,6 +547,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ...(searchTerm ? { q: searchTerm } : {}),
     ...(categoryFilter ? { category: categoryFilter } : {}),
   }).toString()}`;
+  const homeExportUrl = "/api/dashboard-report?type=home";
   const categoryOptions = getReportingCategoryOptions(locale);
   const totalReportingPages = Math.max(
     1,
@@ -740,6 +743,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <h1 className="section-title">{localeText.home.projectIndicatorsTitle}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canSeeFinancials ? (
+            <a href={homeExportUrl} className="primary-button">
+              {localeText.buttons.exportExcel}
+            </a>
+          ) : null}
           <Link href={buildDashboardUrl({})} className="primary-button">
             {homeUiText.refresh}
           </Link>
@@ -920,7 +928,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         />
       </section>
 
-      {platformRole !== "CUSTOMER" ? (
+      {/* Hidden for now by request. Restore by setting SHOW_DASHBOARD_COURSE_PERFORMANCE to true. */}
+      {SHOW_DASHBOARD_COURSE_PERFORMANCE && platformRole !== "CUSTOMER" ? (
         <section className="panel-surface">
           <div className="mb-5">
             <p className="eyebrow">{dashboardText.coursesEyebrow}</p>
@@ -1212,7 +1221,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </ChartPanel>
       </section>
 
-      {canSeeFinancials ? (
+      {/* Hidden for now by request. Restore by setting SHOW_DASHBOARD_REPORTING to true. */}
+      {SHOW_DASHBOARD_REPORTING && canSeeFinancials ? (
       <section className="panel-surface">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
