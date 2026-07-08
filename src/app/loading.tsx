@@ -2,7 +2,7 @@ import { getLocale } from "@/lib/locale";
 
 export default async function Loading() {
   const locale = await getLocale();
-  const text = locale === "ar" ? "جاري تحميل المنصة..." : "Loading platform...";
+  const text = locale === "ar" ? "تحميل" : "Loading";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--surface-base)] px-5">
