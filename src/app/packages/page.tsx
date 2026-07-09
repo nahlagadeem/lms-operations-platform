@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { InstantSearchField } from "@/components/instant-search-field";
-import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { getCurrentPlatformRole, canViewFinancials } from "@/lib/permissions";
+import { loadPackageCatalogRows } from "@/server/services/catalog-table-service";
 
 type PackagesPageProps = {
   searchParams?: Promise<{
@@ -21,6 +22,10 @@ function normalizePage(value?: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
+function normalizeSearch(value?: string) {
+  return value?.trim() || "";
+}
+
 function paginationPages(current: number, total: number) {
   const pages = new Set([1, total, current, current - 1, current + 1]);
   return Array.from(pages)
@@ -34,10 +39,6 @@ function paginationPages(current: number, total: number) {
       items.push(page);
       return items;
     }, []);
-}
-
-function normalizeSearch(value?: string) {
-  return value?.trim() || "";
 }
 
 function pageHref(page: number, q: string) {
@@ -56,20 +57,13 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
   const requestedPage = normalizePage(params.page);
   const searchTerm = normalizeSearch(params.q);
   const searchKey = searchTerm.toLowerCase();
+  const platformRole = await getCurrentPlatformRole();
+  const canSeeFinancials = canViewFinancials(platformRole);
 
-  const packages = await db.package.findMany({
-    orderBy: { code: "asc" },
-    include: {
-      _count: {
-        select: {
-          courses: true,
-        },
-      },
-    },
-  });
+  const packages = await loadPackageCatalogRows(locale);
   const filteredPackages = packages.filter((item) => {
     if (!searchKey) return true;
-    return [item.code, item.nameEn, item.nameAr, item.description]
+    return [item.code, item.displayName, item.nameAr, item.nameEn, item.description]
       .filter(Boolean)
       .join(" ")
       .toLowerCase()
@@ -98,130 +92,178 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
       </section>
 
       <section className="panel-surface">
-        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
           <InstantSearchField
-            label={localeText.common.search}
+            label={localeText.packages.search}
             defaultValue={searchTerm}
-            placeholder={localeText.common.searchPlaceholder}
+            placeholder={localeText.packages.searchPlaceholder}
             pageParams={["page"]}
           />
-          <Link href="/packages" className="secondary-button self-end">
-            {localeText.common.reset}
+          <Link href={pageHref(1, searchTerm)} className="secondary-button self-end">
+            {localeText.packages.reset}
+          </Link>
+          <Link
+            href={`/api/packages/export${searchTerm ? `?q=${encodeURIComponent(searchTerm)}` : ""}`}
+            className="primary-button self-end"
+          >
+            {localeText.buttons.exportExcel}
           </Link>
         </form>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {visiblePackages.map((item) => (
-          <Link
-            key={item.id}
-            href={`/packages/${item.id}`}
-            className="panel-surface block transition hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(17,17,17,0.08)]"
+      <section className="panel-surface min-w-0">
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-[var(--ink-strong)]">
+              {localeText.packages.listTitle}
+            </h3>
+            <p className="mt-1 text-sm text-[var(--ink-soft)]">
+              {filteredPackages.length > 0
+                ? `${localeText.packages.showing} ${formatNumber(
+                    (safePage - 1) * PACKAGES_PAGE_SIZE + 1,
+                    numberLocale,
+                  )} ${localeText.packages.to} ${formatNumber(
+                    Math.min(safePage * PACKAGES_PAGE_SIZE, filteredPackages.length),
+                    numberLocale,
+                  )} ${localeText.packages.fromTotal} ${formatNumber(
+                    filteredPackages.length,
+                    numberLocale,
+                  )}`
+                : localeText.packages.noResults}
+            </p>
+          </div>
+          <div className="rounded-full border border-[var(--brand-yellow)] bg-white px-4 py-2 text-sm font-medium text-[var(--ink-soft)]">
+            {localeText.packages.page} {formatNumber(safePage, numberLocale)} {localeText.packages.of} {formatNumber(totalPages, numberLocale)}
+          </div>
+        </div>
+
+        {visiblePackages.length === 0 ? (
+          <div className="jawraa-subcard border-dashed px-5 py-8 text-center">
+            <p className="text-lg font-semibold text-[var(--ink-strong)]">
+              {localeText.packages.noResults}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{localeText.packages.package}</th>
+                  <th>{localeText.packages.totalCourses}</th>
+                  <th>{localeText.packages.estimatedSeats}</th>
+                  <th>{localeText.packages.actualSeats}</th>
+                  <th>{localeText.packages.remainingSeats}</th>
+                  <th>{localeText.packages.seatUtilizationPct}</th>
+                  {canSeeFinancials ? <th>{localeText.packages.grossMarginPct}</th> : null}
+                  <th>{localeText.packages.details}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePackages.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        <p className="font-semibold text-[var(--ink-strong)]">{item.displayName}</p>
+                        {item.description ? (
+                          <p className="mt-1 text-xs leading-6 text-[var(--ink-soft)]">
+                            {item.description}
+                          </p>
+                        ) : null}
+                      </Link>
+                    </td>
+                    <td className="latin-cell">
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        {formatNumber(item.courseCount, numberLocale)}
+                      </Link>
+                    </td>
+                    <td className="latin-cell">
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        {formatNumber(item.estimatedSeats, numberLocale)}
+                      </Link>
+                    </td>
+                    <td className="latin-cell">
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        {formatNumber(item.actualSeats, numberLocale)}
+                      </Link>
+                    </td>
+                    <td className="latin-cell">
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        {formatNumber(item.remainingSeats, numberLocale)}
+                      </Link>
+                    </td>
+                    <td className="latin-cell">
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        {formatNumber(item.utilizationPct, numberLocale)}%
+                      </Link>
+                    </td>
+                    {canSeeFinancials ? (
+                      <td className="latin-cell">
+                        <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                          {item.grossMarginPct === null
+                            ? "-"
+                            : `${formatNumber(item.grossMarginPct, numberLocale)}%`}
+                        </Link>
+                      </td>
+                    ) : null}
+                    <td>
+                      <Link href={`/packages/${item.id}`} className="secondary-button inline-flex">
+                        {localeText.packages.details}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {filteredPackages.length > PACKAGES_PAGE_SIZE ? (
+          <div
+            className="mt-6 flex flex-wrap items-center justify-between gap-3"
+            dir={locale === "ar" ? "rtl" : "ltr"}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="latin-chip">{item.code}</p>
-                <h3 className="mt-4 text-xl font-semibold text-[var(--ink-strong)]">
-                  {item.nameEn || item.nameAr}
-                </h3>
-              </div>
-              <span className="status-pill">{localeText.packages.active}</span>
-            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={pageHref(Math.max(1, safePage - 1), searchTerm)}
+                aria-disabled={safePage <= 1}
+                className={`secondary-button w-full sm:w-auto ${safePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.packages.previous}
+              </Link>
 
-            <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-              <InfoBox
-                label={localeText.packages.courseCount}
-                value={formatNumber(item._count.courses, numberLocale)}
-              />
-              <InfoBox
-                label={localeText.packages.target}
-                value={formatNumber(item.expectedTraineeCount ?? 0, numberLocale)}
-              />
-            </div>
+              {paginationPages(safePage, totalPages).map((pageNumber, index) => {
+                const previousPage = paginationPages(safePage, totalPages)[index - 1];
+                const showEllipsis =
+                  previousPage !== undefined && pageNumber !== "ellipsis" && typeof previousPage === "number"
+                    ? pageNumber - previousPage > 1
+                    : false;
 
-            {item.description ? (
-              <p className="mt-5 text-sm leading-7 text-[var(--ink-soft)]">
-                {item.description}
-              </p>
-            ) : null}
-          </Link>
-        ))}
-        {filteredPackages.length === 0 ? (
-          <div className="panel-surface border-dashed text-sm text-[var(--ink-soft)] md:col-span-3">
-            {localeText.common.noResults}
+                return (
+                  <div key={`${pageNumber}-${index}`} className="flex items-center gap-2">
+                    {showEllipsis ? <span className="pagination-ellipsis">...</span> : null}
+                    {pageNumber === "ellipsis" ? null : (
+                      <Link
+                        href={pageHref(pageNumber, searchTerm)}
+                        className={`pagination-link ${pageNumber === safePage ? "pagination-link-active" : ""}`}
+                      >
+                        {formatNumber(pageNumber, numberLocale)}
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
+
+              <Link
+                href={pageHref(Math.min(totalPages, safePage + 1), searchTerm)}
+                aria-disabled={safePage >= totalPages}
+                className={`secondary-button w-full sm:w-auto ${safePage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+              >
+                {localeText.packages.next}
+              </Link>
+            </div>
           </div>
         ) : null}
       </section>
-      {filteredPackages.length > PACKAGES_PAGE_SIZE ? (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-semibold text-[var(--ink-soft)]">
-            {localeText.pagination.pageIndicator
-              .replace("{current}", formatNumber(safePage, numberLocale))
-              .replace("{total}", formatNumber(totalPages, numberLocale))}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={pageHref(1, searchTerm)}
-              aria-disabled={safePage <= 1}
-              className={`pagination-link ${safePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
-            >
-              {localeText.pagination.first}
-            </Link>
-            <Link
-              href={pageHref(Math.max(1, safePage - 1), searchTerm)}
-              aria-disabled={safePage <= 1}
-              className={`pagination-link ${safePage <= 1 ? "pointer-events-none opacity-50" : ""}`}
-            >
-              {localeText.pagination.previous}
-            </Link>
-            {paginationPages(safePage, totalPages).map((page, index) =>
-              page === "ellipsis" ? (
-                <span key={`ellipsis-${index}`} className="pagination-ellipsis">
-                  ...
-                </span>
-              ) : (
-                <Link
-                  key={page}
-                  href={pageHref(page, searchTerm)}
-                  aria-current={page === safePage ? "page" : undefined}
-                  className={`pagination-link ${page === safePage ? "pagination-link-active" : ""}`}
-                >
-                  {formatNumber(page, numberLocale)}
-                </Link>
-              ),
-            )}
-            <Link
-              href={pageHref(Math.min(totalPages, safePage + 1), searchTerm)}
-              aria-disabled={safePage >= totalPages}
-              className={`pagination-link ${safePage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
-            >
-              {localeText.pagination.next}
-            </Link>
-            <Link
-              href={pageHref(totalPages, searchTerm)}
-              aria-disabled={safePage >= totalPages}
-              className={`pagination-link ${safePage >= totalPages ? "pointer-events-none opacity-50" : ""}`}
-            >
-              {localeText.pagination.last}
-            </Link>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="jawraa-subcard p-4">
-      <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-[var(--ink-strong)]">{value}</p>
     </div>
   );
 }

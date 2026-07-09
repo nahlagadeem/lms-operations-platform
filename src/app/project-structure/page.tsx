@@ -103,6 +103,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
   const poSearch = normalizeSearch(params.q);
   const poSearchKey = poSearch.toLowerCase();
   const courseSearch = normalizeSearch(params.courseQ);
+  const courseSearchKey = courseSearch.toLowerCase();
   const requestedPage = normalizePage(params.page);
   const platformRole = await getCurrentPlatformRole();
   const canCreate = canCreateOperationalData(platformRole);
@@ -175,8 +176,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
     { packages: 0, courses: 0, budget: 0, invoiced: 0 },
   );
   const filteredScopes = scopes.filter((scope) => {
-    if (!poSearchKey) return true;
-    return [
+    const poMatches = [
       formatPurchaseOrderCode(scope.code, locale),
       formatPurchaseOrderTitle(scope, locale),
       scope.description,
@@ -186,6 +186,23 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
       .join(" ")
       .toLowerCase()
       .includes(poSearchKey);
+
+    const courseMatches = !courseSearchKey
+      ? true
+      : scope.selectedCourses.some((entry) =>
+          [
+            entry.course.courseCode,
+            entry.course.nameAr,
+            entry.course.nameEn,
+            formatPackageDisplayName(entry.course.package, locale),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(courseSearchKey),
+        );
+
+    return poMatches && courseMatches;
   });
   const totalScopePages = Math.max(1, Math.ceil(filteredScopes.length / PURCHASE_ORDERS_PAGE_SIZE));
   const safeScopePage = Math.min(requestedPage, totalScopePages);
@@ -333,7 +350,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
       ) : null}
 
       <section className="panel-surface">
-        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
           {courseSearch ? <input type="hidden" name="courseQ" value={courseSearch} /> : null}
           <InstantSearchField
             label={localeText.common.search}
@@ -347,9 +364,35 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           >
             {localeText.common.reset}
           </Link>
+          <Link
+            href={`/api/pos/export${poSearch || courseSearch ? `?${new URLSearchParams({
+              ...(poSearch ? { q: poSearch } : {}),
+              ...(courseSearch ? { courseQ: courseSearch } : {}),
+            }).toString()}` : ""}`}
+            className="primary-button self-end"
+          >
+            {localeText.buttons.exportExcel}
+          </Link>
         </form>
-        <div className="mt-5 grid gap-4">
-          {visibleScopes.map((scope) => {
+        <div className="mt-6 overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{localeText.projectScopes.scope}</th>
+                <th>{localeText.projectScopes.courses}</th>
+                <th>{localeText.projectScopes.packages}</th>
+                <th>{localeText.projectScopes.estimatedSeats}</th>
+                <th>{localeText.projectScopes.actualSeats}</th>
+                <th>{localeText.projectScopes.remainingSeats}</th>
+                <th>{localeText.projectScopes.fulfillmentPct}</th>
+                {canSeeFinancials ? <th>{localeText.projectScopes.budget}</th> : null}
+                <th>{localeText.projectScopes.viewDetails}</th>
+                {canEdit ? <th>{localeText.buttons.edit}</th> : null}
+                {canEdit ? <th>{localeText.buttons.delete}</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleScopes.map((scope) => {
           const courseCount = scope.selectedCourses.length;
           const totalEstimatedSeats = scope.selectedCourses.reduce(
             (sum, entry) => sum + (entry.estimatedSeats ?? 0),
@@ -366,190 +409,184 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           const actual = progressValue(scope.actualCompletion);
 
           return (
-            <div
-              key={scope.id}
-              className="jawraa-subcard p-5"
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+            <tr key={scope.id}>
+              <td>
+                <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
                   <p className="latin-chip">{formatPurchaseOrderCode(scope.code, locale)}</p>
-                  <h3 className="mt-4 text-2xl font-semibold text-[var(--ink-strong)]">
+                  <p className="mt-2 font-semibold text-[var(--ink-strong)]">
                     {formatPurchaseOrderTitle(scope, locale)}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
-                    {scope.description || localeText.projectScopes.description}
                   </p>
-                </div>
-                <div className="flex flex-col items-start gap-2 sm:items-end">
-                  <span className="status-pill">{scope.isActive ? localeText.projectScopes.active : localeText.projectScopes.inactive}</span>
-                  <Link href={`/pos/${scope.id}`} className="secondary-button">
-                    {localeText.projectScopes.viewDetails}
+                </Link>
+              </td>
+              <td className="latin-cell">
+                <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
+                  {formatNumber(courseCount, numberLocale)}
+                </Link>
+              </td>
+              <td className="latin-cell">
+                <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
+                  {formatNumber(countAssignedPackages(scope.selectedCourses), numberLocale)}
+                </Link>
+              </td>
+              <td className="latin-cell">
+                <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
+                  {formatNumber(totalEstimatedSeats, numberLocale)}
+                </Link>
+              </td>
+              <td className="latin-cell">
+                <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
+                  {formatNumber(totalActualSeats, numberLocale)}
+                </Link>
+              </td>
+              <td className="latin-cell">
+                <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
+                  {formatNumber(totalEstimatedSeats - totalActualSeats, numberLocale)}
+                </Link>
+              </td>
+              <td className="latin-cell">
+                <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
+                  {formatPercent(fulfillmentPct, numberLocale)}
+                </Link>
+              </td>
+              {canSeeFinancials ? (
+                <td className="latin-cell">
+                  <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
+                    {formatCurrency(new Prisma.Decimal(scope.budgetAmount ?? 0), numberLocale)}
                   </Link>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <InfoBox label={localeText.projectScopes.courses} value={formatNumber(courseCount, numberLocale)} />
-                <InfoBox
-                  label={localeText.projectScopes.estimatedSeats}
-                  value={formatNumber(totalEstimatedSeats, numberLocale)}
-                />
-                <InfoBox
-                  label={localeText.projectScopes.actualSeats}
-                  value={formatNumber(totalActualSeats, numberLocale)}
-                />
-                <InfoBox
-                  label={localeText.projectScopes.remainingSeats}
-                  value={formatNumber(totalEstimatedSeats - totalActualSeats, numberLocale)}
-                />
-                <InfoBox
-                  label={localeText.projectScopes.fulfillmentPct}
-                  value={formatPercent(fulfillmentPct, numberLocale)}
-                />
-              </div>
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                {scope.selectedCourses.slice(0, 10).map(({ course }) => (
-                  <div key={course.id} className="jawraa-subcard p-4">
-                    <p className="latin-chip">{course.courseCode}</p>
-                    <p className="mt-3 line-clamp-2 text-sm font-semibold text-[var(--ink-strong)]">
-                      {course.nameEn || course.nameAr}
-                    </p>
-                    <p className="mt-2 text-xs text-[var(--ink-soft)]">
-                      {formatPackageDisplayName(course.package, locale)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="jawraa-subcard mt-5 p-4">
-                <div className="flex items-center justify-between gap-3 text-xs font-semibold text-[var(--ink-soft)]">
-                  <span>{localeText.projectScopes.progress}</span>
-                  <span>{formatNumber(actual, numberLocale)}%</span>
-                </div>
-                <div className="mt-3 h-2 rounded-full bg-[var(--surface-soft)]">
-                  <div
-                    className="h-2 rounded-full bg-[var(--brand-yellow)]"
-                    style={{ width: `${Math.min(100, Math.max(0, actual))}%` }}
-                  />
-                </div>
-              </div>
+                </td>
+              ) : null}
+              <td>
+                <Link href={`/pos/${scope.id}`} className="secondary-button inline-flex">
+                  {localeText.projectScopes.viewDetails}
+                </Link>
+              </td>
               {canEdit ? (
-                <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
-                  <details className="jawraa-subcard p-4">
-                    <summary className="cursor-pointer text-sm font-bold text-[var(--ink-strong)]">
-                      {localeText.projectScopes.editScope}
-                    </summary>
-                    <form action={updateProjectScope} className="mt-4 grid gap-4 lg:grid-cols-2">
-                      <input type="hidden" name="id" value={scope.id} />
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.code}</span>
-                        <input name="code" className="field-input" required defaultValue={scope.code} />
-                      </label>
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.status}</span>
-                        <select
-                          name="status"
-                          className="field-input"
-                          defaultValue={scope.isActive ? "ACTIVE" : "INACTIVE"}
-                        >
-                          <option value="ACTIVE">{localeText.projectScopes.active}</option>
-                          <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
-                        </select>
-                      </label>
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.nameAr}</span>
-                        <input
-                          name="nameAr"
-                          className="field-input"
-                          required
-                          dir="rtl"
-                          defaultValue={formatPurchaseOrderTitle(scope, "ar")}
-                        />
-                      </label>
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.nameEn}</span>
-                        <input
-                          name="nameEn"
-                          className="field-input"
-                          required
-                          dir="ltr"
-                          defaultValue={formatPurchaseOrderTitle(scope, "en")}
-                        />
-                      </label>
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.region}</span>
-                        <input name="region" className="field-input" defaultValue={scope.region || ""} />
-                      </label>
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.file}</span>
-                        <input
-                          name="file"
-                          type="file"
-                          className="field-input"
-                          accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
-                        />
-                      </label>
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.startDate}</span>
-                        <input
-                          name="startDate"
-                          type="date"
-                          className="field-input"
-                          defaultValue={formatInputDate(scope.startDate)}
-                        />
-                      </label>
-                      <label className="field-shell">
-                        <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
-                        <input
-                          name="expectedEndDate"
-                          type="date"
-                          className="field-input"
-                          defaultValue={formatInputDate(scope.expectedEndDate)}
-                        />
-                      </label>
-                      <label className="field-shell lg:col-span-2">
-                        <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
-                        <textarea
-                          name="description"
-                          rows={3}
-                          className="field-input min-h-[6rem] resize-y"
-                          defaultValue={scope.description || ""}
-                        />
-                      </label>
-                      <label className="field-shell lg:col-span-2">
-                        <span className="field-label">{localeText.projectScopes.notes}</span>
-                        <textarea
-                          name="notes"
-                          rows={3}
-                          className="field-input min-h-[6rem] resize-y"
-                          defaultValue={scope.notes || ""}
-                        />
-                      </label>
-                      <div className="lg:col-span-2">
-                        <button type="submit" className="primary-button">
-                          {localeText.projectScopes.saveScope}
-                        </button>
-                      </div>
-                    </form>
-                  </details>
-                  <form action={deleteProjectScope} className="self-start">
+                <td>
+                  <Link href={`#edit-po-${scope.id}`} className="secondary-button inline-flex">
+                    {localeText.buttons.edit}
+                  </Link>
+                </td>
+              ) : null}
+              {canEdit ? (
+                <td>
+                  <form action={deleteProjectScope}>
                     <input type="hidden" name="id" value={scope.id} />
                     <button type="submit" className="secondary-button">
-                      {localeText.projectScopes.deleteScope}
+                      {localeText.buttons.delete}
                     </button>
                   </form>
-                </div>
+                </td>
               ) : null}
-            </div>
+            </tr>
           );
           })}
-          {scopes.length > 0 && filteredScopes.length === 0 ? (
-            <div className="jawraa-subcard border-dashed p-5 text-sm text-[var(--ink-soft)]">
-              {localeText.common.noResults}
-            </div>
-          ) : null}
+            </tbody>
+          </table>
         </div>
+        {canEdit ? (
+          <div className="mt-6 space-y-4">
+            <p className="eyebrow">{localeText.projectScopes.editScope}</p>
+            {visibleScopes.map((scope) => (
+              <details key={scope.id} id={`edit-po-${scope.id}`} className="jawraa-subcard p-4">
+                <summary className="cursor-pointer text-sm font-bold text-[var(--ink-strong)]">
+                  {formatPurchaseOrderCode(scope.code, locale)} - {formatPurchaseOrderTitle(scope, locale)}
+                </summary>
+                <form action={updateProjectScope} className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <input type="hidden" name="id" value={scope.id} />
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.code}</span>
+                    <input name="code" className="field-input" required defaultValue={scope.code} />
+                  </label>
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.status}</span>
+                    <select
+                      name="status"
+                      className="field-input"
+                      defaultValue={scope.isActive ? "ACTIVE" : "INACTIVE"}
+                    >
+                      <option value="ACTIVE">{localeText.projectScopes.active}</option>
+                      <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
+                    </select>
+                  </label>
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.nameAr}</span>
+                    <input
+                      name="nameAr"
+                      className="field-input"
+                      required
+                      dir="rtl"
+                      defaultValue={formatPurchaseOrderTitle(scope, "ar")}
+                    />
+                  </label>
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.nameEn}</span>
+                    <input
+                      name="nameEn"
+                      className="field-input"
+                      required
+                      dir="ltr"
+                      defaultValue={formatPurchaseOrderTitle(scope, "en")}
+                    />
+                  </label>
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.region}</span>
+                    <input name="region" className="field-input" defaultValue={scope.region || ""} />
+                  </label>
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.file}</span>
+                    <input
+                      name="file"
+                      type="file"
+                      className="field-input"
+                      accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
+                    />
+                  </label>
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.startDate}</span>
+                    <input
+                      name="startDate"
+                      type="date"
+                      className="field-input"
+                      defaultValue={formatInputDate(scope.startDate)}
+                    />
+                  </label>
+                  <label className="field-shell">
+                    <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
+                    <input
+                      name="expectedEndDate"
+                      type="date"
+                      className="field-input"
+                      defaultValue={formatInputDate(scope.expectedEndDate)}
+                    />
+                  </label>
+                  <label className="field-shell lg:col-span-2">
+                    <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
+                    <textarea
+                      name="description"
+                      rows={3}
+                      className="field-input min-h-[6rem] resize-y"
+                      defaultValue={scope.description || ""}
+                    />
+                  </label>
+                  <label className="field-shell lg:col-span-2">
+                    <span className="field-label">{localeText.projectScopes.notes}</span>
+                    <textarea
+                      name="notes"
+                      rows={3}
+                      className="field-input min-h-[6rem] resize-y"
+                      defaultValue={scope.notes || ""}
+                    />
+                  </label>
+                  <div className="lg:col-span-2">
+                    <button type="submit" className="primary-button">
+                      {localeText.projectScopes.saveScope}
+                    </button>
+                  </div>
+                </form>
+              </details>
+            ))}
+          </div>
+        ) : null}
         {filteredScopes.length > PURCHASE_ORDERS_PAGE_SIZE ? (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">
