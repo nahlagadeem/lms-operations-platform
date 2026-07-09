@@ -360,6 +360,11 @@ const englishText = {
     totalSessions: "Total sessions",
     deliveryMode: "Delivery mode",
     status: "Status",
+    trainingState: "Training State",
+    trainingStates: {
+      ACTIVE: "Active",
+      CANCELED: "Cancelled",
+    },
     startDate: "Start date",
     endDate: "End date",
     plannedSeats: "Estimated Seats",
@@ -842,6 +847,11 @@ const arabicText = {
     totalSessions: "إجمالي الجلسات",
     deliveryMode: "طريقة التدريب",
     status: "الحالة",
+    trainingState: "حالة التدريب التشغيلية",
+    trainingStates: {
+      ACTIVE: "نشط",
+      CANCELED: "ملغى",
+    },
     startDate: "تاريخ البداية",
     endDate: "تاريخ النهاية",
     plannedSeats: "المقاعد التقديرية",

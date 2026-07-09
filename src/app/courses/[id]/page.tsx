@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ActiveStatus, CourseRunStatus, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { deriveTrainingDisplayStatus } from "@/lib/training-status";
 import {
   canViewFinancials,
   getCurrentPlatformRole,
@@ -219,6 +220,9 @@ export default async function CourseDetailPage({
               nameEn: true,
             },
           },
+          _count: {
+            select: { trainingEvaluations: true },
+          },
         },
         take: 12,
       },
@@ -325,12 +329,24 @@ export default async function CourseDetailPage({
                   {details.noRuns}
                 </div>
               ) : (
-                course.runs.map((run) => (
-                  <Link
-                    key={run.id}
-                    href={`/trainings/${run.id}`}
-                    className="jawraa-subcard block px-4 py-4 transition hover:shadow-[0_12px_28px_rgba(17,17,17,0.06)]"
-                  >
+                course.runs.map((run) => {
+                  const displayStatus = deriveTrainingDisplayStatus({
+                    status: run.status,
+                    plannedSeats: run.plannedSeats,
+                    confirmedSeats: run.confirmedSeats,
+                    trainingEvaluationCount: run._count.trainingEvaluations,
+                  });
+                  const displayStatusLabel =
+                    localeText.courseRunStatuses[
+                      displayStatus as keyof typeof localeText.courseRunStatuses
+                    ];
+
+                  return (
+                    <Link
+                      key={run.id}
+                      href={`/trainings/${run.id}`}
+                      className="jawraa-subcard block px-4 py-4 transition hover:shadow-[0_12px_28px_rgba(17,17,17,0.06)]"
+                    >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="latin-cell text-sm font-semibold text-[var(--brand-ink)]">
@@ -347,15 +363,16 @@ export default async function CourseDetailPage({
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="status-pill">
-                          {localeText.courseRunStatuses[run.status]}
+                          {displayStatusLabel}
                         </span>
                         <span className="text-xs font-medium text-[var(--ink-soft)]">
                           {details.openRun}
                         </span>
                       </div>
                     </div>
-                  </Link>
-                ))
+                    </Link>
+                  );
+                })
               )}
             </div>
           </div>

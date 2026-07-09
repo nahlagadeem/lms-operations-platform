@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   CourseRunStatus,
   DeliveryMode,
-  NominationStatus,
   Prisma,
   TrainingCity,
 } from "@prisma/client";
@@ -12,6 +11,11 @@ import { db } from "@/lib/db";
 import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import {
+  deriveTrainingDisplayStatus,
+  simplifiedTrainingStatuses,
+  trainingStateFromStatus,
+} from "@/lib/training-status";
 import {
   canCreateOperationalData,
   canManageFinancialFields,
@@ -34,13 +38,6 @@ type CourseRunsPageProps = {
 };
 
 const TRAININGS_PAGE_SIZE = 10;
-const statusGroupsForPlanned = [
-  CourseRunStatus.PLANNED,
-  CourseRunStatus.APPROVAL_PENDING,
-  CourseRunStatus.OPEN_FOR_NOMINATION,
-  CourseRunStatus.CONFIRMED,
-];
-
 const trainingListSortKeys = [
   "code",
   "course",
@@ -236,7 +233,6 @@ export default async function CourseRunsPage({
   const canManageFinancials = canManageFinancialFields(platformRole);
 
   const whereClause: Prisma.CourseRunWhereInput = {
-    status: statusFilter || undefined,
     courseId: courseId || undefined,
     projectScopeId: poId || undefined,
     city: cityFilter || undefined,
@@ -260,9 +256,7 @@ export default async function CourseRunsPage({
 
   const [
     totalRuns,
-    plannedRuns,
-    ongoingRuns,
-    completedRuns,
+    statusSnapshot,
     packages,
     courses,
     purchaseOrders,
@@ -271,21 +265,12 @@ export default async function CourseRunsPage({
     courseRuns,
   ] = await Promise.all([
     db.courseRun.count(),
-    db.courseRun.count({
-      where: {
-        status: {
-          in: statusGroupsForPlanned,
-        },
-      },
-    }),
-    db.courseRun.count({
-      where: {
-        status: CourseRunStatus.ONGOING,
-      },
-    }),
-    db.courseRun.count({
-      where: {
-        status: CourseRunStatus.COMPLETED,
+    db.courseRun.findMany({
+      select: {
+        status: true,
+        plannedSeats: true,
+        confirmedSeats: true,
+        _count: { select: { trainingEvaluations: true } },
       },
     }),
     db.package.findMany({
@@ -338,23 +323,43 @@ export default async function CourseRunsPage({
           include: { course: true },
         },
         _count: {
-          select: { sessions: true },
-        },
-        nominations: {
-          select: { nominationStatus: true },
+          select: { sessions: true, trainingEvaluations: true },
         },
       },
       orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
     }),
   ]);
 
+  const derivedStatusCounts = statusSnapshot.reduce(
+    (counts, run) => {
+      const status = deriveTrainingDisplayStatus({
+        status: run.status,
+        plannedSeats: run.plannedSeats,
+        confirmedSeats: run.confirmedSeats,
+        trainingEvaluationCount: run._count.trainingEvaluations,
+      }) as (typeof simplifiedTrainingStatuses)[number];
+      counts[status] += 1;
+      return counts;
+    },
+    {
+      [CourseRunStatus.PLANNED]: 0,
+      [CourseRunStatus.CONFIRMED]: 0,
+      [CourseRunStatus.COMPLETED]: 0,
+      [CourseRunStatus.CANCELED]: 0,
+    } as Record<(typeof simplifiedTrainingStatuses)[number], number>,
+  );
+
   const trainingRows = courseRuns
     .map((run) => {
       const training = getTrainingBusinessFields(run);
-      const estimatedSeats = run.projectScopeCourse?.estimatedSeats ?? null;
-      const actualSeats = run.nominations.filter(
-        (nomination) => nomination.nominationStatus === NominationStatus.CONFIRMED,
-      ).length;
+      const estimatedSeats = run.plannedSeats;
+      const actualSeats = run.confirmedSeats;
+      const displayStatus = deriveTrainingDisplayStatus({
+        status: run.status,
+        plannedSeats: run.plannedSeats,
+        confirmedSeats: run.confirmedSeats,
+        trainingEvaluationCount: run._count.trainingEvaluations,
+      });
       const locationLabel = run.city
         ? localeText.courseRuns.trainingCities[
             run.city as keyof typeof localeText.courseRuns.trainingCities
@@ -375,9 +380,14 @@ export default async function CourseRunsPage({
           estimatedSeats && estimatedSeats > 0 ? (actualSeats / estimatedSeats) * 100 : null,
         locationLabel,
         daysHeld: run.daysHeld ?? run._count.sessions,
-        statusLabel: localeText.courseRunStatuses[run.status],
+        displayStatus,
+        statusLabel:
+          localeText.courseRunStatuses[
+            displayStatus as keyof typeof localeText.courseRunStatuses
+          ],
       };
     })
+    .filter((row) => !statusFilter || row.displayStatus === statusFilter)
     .sort((left, right) => {
       if (sortKey === "estimatedSeats") {
         return compareNullableNumber(left.estimatedSeats, right.estimatedSeats, sortDirection);
@@ -449,9 +459,9 @@ export default async function CourseRunsPage({
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <RunMetric title={localeText.courseRuns.totalRuns} value={formatNumber(totalRuns, numberLocale)} />
-        <RunMetric title={localeText.courseRuns.plannedRuns} value={formatNumber(plannedRuns, numberLocale)} />
-        <RunMetric title={localeText.courseRuns.ongoingRuns} value={formatNumber(ongoingRuns, numberLocale)} />
-        <RunMetric title={localeText.courseRuns.completedRuns} value={formatNumber(completedRuns, numberLocale)} />
+        <RunMetric title={localeText.courseRunStatuses.PLANNED} value={formatNumber(derivedStatusCounts.PLANNED, numberLocale)} />
+        <RunMetric title={localeText.courseRunStatuses.CONFIRMED} value={formatNumber(derivedStatusCounts.CONFIRMED, numberLocale)} />
+        <RunMetric title={localeText.courseRunStatuses.COMPLETED} value={formatNumber(derivedStatusCounts.COMPLETED, numberLocale)} />
       </section>
 
       <section className="panel-surface min-w-0">
@@ -527,9 +537,9 @@ export default async function CourseRunsPage({
             <span className="field-label">{localeText.courseRuns.filterStatus}</span>
             <select name="status" defaultValue={statusFilter} className="field-input">
               <option value="">{localeText.courseRuns.allStatuses}</option>
-              {Object.entries(localeText.courseRunStatuses).map(([key, label]) => (
+              {simplifiedTrainingStatuses.map((key) => (
                 <option key={key} value={key}>
-                  {label}
+                  {localeText.courseRunStatuses[key]}
                 </option>
               ))}
             </select>
@@ -618,7 +628,7 @@ export default async function CourseRunsPage({
                 </tr>
               </thead>
               <tbody>
-                {visibleTrainingRows.map(({ run, training, courseLabel, estimatedSeats, actualSeats, utilization, locationLabel, daysHeld, statusLabel }) => (
+                {visibleTrainingRows.map(({ run, training, courseLabel, estimatedSeats, actualSeats, utilization, locationLabel, daysHeld, displayStatus, statusLabel }) => (
                   <tr
                     key={run.id}
                     className="cursor-pointer transition hover:bg-white"
@@ -668,7 +678,7 @@ export default async function CourseRunsPage({
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {statusLabel}
+                        <StatusBadge status={displayStatus} label={statusLabel} />
                       </Link>
                     </td>
                   </tr>
@@ -851,6 +861,18 @@ export default async function CourseRunsPage({
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="field-shell">
+                  <span className="field-label">{localeText.courseRuns.plannedSeats}</span>
+                  <input
+                    type="number"
+                    name="plannedSeats"
+                    min="0"
+                    step="1"
+                    className="field-input"
+                    required
+                  />
+                </label>
+
+                <label className="field-shell">
                   <span className="field-label">{localeText.courseRuns.city}</span>
                   <select name="city" className="field-input" defaultValue="">
                     <option value="">{localeText.courseRuns.selectCity}</option>
@@ -895,17 +917,14 @@ export default async function CourseRunsPage({
                 </label>
 
                 <label className="field-shell">
-                  <span className="field-label">{localeText.courseRuns.status}</span>
+                  <span className="field-label">{localeText.courseRuns.trainingState}</span>
                   <select
-                    name="status"
+                    name="trainingState"
                     className="field-input"
-                    defaultValue={CourseRunStatus.PLANNED}
+                    defaultValue={trainingStateFromStatus(CourseRunStatus.PLANNED)}
                   >
-                    {Object.entries(localeText.courseRunStatuses).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
-                    ))}
+                    <option value="ACTIVE">{localeText.courseRuns.trainingStates.ACTIVE}</option>
+                    <option value="CANCELED">{localeText.courseRuns.trainingStates.CANCELED}</option>
                   </select>
                 </label>
               </div>
@@ -955,5 +974,28 @@ function RunMetric({
       <p className="text-sm font-medium text-[var(--ink-soft)]">{title}</p>
       <p className="mt-3 text-3xl font-semibold text-[var(--ink-strong)]">{value}</p>
     </article>
+  );
+}
+
+function StatusBadge({
+  status,
+  label,
+}: {
+  status: CourseRunStatus;
+  label: string;
+}) {
+  const tone =
+    status === CourseRunStatus.CANCELED
+      ? "border-red-200 bg-red-50 text-red-700"
+      : status === CourseRunStatus.COMPLETED
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : status === CourseRunStatus.CONFIRMED
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : "border-slate-200 bg-slate-50 text-slate-700";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
+      {label}
+    </span>
   );
 }

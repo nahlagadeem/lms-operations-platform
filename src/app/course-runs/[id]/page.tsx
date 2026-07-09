@@ -21,6 +21,10 @@ import { getTrainingBusinessFields } from "@/lib/brd-terminology";
 import { getLocale, t } from "@/lib/locale";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import {
+  deriveTrainingDisplayStatus,
+  trainingStateFromStatus,
+} from "@/lib/training-status";
+import {
   canEditOperationalData,
   canManageTrainingVendorCost,
   canViewFinancials,
@@ -284,6 +288,11 @@ function detailText(locale: "en" | "ar") {
       attendanceRequired: "يتطلب حضور",
       certificateRequired: "يتطلب شهادة",
       confirmedSeats: "المقاعد الفعلية",
+      trainingState: "حالة التدريب التشغيلية",
+      trainingStates: {
+        ACTIVE: "نشط",
+        CANCELED: "ملغى",
+      },
       vendor: "المورد",
       city: "المدينة",
       selectCity: "اختر المدينة",
@@ -436,6 +445,11 @@ function detailText(locale: "en" | "ar") {
     attendanceRequired: "Attendance required",
     certificateRequired: "Issue certificate",
     confirmedSeats: "Actual Seats",
+    trainingState: "Training State",
+    trainingStates: {
+      ACTIVE: "Active",
+      CANCELED: "Cancelled",
+    },
     vendor: "Vendor",
     city: "City",
     selectCity: "Select a city",
@@ -738,6 +752,16 @@ export default async function CourseRunDetailPage({
   if (!run) notFound();
 
   const training = getTrainingBusinessFields(run);
+  const displayStatus = deriveTrainingDisplayStatus({
+    status: run.status,
+    plannedSeats: run.plannedSeats,
+    confirmedSeats: run.confirmedSeats,
+    trainingEvaluationCount: run.trainingEvaluations.length,
+  });
+  const displayStatusLabel =
+    localeText.courseRunStatuses[
+      displayStatus as keyof typeof localeText.courseRunStatuses
+    ];
   const selectedPurchaseOrderCourseEntryId =
     run.projectScopeCourseId ||
     purchaseOrderCourseEntries.find(
@@ -981,6 +1005,17 @@ export default async function CourseRunDetailPage({
                 label={localeText.courseRuns.mode}
                 value={localeText.deliveryModes[run.deliveryMode]}
               />
+              <div className="jawraa-subcard p-4">
+                <p className="text-xs font-medium text-[var(--ink-soft)]">
+                  {details.courseStatus}
+                </p>
+                <div className="mt-2">
+                  <StatusBadge
+                    status={displayStatus}
+                    label={displayStatusLabel}
+                  />
+                </div>
+              </div>
               <InfoCard
                 label={details.provider}
                 value={run.provider?.nameEn || run.provider?.nameAr || details.notAssigned}
@@ -2326,16 +2361,29 @@ export default async function CourseRunDetailPage({
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
-                    <span className="field-label">{localeText.courseRuns.status}</span>
-                    <select name="status" className="field-input" defaultValue={run.status}>
-                      {Object.entries(localeText.courseRunStatuses).map(([key, label]) => (
-                        <option key={key} value={key}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="field-label">{details.courseStatus}</span>
+                    <div className="field-input bg-[var(--surface-soft)]">
+                      <StatusBadge
+                        status={displayStatus}
+                        label={displayStatusLabel}
+                      />
+                    </div>
                   </label>
 
+                  <label className="field-shell">
+                    <span className="field-label">{details.trainingState}</span>
+                    <select
+                      name="trainingState"
+                      className="field-input"
+                      defaultValue={trainingStateFromStatus(run.status)}
+                    >
+                      <option value="ACTIVE">{details.trainingStates.ACTIVE}</option>
+                      <option value="CANCELED">{details.trainingStates.CANCELED}</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
                     <span className="field-label">{localeText.courseRuns.deliveryMode}</span>
                     <select
@@ -2349,6 +2397,34 @@ export default async function CourseRunDetailPage({
                         </option>
                       ))}
                     </select>
+                  </label>
+
+                  <label className="field-shell">
+                    <span className="field-label">{details.plannedSeats}</span>
+                    <input
+                      type="number"
+                      name="plannedSeats"
+                      min="0"
+                      step="1"
+                      className="field-input"
+                      defaultValue={run.plannedSeats ?? ""}
+                      required
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="field-shell">
+                    <span className="field-label">{details.confirmedSeats}</span>
+                    <input
+                      type="number"
+                      name="confirmedSeats"
+                      min="0"
+                      step="1"
+                      className="field-input"
+                      defaultValue={run.confirmedSeats}
+                      required
+                    />
                   </label>
                 </div>
 
@@ -2770,5 +2846,28 @@ function ProgressCard({
       <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
       <p className="mt-3 text-2xl font-semibold text-[var(--ink-strong)]">{value}</p>
     </div>
+  );
+}
+
+function StatusBadge({
+  status,
+  label,
+}: {
+  status: string;
+  label: string;
+}) {
+  const tone =
+    status === "CANCELED"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : status === "COMPLETED"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : status === "CONFIRMED"
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : "border-slate-200 bg-slate-50 text-slate-700";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
+      {label}
+    </span>
   );
 }

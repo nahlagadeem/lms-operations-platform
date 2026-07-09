@@ -8,7 +8,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
-import { AttendeeType, EnrollmentStatus, TrainingStatus } from "@/lib/brd-terminology";
+import { AttendeeType, EnrollmentStatus } from "@/lib/brd-terminology";
 import { db } from "@/lib/db";
 import {
   assertPermission,
@@ -20,6 +20,7 @@ import {
 import * as trainingEvaluationService from "@/server/services/training-evaluation-service";
 import * as trainingSessionService from "@/server/services/training-session-service";
 import * as trainingService from "@/server/services/training-service";
+import type { TrainingState } from "@/lib/training-status";
 
 function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -72,6 +73,10 @@ function parseTrainingCity(value: string) {
     : null;
 }
 
+function parseTrainingState(value: string): TrainingState {
+  return value === "CANCELED" ? "CANCELED" : "ACTIVE";
+}
+
 export async function createTraining(formData: FormData) {
   await requireAuth();
   const role = await requireOperationalCreationAccess();
@@ -84,15 +89,16 @@ export async function createTraining(formData: FormData) {
   const vendorCost = parseOptionalDecimal(normalizeText(formData.get("vendorCost")));
   const city = parseTrainingCity(normalizeText(formData.get("city")));
   const daysHeld = parseOptionalInt(normalizeText(formData.get("daysHeld")));
+  const plannedSeats = parseOptionalInt(normalizeText(formData.get("plannedSeats")));
   const vendorCostValue = normalizeText(formData.get("vendorCost"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
-  const status = normalizeText(formData.get("status")) as TrainingStatus;
+  const trainingState = parseTrainingState(normalizeText(formData.get("trainingState")));
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
   const notes = normalizeText(formData.get("notes"));
 
-  if (!purchaseOrderCourseEntryId || !deliveryMode || !status) {
-    throw new Error("Please choose a PO Course Entry and try again.");
+  if (!purchaseOrderCourseEntryId || !deliveryMode || plannedSeats === null) {
+    throw new Error("Please choose a PO Course Entry and enter Training Estimated Seats.");
   }
 
   if (vendorCostValue && !canManageTrainingVendorCost(role)) {
@@ -106,8 +112,9 @@ export async function createTraining(formData: FormData) {
     vendorCost: vendorCostValue && canManageTrainingVendorCost(role) ? vendorCost : null,
     city,
     daysHeld,
+    plannedSeats,
     deliveryMode,
-    status,
+    trainingState,
     startDate,
     endDate,
     notes,
@@ -133,14 +140,16 @@ export async function updateTraining(formData: FormData) {
   const submittedVendorCost = parseOptionalDecimal(submittedVendorCostValue);
   const city = parseTrainingCity(normalizeText(formData.get("city")));
   const daysHeld = parseOptionalInt(normalizeText(formData.get("daysHeld")));
+  const plannedSeats = parseOptionalInt(normalizeText(formData.get("plannedSeats")));
+  const confirmedSeats = parseOptionalInt(normalizeText(formData.get("confirmedSeats")));
   const locationId = normalizeText(formData.get("locationId"));
   const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
-  const status = normalizeText(formData.get("status")) as TrainingStatus;
+  const trainingState = parseTrainingState(normalizeText(formData.get("trainingState")));
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
   const notes = normalizeText(formData.get("notes"));
 
-  if (!trainingId || !deliveryMode || !status) {
+  if (!trainingId || !deliveryMode || plannedSeats === null || confirmedSeats === null) {
     throw new Error("Please complete the required training details.");
   }
 
@@ -170,8 +179,10 @@ export async function updateTraining(formData: FormData) {
     vendorCost,
     city,
     daysHeld,
+    plannedSeats,
+    confirmedSeats,
     deliveryMode,
-    status,
+    trainingState,
     startDate,
     endDate,
     notes,
@@ -431,6 +442,7 @@ export async function upsertCourseEvaluation(formData: FormData) {
     rating,
     comments,
   });
+  await trainingService.refreshTrainingAutomaticStatus(trainingId);
 
   revalidatePath("/trainings");
   revalidatePath(`/trainings/${trainingId}`);
@@ -458,6 +470,7 @@ export async function upsertInstructorEvaluation(formData: FormData) {
     rating,
     comments,
   });
+  await trainingService.refreshTrainingAutomaticStatus(trainingId);
 
   revalidatePath("/trainings");
   revalidatePath(`/trainings/${trainingId}`);
@@ -485,6 +498,7 @@ export async function upsertAttendeeEvaluation(formData: FormData) {
     rating,
     comments,
   });
+  await trainingService.refreshTrainingAutomaticStatus(trainingId);
 
   revalidatePath("/trainings");
   revalidatePath(`/trainings/${trainingId}`);

@@ -73,24 +73,6 @@ type RecordAttendanceInput = {
   notes: string;
 };
 
-async function syncConfirmedSeats(courseRunId: string) {
-  const confirmedSeats = await db.nomination.count({
-    where: {
-      courseRunId,
-      nominationStatus: NominationStatus.CONFIRMED,
-    },
-  });
-
-  await db.courseRun.update({
-    where: {
-      id: courseRunId,
-    },
-    data: {
-      confirmedSeats,
-    },
-  });
-}
-
 async function generateRunCode(courseCode: string, startDate: Date | null) {
   const dateToken = startDate
     ? startDate.toISOString().slice(0, 10).replaceAll("-", "")
@@ -250,7 +232,6 @@ export async function nominateExistingParticipant(input: NominateExistingPartici
     },
   });
 
-  await syncConfirmedSeats(input.courseRunId);
 }
 
 export async function createParticipantAndNominate(input: CreateParticipantAndNominateInput) {
@@ -303,7 +284,6 @@ export async function createParticipantAndNominate(input: CreateParticipantAndNo
     },
   });
 
-  await syncConfirmedSeats(input.courseRunId);
 }
 
 export async function updateNominationStatus(input: UpdateNominationStatusInput) {
@@ -322,7 +302,6 @@ export async function updateNominationStatus(input: UpdateNominationStatusInput)
     },
   });
 
-  await syncConfirmedSeats(input.courseRunId);
 }
 
 export async function recordAttendance(input: RecordAttendanceInput) {

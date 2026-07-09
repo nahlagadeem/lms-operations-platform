@@ -1,10 +1,10 @@
-import { AttendanceStatus, DeliveryMode, Prisma, TrainingCity } from "@prisma/client";
+import { AttendanceStatus, CourseRunStatus, DeliveryMode, Prisma, TrainingCity } from "@prisma/client";
 import { db } from "@/lib/db";
 import type {
   AttendeeType,
   EnrollmentStatus,
-  TrainingStatus,
 } from "@/lib/brd-terminology";
+import { derivePersistedTrainingStatus, type TrainingState } from "@/lib/training-status";
 import * as compatibilityService from "@/server/services/course-run-service";
 
 type CreateTrainingInput = {
@@ -14,8 +14,9 @@ type CreateTrainingInput = {
   vendorCost?: number | null;
   city?: TrainingCity | null;
   daysHeld?: number | null;
+  plannedSeats: number | null;
   deliveryMode: DeliveryMode;
-  status: TrainingStatus;
+  trainingState: TrainingState;
   startDate: Date | null;
   endDate: Date | null;
   notes: string;
@@ -29,8 +30,10 @@ type UpdateTrainingInput = {
   vendorCost?: number | null;
   city?: TrainingCity | null;
   daysHeld?: number | null;
+  plannedSeats: number | null;
+  confirmedSeats: number;
   deliveryMode: DeliveryMode;
-  status: TrainingStatus;
+  trainingState: TrainingState;
   startDate: Date | null;
   endDate: Date | null;
   notes: string;
@@ -102,10 +105,14 @@ export async function createTraining(input: CreateTrainingInput) {
       providerId: input.vendorId || null,
       runCode: trainingCode,
       deliveryMode: input.deliveryMode,
-      status: input.status,
+      status: derivePersistedTrainingStatus({
+        trainingState: input.trainingState,
+        plannedSeats: input.plannedSeats,
+        confirmedSeats: 0,
+      }),
       startDate: input.startDate,
       endDate: input.endDate,
-      plannedSeats: purchaseOrderCourseEntry.estimatedSeats,
+      plannedSeats: input.plannedSeats,
       vendorCost:
         input.vendorCost === null || input.vendorCost === undefined
           ? null
@@ -123,6 +130,9 @@ export async function updateTraining(input: UpdateTrainingInput) {
   const purchaseOrderCourseEntry = input.purchaseOrderCourseEntryId
     ? await resolvePurchaseOrderCourseEntry(input.purchaseOrderCourseEntryId)
     : null;
+  const evaluationCount = await db.trainingEvaluation.count({
+    where: { courseRunId: input.trainingId },
+  });
 
   await db.courseRun.update({
     where: { id: input.trainingId },
@@ -132,7 +142,6 @@ export async function updateTraining(input: UpdateTrainingInput) {
             courseId: purchaseOrderCourseEntry.courseId,
             projectScopeId: purchaseOrderCourseEntry.scopeId,
             projectScopeCourseId: purchaseOrderCourseEntry.id,
-            plannedSeats: purchaseOrderCourseEntry.estimatedSeats,
           }
         : {}),
       providerId: input.vendorId || null,
@@ -144,10 +153,45 @@ export async function updateTraining(input: UpdateTrainingInput) {
       city: input.city ?? null,
       daysHeld: input.daysHeld ?? null,
       deliveryMode: input.deliveryMode,
-      status: input.status,
+      status: derivePersistedTrainingStatus({
+        trainingState: input.trainingState,
+        plannedSeats: input.plannedSeats,
+        confirmedSeats: input.confirmedSeats,
+        trainingEvaluationCount: evaluationCount,
+      }),
       startDate: input.startDate,
       endDate: input.endDate,
+      plannedSeats: input.plannedSeats,
+      confirmedSeats: input.confirmedSeats,
       notes: input.notes || null,
+    },
+  });
+}
+
+export async function refreshTrainingAutomaticStatus(trainingId: string) {
+  const training = await db.courseRun.findUnique({
+    where: { id: trainingId },
+    select: {
+      status: true,
+      plannedSeats: true,
+      confirmedSeats: true,
+      _count: { select: { trainingEvaluations: true } },
+    },
+  });
+
+  if (!training || training.status === CourseRunStatus.CANCELED) {
+    return;
+  }
+
+  await db.courseRun.update({
+    where: { id: trainingId },
+    data: {
+      status: derivePersistedTrainingStatus({
+        trainingState: "ACTIVE",
+        plannedSeats: training.plannedSeats,
+        confirmedSeats: training.confirmedSeats,
+        trainingEvaluationCount: training._count.trainingEvaluations,
+      }),
     },
   });
 }

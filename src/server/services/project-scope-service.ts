@@ -147,11 +147,6 @@ export async function updatePurchaseOrderCourseEntryEstimatedSeats(
   if (result.count !== 1) {
     throw new Error("Purchase Order Course Entry was not found.");
   }
-
-  await db.courseRun.updateMany({
-    where: { projectScopeCourseId: purchaseOrderCourseEntryId },
-    data: { plannedSeats: estimatedSeats },
-  });
 }
 
 export async function deleteProjectScope(id: string) {

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { Locale } from "@/lib/locale";
 import { t } from "@/lib/locale";
+import { deriveTrainingDisplayStatus } from "@/lib/training-status";
 import { getProjectSummary } from "@/server/services/project-overview-service";
 
 export type ReportingCategory =
@@ -133,6 +134,7 @@ export async function getProjectReportingRows(
         course: { select: { courseCode: true, nameAr: true, nameEn: true } },
         provider: { select: { nameAr: true, nameEn: true } },
         location: { select: { nameAr: true, nameEn: true, city: true } },
+        _count: { select: { trainingEvaluations: true } },
       },
       orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
       take: 120,
@@ -193,23 +195,32 @@ export async function getProjectReportingRows(
       date: course.updatedAt,
       notes: course.category.nameEn || course.category.nameAr,
     })),
-    ...courseRuns.map((run): ReportingRow => ({
-      id: `run-${run.id}`,
-      category: "COURSE_RUN",
-      categoryLabel: categoryLabel("COURSE_RUN", locale),
-      name: `${run.runCode} - ${run.course.nameEn || run.course.nameAr}`,
-      related: run.course.courseCode,
-      owner: run.provider?.nameEn || run.provider?.nameAr || "-",
-      status: labels.courseRunStatuses[run.status],
-      statusValue: run.status,
-      date: run.startDate ?? run.updatedAt,
-      notes: [
-        run.location?.nameEn || run.location?.nameAr || run.location?.city,
-        `${run.confirmedSeats}/${run.plannedSeats ?? 0}`,
-      ]
-        .filter(Boolean)
-        .join(" | "),
-    })),
+    ...courseRuns.map((run): ReportingRow => {
+      const displayStatus = deriveTrainingDisplayStatus({
+        status: run.status,
+        plannedSeats: run.plannedSeats,
+        confirmedSeats: run.confirmedSeats,
+        trainingEvaluationCount: run._count.trainingEvaluations,
+      });
+
+      return {
+        id: `run-${run.id}`,
+        category: "COURSE_RUN",
+        categoryLabel: categoryLabel("COURSE_RUN", locale),
+        name: `${run.runCode} - ${run.course.nameEn || run.course.nameAr}`,
+        related: run.course.courseCode,
+        owner: run.provider?.nameEn || run.provider?.nameAr || "-",
+        status: labels.courseRunStatuses[displayStatus],
+        statusValue: displayStatus,
+        date: run.startDate ?? run.updatedAt,
+        notes: [
+          run.location?.nameEn || run.location?.nameAr || run.location?.city,
+          `${run.confirmedSeats}/${run.plannedSeats ?? 0}`,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      };
+    }),
     ...trainers.map((trainer): ReportingRow => ({
       id: `trainer-${trainer.id}`,
       category: "TRAINER",
