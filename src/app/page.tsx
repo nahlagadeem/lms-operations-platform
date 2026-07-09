@@ -109,6 +109,14 @@ function formatDate(value: Date | null, locale: string) {
   }).format(value);
 }
 
+function formatPackageDisplayName(
+  pkg: { code: string; nameAr: string; nameEn: string | null },
+  label: string,
+) {
+  const name = pkg.nameEn || pkg.nameAr || pkg.code;
+  return `${label} ${pkg.code}  ${name}`;
+}
+
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined) {
   return value === null || value === undefined ? 0 : Number(value);
 }
@@ -584,10 +592,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       name: formatPurchaseOrderTitle(scope, locale),
         courseId: selection.course.id,
         courseName: selection.course.nameEn || selection.course.nameAr,
-        packageName:
-          selection.course.package.nameEn ||
-          selection.course.package.nameAr ||
-          selection.course.package.code,
+        packageName: formatPackageDisplayName(
+          selection.course.package,
+          dashboardText.package,
+        ),
         estimatedSeats,
         actualSeats,
         remainingSeats,
@@ -673,9 +681,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       id: item.id,
       code: item.code,
       name: item.nameEn || item.nameAr,
+      displayName: formatPackageDisplayName(item, dashboardText.package),
       completed,
       planned: runs.length,
+      plannedSeats,
       delivered,
+      shortfall: Math.max(plannedSeats - delivered, 0),
       utilization: ratio(delivered, plannedSeats),
       averageCourseRating: average(courseRatings),
       averageInstructorRating: average(instructorRatings),
@@ -714,7 +725,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     return {
       id: course.id,
       name: course.nameEn || course.nameAr,
-      packageName: course.package.nameEn || course.package.nameAr || course.package.code,
+      packageName: formatPackageDisplayName(course.package, dashboardText.package),
       totalTrainings: course.runs.length,
       plannedSeats,
       delivered,
@@ -737,6 +748,54 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     (safeCoursePage - 1) * DASHBOARD_TABLE_PAGE_SIZE,
     safeCoursePage * DASHBOARD_TABLE_PAGE_SIZE,
   );
+  const averagePackageUtilization = average(
+    packageBreakdownRows.map((row) => row.utilization),
+  );
+  const bestPackage = [...packageBreakdownRows].sort((left, right) =>
+    canSeeFinancials
+      ? right.marginPct - left.marginPct
+      : right.utilization - left.utilization,
+  )[0];
+  const attentionPackage = [...packageBreakdownRows].sort((left, right) => {
+    if (right.shortfall !== left.shortfall) return right.shortfall - left.shortfall;
+    return left.utilization - right.utilization;
+  })[0];
+  const poSummaryRows = projectScopeRows.map((scope) => {
+    const estimatedSeats = scope.selectedCourses.reduce(
+      (sum, selection) => sum + (selection.estimatedSeats ?? 0),
+      0,
+    );
+    const actualSeats = scope.selectedCourses.reduce(
+      (sum, selection) =>
+        sum +
+        selection.courseRuns.reduce(
+          (courseSum, run) => courseSum + run.confirmedSeats,
+          0,
+        ),
+      0,
+    );
+
+    return {
+      id: scope.id,
+      code: formatPurchaseOrderCode(scope.code, locale),
+      createdAt: scope.createdAt,
+      estimatedSeats,
+      actualSeats,
+      flagged: actualSeats !== estimatedSeats,
+    };
+  });
+  const totalPoEstimatedSeats = poSummaryRows.reduce(
+    (sum, row) => sum + row.estimatedSeats,
+    0,
+  );
+  const totalPoActualSeats = poSummaryRows.reduce(
+    (sum, row) => sum + row.actualSeats,
+    0,
+  );
+  const flaggedPoCount = poSummaryRows.filter((row) => row.flagged).length;
+  const mostRecentPo = [...poSummaryRows].sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  )[0];
 
   return (
     <div className="space-y-8">
@@ -830,6 +889,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             label={dashboardText.actualProgress}
             value={formatPercent(decimalToNumber(projectSummary.actualProgress), numberLocale)}
           />
+          <ReadOnlySummaryCard
+            label={homeUiText.attendees}
+            value={formatNumber(allTimeTrainees, numberLocale)}
+          />
+          <ReadOnlySummaryCard
+            label={homeUiText.activeInstructors}
+            value={formatNumber(activeTrainerCount, numberLocale)}
+          />
         </div>
       </section>
 
@@ -859,255 +926,96 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <p className="eyebrow">{dashboardText.packagesEyebrow}</p>
           <h2 className="section-title">{dashboardText.packagePerformance}</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{dashboardText.package}</th>
-                <th>{dashboardText.trainingsCompletedPlanned}</th>
-                <th>{dashboardText.totalSeatsDelivered}</th>
-                <th>{dashboardText.seatUtilization}</th>
-                <th>{dashboardText.averageCourseRating}</th>
-                <th>{dashboardText.averageInstructorRating}</th>
-                <th>{dashboardText.attendanceRate}</th>
-                {canSeeFinancials ? (
-                  <>
-                    <th>{dashboardText.revenueByPackage}</th>
-                    <th>{dashboardText.vendorCostByPackage}</th>
-                    <th>{dashboardText.grossMarginByPackage}</th>
-                  </>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {visiblePackageBreakdownRows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <p className="latin-chip">{row.code}</p>
-                    <p className="mt-1 font-semibold text-[var(--ink-strong)]">{row.name}</p>
-                  </td>
-                  <td>{formatNumber(row.completed, numberLocale)} / {formatNumber(row.planned, numberLocale)}</td>
-                  <td>{formatNumber(row.delivered, numberLocale)}</td>
-                  <td>{formatPercent(row.utilization, numberLocale)}</td>
-                  <td>{formatRating(row.averageCourseRating, numberLocale)}</td>
-                  <td>{formatRating(row.averageInstructorRating, numberLocale)}</td>
-                  <td>{formatPercent(row.attendanceRate, numberLocale)}</td>
-                  {canSeeFinancials ? (
-                    <>
-                      <td>{formatCurrency(row.revenue, numberLocale)}</td>
-                      <td>{formatCurrency(row.vendorCost, numberLocale)}</td>
-                      <td>{formatPercent(row.marginPct, numberLocale)}</td>
-                    </>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <DashboardPagination
-          currentPage={safePackagePage}
-          totalPages={totalPackagePages}
-          numberLocale={numberLocale}
-          labels={localeText.pagination}
-          hrefForPage={(page) =>
-            buildDashboardUrl({
-              q: searchTerm,
-              category: categoryFilter,
-              page: safeReportingPage,
-              packagePage: page,
-              coursePage: safeCoursePage,
-              poPage: safePoPage,
-              courseQ: params.courseQ ?? "",
-              poQ: params.poQ ?? "",
-            })
-          }
-        />
-      </section>
-
-      {/* Hidden for now by request. Restore by setting SHOW_DASHBOARD_COURSE_PERFORMANCE to true. */}
-      {SHOW_DASHBOARD_COURSE_PERFORMANCE && platformRole !== "CUSTOMER" ? (
-        <section className="panel-surface">
-          <div className="mb-5">
-            <p className="eyebrow">{dashboardText.coursesEyebrow}</p>
-            <h2 className="section-title">{dashboardText.coursePerformance}</h2>
-          </div>
-          <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <InstantSearchField
-              name="courseQ"
-              label={localeText.common.search}
-              defaultValue={params.courseQ ?? ""}
-              placeholder={localeText.common.searchPlaceholder}
-              pageParams={["coursePage"]}
-            />
-            <Link
-              href={buildDashboardUrl({
-                q: searchTerm,
-                category: categoryFilter,
-                page: safeReportingPage,
-                packagePage: safePackagePage,
-                poPage: safePoPage,
-                poQ: params.poQ ?? "",
-              })}
-              className="secondary-button self-end"
-            >
-              {localeText.common.reset}
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{dashboardText.courseName}</th>
-                  <th>{dashboardText.package}</th>
-                  <th>{dashboardText.totalTrainings}</th>
-                  <th>{dashboardText.seatsPlanned}</th>
-                  <th>{dashboardText.seatsDelivered}</th>
-                  <th>{dashboardText.utilization}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleCourseSummaryRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <Link href={`/courses/${row.id}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
-                        {row.name}
-                      </Link>
-                    </td>
-                    <td>{row.packageName}</td>
-                    <td>{formatNumber(row.totalTrainings, numberLocale)}</td>
-                    <td>{formatNumber(row.plannedSeats, numberLocale)}</td>
-                    <td>{formatNumber(row.delivered, numberLocale)}</td>
-                    <td>{formatPercent(row.utilization, numberLocale)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredCourseSummaryRows.length === 0 ? (
-              <p className="mt-4 text-sm text-[var(--ink-soft)]">{localeText.common.noResults}</p>
-            ) : null}
-          </div>
-          <DashboardPagination
-            currentPage={safeCoursePage}
-            totalPages={totalCoursePages}
-            numberLocale={numberLocale}
-            labels={localeText.pagination}
-            hrefForPage={(page) =>
-              buildDashboardUrl({
-                q: searchTerm,
-                category: categoryFilter,
-                page: safeReportingPage,
-                packagePage: safePackagePage,
-                coursePage: page,
-                poPage: safePoPage,
-                courseQ: params.courseQ ?? "",
-                poQ: params.poQ ?? "",
-              })
-            }
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KpiCard
+            href="/packages"
+            title={dashboardText.totalPackages}
+            value={formatNumber(packageBreakdownRows.length, numberLocale)}
+            detail={localeText.home.catalogSnapshot}
           />
-        </section>
-      ) : null}
+          <KpiCard
+            href="/packages"
+            title={dashboardText.bestPerformingPackage}
+            value={bestPackage
+              ? formatPercent(
+                  canSeeFinancials ? bestPackage.marginPct : bestPackage.utilization,
+                  numberLocale,
+                )
+              : "-"}
+            detail={bestPackage
+              ? `${bestPackage.displayName} / ${
+                  canSeeFinancials
+                    ? dashboardText.byMargin
+                    : dashboardText.bySeatUtilization
+                }`
+              : localeText.home.unavailable}
+          />
+          <KpiCard
+            href="/packages"
+            title={dashboardText.packageNeedingAttention}
+            value={attentionPackage
+              ? attentionPackage.shortfall > 0
+                ? formatNumber(attentionPackage.shortfall, numberLocale)
+                : formatPercent(attentionPackage.utilization, numberLocale)
+              : "-"}
+            detail={attentionPackage
+              ? `${attentionPackage.displayName} / ${
+                  attentionPackage.shortfall > 0
+                    ? dashboardText.shortfallSeats.replace(
+                        "{count}",
+                        formatNumber(attentionPackage.shortfall, numberLocale),
+                      )
+                    : dashboardText.lowestUtilization
+                }`
+              : localeText.home.unavailable}
+            tone={attentionPackage ? "warning" : "normal"}
+          />
+          <KpiCard
+            href="/packages"
+            title={dashboardText.averagePackageUtilization}
+            value={formatPercent(averagePackageUtilization ?? 0, numberLocale)}
+            detail={dashboardText.bySeatUtilization}
+          />
+        </div>
+      </section>
 
       {platformRole !== "CUSTOMER" ? (
       <section className="panel-surface">
         <div className="mb-5">
-          <p className="eyebrow">{localeText.projectScopes.summaryTitle}</p>
-          <h2 className="section-title">{localeText.projectScopes.summaryTitle}</h2>
+          <p className="eyebrow">{localeText.projectScopes.title}</p>
+          <h2 className="section-title">{dashboardText.poBreakdown}</h2>
         </div>
-        <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <InstantSearchField
-            name="poQ"
-            label={localeText.common.search}
-            defaultValue={params.poQ ?? ""}
-            placeholder={localeText.common.searchPlaceholder}
-            pageParams={["poPage"]}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KpiCard
+            href="/pos"
+            title={dashboardText.totalPurchaseOrders}
+            value={formatNumber(poSummaryRows.length, numberLocale)}
+            detail={localeText.projectScopes.summaryTitle}
           />
-          <Link
-            href={buildDashboardUrl({
-              q: searchTerm,
-              category: categoryFilter,
-              page: safeReportingPage,
-              packagePage: safePackagePage,
-              coursePage: safeCoursePage,
-              courseQ: params.courseQ ?? "",
-            })}
-            className="secondary-button self-end"
-          >
-            {localeText.common.reset}
-          </Link>
+          <KpiCard
+            href="/pos"
+            title={dashboardText.totalEstimatedVsActualSeats}
+            value={`${formatNumber(totalPoEstimatedSeats, numberLocale)} / ${formatNumber(totalPoActualSeats, numberLocale)}`}
+            detail={dashboardText.actualEstimatedSeats
+              .replace("{actual}", formatNumber(totalPoActualSeats, numberLocale))
+              .replace("{estimated}", formatNumber(totalPoEstimatedSeats, numberLocale))}
+          />
+          <KpiCard
+            href="/pos"
+            title={dashboardText.flaggedPurchaseOrders}
+            value={formatNumber(flaggedPoCount, numberLocale)}
+            detail={dashboardText.flaggedPurchaseOrdersDetail
+              .replace("{flagged}", formatNumber(flaggedPoCount, numberLocale))
+              .replace("{total}", formatNumber(poSummaryRows.length, numberLocale))}
+            tone={flaggedPoCount > 0 ? "warning" : "normal"}
+          />
+          <KpiCard
+            href={mostRecentPo ? `/pos/${mostRecentPo.id}` : "/pos"}
+            title={dashboardText.mostRecentPurchaseOrder}
+            value={mostRecentPo?.code ?? "-"}
+            detail={mostRecentPo ? formatDate(mostRecentPo.createdAt, numberLocale) : localeText.home.unavailable}
+          />
         </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{localeText.projectScopes.scope}</th>
-                <th>{dashboardText.courseName}</th>
-                <th>{dashboardText.package}</th>
-                <th>{localeText.projectScopes.estimatedSeats}</th>
-                <th>{localeText.projectScopes.actualSeats}</th>
-                <th>{localeText.projectScopes.remainingSeats}</th>
-                <th>{localeText.projectScopes.fulfillmentPct}</th>
-                <th>{localeText.projectScopes.linkedTrainings}</th>
-                <th>{localeText.projectScopes.statusFlag}</th>
-                <th>{localeText.projectScopes.viewDetails}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleProjectScopeSummaryRows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <div className="space-y-1">
-                      <p className="latin-chip">{row.code}</p>
-                      <p className="font-semibold text-[var(--ink-strong)]">{row.name}</p>
-                    </div>
-                  </td>
-                  <td>
-                    <Link href={`/courses/${row.courseId}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
-                      {row.courseName}
-                    </Link>
-                  </td>
-                  <td>{row.packageName}</td>
-                  <td>{formatNumber(row.estimatedSeats, numberLocale)}</td>
-                  <td>{formatNumber(row.actualSeats, numberLocale)}</td>
-                  <td>{formatNumber(row.remainingSeats, numberLocale)}</td>
-                  <td>{formatPercent(row.fulfillmentPct, numberLocale)}</td>
-                  <td>{formatNumber(row.linkedTrainings, numberLocale)}</td>
-                  <td><span className="status-pill">{row.statusFlag}</span></td>
-                  <td>
-                    <Link href={`/pos/${row.scopeId}`} className="secondary-button">
-                      {localeText.projectScopes.viewDetails}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {projectScopeSummaryRows.length === 0 ? (
-            <p className="mt-4 text-sm text-[var(--ink-soft)]">
-              {localeText.projectScopes.noScopes}
-            </p>
-          ) : null}
-          {projectScopeSummaryRows.length > 0 && filteredProjectScopeSummaryRows.length === 0 ? (
-            <p className="mt-4 text-sm text-[var(--ink-soft)]">{localeText.common.noResults}</p>
-          ) : null}
-        </div>
-        <DashboardPagination
-          currentPage={safePoPage}
-          totalPages={totalPoPages}
-          numberLocale={numberLocale}
-          labels={localeText.pagination}
-          hrefForPage={(page) =>
-            buildDashboardUrl({
-              q: searchTerm,
-              category: categoryFilter,
-              page: safeReportingPage,
-              packagePage: safePackagePage,
-              coursePage: safeCoursePage,
-              poPage: page,
-              courseQ: params.courseQ ?? "",
-              poQ: params.poQ ?? "",
-            })
-          }
-        />
       </section>
       ) : null}
 
@@ -1125,22 +1033,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           />
           <KpiCard
             href="/trainings"
-            title={homeUiText.trainings}
-            value={formatNumber(totalRuns, numberLocale)}
-            detail={homeUiText.completedOngoingUpcoming
-              .replace("{completed}", formatNumber(completedRuns, numberLocale))
-              .replace("{ongoing}", formatNumber(ongoingRuns, numberLocale))
-              .replace("{upcoming}", formatNumber(upcomingRunsCount, numberLocale))}
-          />
-          <KpiCard
-            href="/courses"
-            title={homeUiText.attendees}
-            value={formatNumber(allTimeTrainees, numberLocale)}
-            detail={homeUiText.activeNow.replace("{active}", formatNumber(activeTrainees, numberLocale))}
-          />
-          <KpiCard
-            href="/trainings"
-            title={homeUiText.seatUtilization}
+            title={dashboardText.seatUtilizationAcrossCourses}
             value={formatPercent(seatUtilization, numberLocale)}
             detail={homeUiText.actualEstimatedSeats
               .replace("{actual}", formatNumber(filledSeats, numberLocale))
@@ -1148,18 +1041,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           />
           <KpiCard
             href="/trainings"
-            title={homeUiText.satisfactionRate}
+            title={dashboardText.satisfactionRate}
             value={formatPercent(satisfactionRate, numberLocale)}
             detail={homeUiText.feedbackEntries.replace(
               "{count}",
               formatNumber(qualitySatisfactionRows.length || evaluationRows.length, numberLocale),
             )}
-          />
-          <KpiCard
-            href="/vendors"
-            title={homeUiText.activeInstructors}
-            value={formatNumber(activeTrainerCount, numberLocale)}
-            detail={homeUiText.approvedInstructorsLive}
           />
         </div>
       </section>
