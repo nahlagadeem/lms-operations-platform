@@ -42,6 +42,10 @@ function formatCurrency(value: Prisma.Decimal | null | undefined, locale: string
   }).format(Number(value));
 }
 
+function formatPercent(value: number, locale: string) {
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)}%`;
+}
+
 function progressValue(value: Prisma.Decimal | null | undefined) {
   return value ? Number(value) : 0;
 }
@@ -348,6 +352,8 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
               entry.courseRuns.reduce((runSum, run) => runSum + run.confirmedSeats, 0),
             0,
           );
+          const fulfillmentPct =
+            totalEstimatedSeats > 0 ? (totalActualSeats / totalEstimatedSeats) * 100 : 0;
           const actual = progressValue(scope.actualCompletion);
 
           return (
@@ -386,6 +392,10 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 <InfoBox
                   label={localeText.projectScopes.remainingSeats}
                   value={formatNumber(totalEstimatedSeats - totalActualSeats, numberLocale)}
+                />
+                <InfoBox
+                  label={localeText.projectScopes.fulfillmentPct}
+                  value={formatPercent(fulfillmentPct, numberLocale)}
                 />
               </div>
 

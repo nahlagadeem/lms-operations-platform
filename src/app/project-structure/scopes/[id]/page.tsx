@@ -199,11 +199,6 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   }
 
   const courseCount = scope.selectedCourses.length;
-  const budget = Number(scope.budgetAmount ?? 0);
-  const invoiced = Number(scope.invoicedAmount ?? 0);
-  const remaining = Math.max(0, budget - invoiced);
-  const actualCompletion = Number(scope.actualCompletion ?? 0);
-  const plannedCompletion = Number(scope.plannedCompletion ?? 0);
   const scopeName = formatPurchaseOrderTitle(scope, locale);
   const trackingByEntryId = new Map(
     tracking?.rows.map((row) => [row.purchaseOrderCourseEntryId, row] as const) ?? [],
@@ -263,7 +258,8 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
         {canSeeFinancials ? (
           <>
             <MetricCard title={localeText.projectScopes.budget} value={formatCurrency(scope.budgetAmount, numberLocale)} />
-            <MetricCard title={localeText.projectScopes.remaining} value={formatCurrency(new Prisma.Decimal(remaining), numberLocale)} />
+            <MetricCard title={localeText.projectScopes.invoiced} value={formatCurrency(scope.invoicedAmount, numberLocale)} />
+            <MetricCard title={localeText.projectScopes.collected} value={formatCurrency(scope.collectedAmount, numberLocale)} />
           </>
         ) : null}
       </section>
@@ -440,15 +436,14 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
         </section>
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-6">
+      <section className="space-y-6">
           <div className="panel-surface">
             <p className="eyebrow">{localeText.projectScopes.selectedCourses}</p>
             <h3 className="section-title">
               {localeText.projectScopes.coursesInScope.replace("{scope}", scopeName)}
             </h3>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="mt-5 grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {visibleCourses.map((entry) => {
                 const course = entry.course;
                 const trackingRow = trackingByEntryId.get(entry.id);
@@ -677,31 +672,6 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
           ) : null}
 
           <div className="panel-surface">
-            <p className="eyebrow">{localeText.projectScopes.budgetProgress}</p>
-            <h3 className="section-title">{localeText.projectScopes.budgetProgress}</h3>
-
-            {canSeeFinancials ? (
-              <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                <InfoBox title={localeText.projectScopes.budget} label={localeText.projectScopes.total} value={formatCurrency(scope.budgetAmount, numberLocale)} />
-                <InfoBox title={localeText.projectScopes.invoiced} label={localeText.projectScopes.submitted} value={formatCurrency(scope.invoicedAmount, numberLocale)} />
-                <InfoBox title={localeText.projectScopes.collected} label={localeText.projectScopes.received} value={formatCurrency(scope.collectedAmount, numberLocale)} />
-              </div>
-            ) : null}
-
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <ProgressBox label={localeText.projectOverview.baselineProgress} value={plannedCompletion} locale={numberLocale} />
-              <ProgressBox label={localeText.projectOverview.actualProgress} value={actualCompletion} locale={numberLocale} />
-            </div>
-
-            {actualCompletion < plannedCompletion ? (
-              <div className="jawraa-subcard mt-5 border-dashed p-4 text-sm font-medium text-[var(--ink-strong)]">
-                {localeText.projectScopes.delayFlag}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-          <div className="panel-surface">
             <p className="eyebrow">{localeText.projectScopes.documents}</p>
             <h3 className="section-title">{localeText.projectScopes.documents}</h3>
             <p className="section-copy">
@@ -821,31 +791,6 @@ function InfoBox({
       {title ? <p className="text-sm font-semibold text-[var(--ink-strong)]">{title}</p> : null}
       <p className="text-xs font-medium text-[var(--ink-soft)]">{label}</p>
       <p className="mt-2 text-lg font-semibold text-[var(--ink-strong)]">{value}</p>
-    </div>
-  );
-}
-
-function ProgressBox({
-  label,
-  value,
-  locale,
-}: {
-  label: string;
-  value: number;
-  locale: string;
-}) {
-  return (
-    <div className="jawraa-subcard p-4">
-      <div className="flex items-center justify-between gap-3 text-xs font-semibold text-[var(--ink-soft)]">
-        <span>{label}</span>
-        <span>{formatNumber(value, locale)}%</span>
-      </div>
-      <div className="mt-3 h-2 rounded-full bg-[var(--surface-soft)]">
-        <div
-          className="h-2 rounded-full bg-[var(--brand-yellow)]"
-          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
-        />
-      </div>
     </div>
   );
 }

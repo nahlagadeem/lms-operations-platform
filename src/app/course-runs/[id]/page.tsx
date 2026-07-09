@@ -29,9 +29,7 @@ import {
 } from "@/lib/permissions";
 import {
   getTrainingCapacity,
-  getTrainingSessionAttendanceRate,
 } from "@/server/services/capacity-service";
-import { getTrainingEnrollmentSummary } from "@/server/services/enrollment-service";
 import {
   getAverageCourseRating,
   getAverageInstructorRating,
@@ -289,7 +287,7 @@ function detailText(locale: "en" | "ar") {
       vendor: "المورد",
       city: "المدينة",
       selectCity: "اختر المدينة",
-      daysHeld: "أيام التعاقد",
+      daysHeld: "أيام الانعقاد",
       yes: "نعم",
       no: "لا",
       close: "إغلاق",
@@ -644,7 +642,6 @@ export default async function CourseRunDetailPage({
     trainers,
     participants,
     purchaseOrderCourseEntries,
-    enrollmentSummary,
   ] = await Promise.all([
     db.courseRun.findUnique({
       where: { id },
@@ -652,7 +649,6 @@ export default async function CourseRunDetailPage({
         course: {
           include: {
             package: true,
-            category: true,
           },
         },
         projectScope: true,
@@ -737,7 +733,6 @@ export default async function CourseRunDetailPage({
       include: { scope: true, course: true },
       orderBy: [{ scope: { code: "asc" } }, { sortOrder: "asc" }],
     }),
-    getTrainingEnrollmentSummary(id),
   ]);
 
   if (!run) notFound();
@@ -759,7 +754,6 @@ export default async function CourseRunDetailPage({
     plannedSeats: run.plannedSeats,
     confirmedSeats: run.confirmedSeats,
   });
-  const attendanceSummary = await getTrainingSessionAttendanceRate(run.id);
   const totalSessionCount = run.sessions.length;
   const latestAttendanceByParticipant = new Map<
     string,
@@ -967,11 +961,9 @@ export default async function CourseRunDetailPage({
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <InfoCard
                 label={localeText.courseRuns.packageName}
-                value={run.course.package.nameEn || run.course.package.nameAr}
-              />
-              <InfoCard
-                label={localeText.courses.category}
-                value={run.course.category.nameEn || run.course.category.nameAr}
+                value={`${localeText.projectScopes.package} ${run.course.package.code}  ${
+                  run.course.package.nameEn || run.course.package.nameAr
+                }`}
               />
               <InfoCard
                 label={localeText.courseRuns.course}
@@ -982,14 +974,6 @@ export default async function CourseRunDetailPage({
                 value={
                   run.projectScope
                     ? `${formatPurchaseOrderCode(run.projectScope.code, locale)} | ${formatPurchaseOrderTitle(run.projectScope, locale)}`
-                    : details.notAssigned
-                }
-              />
-              <InfoCard
-                label={localeText.courseRuns.purchaseOrderCourseEntry}
-                value={
-                  run.projectScopeCourse
-                    ? `${run.projectScopeCourse.course.courseCode} | ${run.projectScopeCourse.course.nameEn || run.projectScopeCourse.course.nameAr}`
                     : details.notAssigned
                 }
               />
@@ -1020,6 +1004,46 @@ export default async function CourseRunDetailPage({
               <p className="mt-2 text-sm leading-7 text-[var(--ink-strong)]">
                 {run.notes || details.noNotes}
               </p>
+            </div>
+          </div>
+
+          <div className="panel-surface">
+            <p className="eyebrow">{details.capacityTitle}</p>
+            <h3 className="section-title">{details.capacityTitle}</h3>
+            <p className="section-copy">{details.capacityDescription}</p>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <ProgressCard
+                label={details.plannedSeats}
+                value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
+                tone="ink"
+              />
+              <ProgressCard
+                label={details.confirmedSeats}
+                value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
+                tone="sand"
+              />
+              <ProgressCard
+                label={details.utilizationPct}
+                value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
+                  trainingCapacity.utilizationPct,
+                )}%`}
+                tone="teal"
+              />
+              <ProgressCard
+                label={details.remainingCapacity}
+                value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
+                tone="ink"
+              />
+              <ProgressCard
+                label={details.fullyBooked}
+                value={trainingCapacity.fullyBooked ? details.yes : details.no}
+                tone="sand"
+              />
+              <ProgressCard
+                label={details.overCapacityBy}
+                value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
+                tone="teal"
+              />
             </div>
           </div>
 
@@ -1804,147 +1828,6 @@ export default async function CourseRunDetailPage({
         </div>
 
         <div className="space-y-6 min-w-0">
-          <div className="panel-surface">
-            <p className="eyebrow">{details.progress}</p>
-            <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              {customerOnly ? (
-                <>
-                  <ProgressCard
-                    label={details.plannedSeats}
-                    value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
-                    tone="ink"
-                  />
-                  <ProgressCard
-                    label={details.confirmedSeats}
-                    value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.utilizationPct}
-                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
-                      trainingCapacity.utilizationPct,
-                    )}%`}
-                    tone="teal"
-                  />
-                  <ProgressCard
-                    label={details.remainingCapacity}
-                    value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
-                    tone="ink"
-                  />
-                  <ProgressCard
-                    label={details.fullyBooked}
-                    value={trainingCapacity.fullyBooked ? details.yes : details.no}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.overCapacityBy}
-                    value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
-                    tone="teal"
-                  />
-                </>
-              ) : (
-                <>
-                  <ProgressCard
-                    label={details.attendanceRequired}
-                    value={run.attendanceRequired ? details.yes : details.no}
-                    tone="teal"
-                  />
-                  <ProgressCard
-                    label={details.certificateRequired}
-                    value={run.certificateRequired ? details.yes : details.no}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.trainerAssignments}
-                    value={formatNumber(run.trainers.length, numberLocale)}
-                    tone="ink"
-                  />
-                  <ProgressCard
-                    label={details.totalEnrollments}
-                    value={formatNumber(enrollmentSummary.totalEnrollments, numberLocale)}
-                    tone="teal"
-                  />
-                  <ProgressCard
-                    label={details.confirmedEnrollments}
-                    value={formatNumber(enrollmentSummary.confirmedEnrollments, numberLocale)}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.cancelledEnrollments}
-                    value={formatNumber(enrollmentSummary.cancelledEnrollments, numberLocale)}
-                    tone="ink"
-                  />
-                  <ProgressCard
-                    label={details.completedEnrollments}
-                    value={formatNumber(enrollmentSummary.completedEnrollments, numberLocale)}
-                    tone="teal"
-                  />
-                  <ProgressCard
-                    label={details.completionRate}
-                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
-                      enrollmentSummary.completionRate,
-                    )}%`}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.documents}
-                    value={formatNumber(documents.length, numberLocale)}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.recordedAttendance}
-                    value={formatNumber(run._count.attendanceRecords, numberLocale)}
-                    tone="teal"
-                  />
-                  <ProgressCard
-                    label={details.plannedSeats}
-                    value={formatNumber(trainingCapacity.estimatedSeats, numberLocale)}
-                    tone="ink"
-                  />
-                  <ProgressCard
-                    label={details.confirmedSeats}
-                    value={formatNumber(trainingCapacity.actualSeats, numberLocale)}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.utilizationPct}
-                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
-                      trainingCapacity.utilizationPct,
-                    )}%`}
-                    tone="teal"
-                  />
-                  <ProgressCard
-                    label={details.remainingCapacity}
-                    value={formatNumber(trainingCapacity.remainingCapacity, numberLocale)}
-                    tone="ink"
-                  />
-                  <ProgressCard
-                    label={details.fullyBooked}
-                    value={trainingCapacity.fullyBooked ? details.yes : details.no}
-                    tone="sand"
-                  />
-                  <ProgressCard
-                    label={details.overCapacityBy}
-                    value={formatNumber(trainingCapacity.overCapacityBy, numberLocale)}
-                    tone="teal"
-                  />
-                  <ProgressCard
-                    label={details.attendanceRate}
-                    value={`${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(
-                      attendanceSummary.attendanceRate,
-                    )}%`}
-                    tone="ink"
-                  />
-                  <ProgressCard
-                    label={details.courseStatus}
-                    value={localeText.courseRunStatuses[run.status]}
-                    tone="teal"
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
           {canSeeFinancials && trainingFinancials ? (
             <div className="panel-surface">
               <p className="eyebrow">{details.financialTitle}</p>

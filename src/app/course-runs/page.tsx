@@ -22,6 +22,9 @@ type CourseRunsPageProps = {
   searchParams?: Promise<{
     q?: string;
     package?: string;
+    course?: string;
+    po?: string;
+    city?: string;
     status?: string;
     panel?: string;
     sort?: string;
@@ -43,8 +46,10 @@ const trainingListSortKeys = [
   "course",
   "estimatedSeats",
   "actualSeats",
+  "utilization",
   "location",
-  "duration",
+  "daysHeld",
+  "status",
 ] as const;
 
 type TrainingListSortKey = (typeof trainingListSortKeys)[number];
@@ -104,6 +109,9 @@ function sortHref(
   params: {
     q: string;
     package: string;
+    course: string;
+    po: string;
+    city: string;
     status: string;
     sort: TrainingListSortKey;
     dir: SortDirection;
@@ -116,6 +124,9 @@ function sortHref(
 
   if (params.q) query.set("q", params.q);
   if (params.package) query.set("package", params.package);
+  if (params.course) query.set("course", params.course);
+  if (params.po) query.set("po", params.po);
+  if (params.city) query.set("city", params.city);
   if (params.status) query.set("status", params.status);
   query.set("sort", key);
   query.set("dir", nextDirection);
@@ -126,6 +137,9 @@ function sortHref(
 function trainingsPageHref(params: {
   q: string;
   package: string;
+  course: string;
+  po: string;
+  city: string;
   status: string;
   sort: TrainingListSortKey;
   dir: SortDirection;
@@ -134,6 +148,9 @@ function trainingsPageHref(params: {
   const query = new URLSearchParams();
   if (params.q) query.set("q", params.q);
   if (params.package) query.set("package", params.package);
+  if (params.course) query.set("course", params.course);
+  if (params.po) query.set("po", params.po);
+  if (params.city) query.set("city", params.city);
   if (params.status) query.set("status", params.status);
   query.set("sort", params.sort);
   query.set("dir", params.dir);
@@ -170,6 +187,9 @@ function SortHeader({
   query: {
     q: string;
     package: string;
+    course: string;
+    po: string;
+    city: string;
     status: string;
   };
 }) {
@@ -204,6 +224,9 @@ export default async function CourseRunsPage({
   const openPanel = params.panel === "create" ? "create" : "";
   const searchTerm = normalizeSingleValue(params.q);
   const packageCode = normalizeSingleValue(params.package);
+  const courseId = normalizeSingleValue(params.course);
+  const poId = normalizeSingleValue(params.po);
+  const cityFilter = normalizeSingleValue(params.city) as TrainingCity | "";
   const statusFilter = normalizeSingleValue(params.status) as CourseRunStatus | "";
   const sortKey = normalizeSortKey(params.sort);
   const sortDirection = normalizeSortDirection(params.dir);
@@ -214,6 +237,9 @@ export default async function CourseRunsPage({
 
   const whereClause: Prisma.CourseRunWhereInput = {
     status: statusFilter || undefined,
+    courseId: courseId || undefined,
+    projectScopeId: poId || undefined,
+    city: cityFilter || undefined,
     course: packageCode
       ? {
           package: {
@@ -238,6 +264,8 @@ export default async function CourseRunsPage({
     ongoingRuns,
     completedRuns,
     packages,
+    courses,
+    purchaseOrders,
     purchaseOrderCourseEntries,
     vendors,
     courseRuns,
@@ -262,6 +290,14 @@ export default async function CourseRunsPage({
     }),
     db.package.findMany({
       select: { id: true, code: true, nameAr: true, nameEn: true },
+      orderBy: { code: "asc" },
+    }),
+    db.course.findMany({
+      select: { id: true, courseCode: true, nameAr: true, nameEn: true },
+      orderBy: [{ courseCode: "asc" }],
+    }),
+    db.projectScope.findMany({
+      select: { id: true, code: true, name: true, nameAr: true, nameEn: true },
       orderBy: { code: "asc" },
     }),
     db.projectScopeCourse.findMany({
@@ -335,8 +371,11 @@ export default async function CourseRunsPage({
         courseLabel,
         estimatedSeats,
         actualSeats,
+        utilization:
+          estimatedSeats && estimatedSeats > 0 ? (actualSeats / estimatedSeats) * 100 : null,
         locationLabel,
-        duration: run._count.sessions,
+        daysHeld: run.daysHeld ?? run._count.sessions,
+        statusLabel: localeText.courseRunStatuses[run.status],
       };
     })
     .sort((left, right) => {
@@ -350,10 +389,14 @@ export default async function CourseRunsPage({
           : right.actualSeats - left.actualSeats;
       }
 
-      if (sortKey === "duration") {
+      if (sortKey === "utilization") {
+        return compareNullableNumber(left.utilization, right.utilization, sortDirection);
+      }
+
+      if (sortKey === "daysHeld") {
         return sortDirection === "asc"
-          ? left.duration - right.duration
-          : right.duration - left.duration;
+          ? left.daysHeld - right.daysHeld
+          : right.daysHeld - left.daysHeld;
       }
 
       const leftValue =
@@ -361,12 +404,16 @@ export default async function CourseRunsPage({
           ? left.locationLabel
           : sortKey === "course"
             ? left.courseLabel
+            : sortKey === "status"
+              ? left.statusLabel
             : left.training.trainingCode;
       const rightValue =
         sortKey === "location"
           ? right.locationLabel
           : sortKey === "course"
             ? right.courseLabel
+            : sortKey === "status"
+              ? right.statusLabel
             : right.training.trainingCode;
 
       return sortDirection === "asc"
@@ -416,7 +463,7 @@ export default async function CourseRunsPage({
           </div>
         </div>
 
-        <form className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.8fr_0.8fr_auto]">
+        <form className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_repeat(5,minmax(0,0.8fr))_auto]">
           <InstantSearchField
             label={localeText.courseRuns.search}
             defaultValue={searchTerm}
@@ -431,6 +478,46 @@ export default async function CourseRunsPage({
               {packages.map((item) => (
                 <option key={item.id} value={item.code}>
                   {item.nameEn || item.nameAr}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-shell">
+            <span className="field-label">{localeText.courseRuns.course}</span>
+            <select name="course" defaultValue={courseId} className="field-input">
+              <option value="">{localeText.courseRuns.allCourses}</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.courseCode} | {course.nameEn || course.nameAr}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-shell">
+            <span className="field-label">{localeText.courseRuns.purchaseOrder}</span>
+            <select name="po" defaultValue={poId} className="field-input">
+              <option value="">{localeText.courseRuns.allPurchaseOrders}</option>
+              {purchaseOrders.map((po) => (
+                <option key={po.id} value={po.id}>
+                  {formatPurchaseOrderCode(po.code, locale)} | {formatPurchaseOrderTitle(po, locale)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-shell">
+            <span className="field-label">{localeText.courseRuns.city}</span>
+            <select name="city" defaultValue={cityFilter} className="field-input">
+              <option value="">{localeText.courseRuns.allCities}</option>
+              {Object.values(TrainingCity).map((city) => (
+                <option key={city} value={city}>
+                  {
+                    localeText.courseRuns.trainingCities[
+                      city as keyof typeof localeText.courseRuns.trainingCities
+                    ]
+                  }
                 </option>
               ))}
             </select>
@@ -477,47 +564,61 @@ export default async function CourseRunsPage({
                     sortKey="code"
                     currentSort={sortKey}
                     currentDirection={sortDirection}
-                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
                   />
                   <SortHeader
                     label={localeText.courseRuns.courseName}
                     sortKey="course"
                     currentSort={sortKey}
                     currentDirection={sortDirection}
-                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
                   />
                   <SortHeader
                     label={localeText.courseRuns.seats}
                     sortKey="estimatedSeats"
                     currentSort={sortKey}
                     currentDirection={sortDirection}
-                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
                   />
                   <SortHeader
                     label={localeText.projectScopes.actualSeats}
                     sortKey="actualSeats"
                     currentSort={sortKey}
                     currentDirection={sortDirection}
-                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.courseRuns.utilizationPct}
+                    sortKey="utilization"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
                   />
                   <SortHeader
                     label={localeText.courseRuns.city}
                     sortKey="location"
                     currentSort={sortKey}
                     currentDirection={sortDirection}
-                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
                   />
                   <SortHeader
-                    label={localeText.projectScopes.duration}
-                    sortKey="duration"
+                    label={localeText.courseRuns.daysHeld}
+                    sortKey="daysHeld"
                     currentSort={sortKey}
                     currentDirection={sortDirection}
-                    query={{ q: searchTerm, package: packageCode, status: statusFilter }}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
+                  />
+                  <SortHeader
+                    label={localeText.courseRuns.status}
+                    sortKey="status"
+                    currentSort={sortKey}
+                    currentDirection={sortDirection}
+                    query={{ q: searchTerm, package: packageCode, course: courseId, po: poId, city: cityFilter, status: statusFilter }}
                   />
                 </tr>
               </thead>
               <tbody>
-                {visibleTrainingRows.map(({ run, training, courseLabel, estimatedSeats, actualSeats, locationLabel, duration }) => (
+                {visibleTrainingRows.map(({ run, training, courseLabel, estimatedSeats, actualSeats, utilization, locationLabel, daysHeld, statusLabel }) => (
                   <tr
                     key={run.id}
                     className="cursor-pointer transition hover:bg-white"
@@ -550,12 +651,24 @@ export default async function CourseRunsPage({
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {utilization === null
+                          ? "-"
+                          : `${new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(utilization)}%`}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
                         {locationLabel}
                       </Link>
                     </td>
                     <td>
                       <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
-                        {formatNumber(duration, numberLocale)}
+                        {formatNumber(daysHeld, numberLocale)}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link href={`/trainings/${run.id}`} className="block w-full no-underline">
+                        {statusLabel}
                       </Link>
                     </td>
                   </tr>
@@ -574,6 +687,9 @@ export default async function CourseRunsPage({
                     href={trainingsPageHref({
                       q: searchTerm,
                       package: packageCode,
+                      course: courseId,
+                      po: poId,
+                      city: cityFilter,
                       status: statusFilter,
                       sort: sortKey,
                       dir: sortDirection,
@@ -588,6 +704,9 @@ export default async function CourseRunsPage({
                     href={trainingsPageHref({
                       q: searchTerm,
                       package: packageCode,
+                      course: courseId,
+                      po: poId,
+                      city: cityFilter,
                       status: statusFilter,
                       sort: sortKey,
                       dir: sortDirection,
@@ -609,6 +728,9 @@ export default async function CourseRunsPage({
                         href={trainingsPageHref({
                           q: searchTerm,
                           package: packageCode,
+                          course: courseId,
+                          po: poId,
+                          city: cityFilter,
                           status: statusFilter,
                           sort: sortKey,
                           dir: sortDirection,
@@ -625,6 +747,9 @@ export default async function CourseRunsPage({
                     href={trainingsPageHref({
                       q: searchTerm,
                       package: packageCode,
+                      course: courseId,
+                      po: poId,
+                      city: cityFilter,
                       status: statusFilter,
                       sort: sortKey,
                       dir: sortDirection,
@@ -639,6 +764,9 @@ export default async function CourseRunsPage({
                     href={trainingsPageHref({
                       q: searchTerm,
                       package: packageCode,
+                      course: courseId,
+                      po: poId,
+                      city: cityFilter,
                       status: statusFilter,
                       sort: sortKey,
                       dir: sortDirection,

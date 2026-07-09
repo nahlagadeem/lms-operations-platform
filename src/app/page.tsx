@@ -758,13 +758,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </section>
 
-      <ProjectSummarySection
-        localeText={localeText}
-        numberLocale={numberLocale}
-        projectSummary={projectSummary}
-        canSeeFinancials={canSeeFinancials}
-      />
-
       {canSeeFinancials && projectFinancialOverview ? (
         <section className="panel-surface">
           <div className="mb-5">
@@ -971,9 +964,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <th>{dashboardText.seatsPlanned}</th>
                   <th>{dashboardText.seatsDelivered}</th>
                   <th>{dashboardText.utilization}</th>
-                  <th>{dashboardText.averageCourseRating}</th>
-                  <th>{dashboardText.averageInstructorRating}</th>
-                  <th>{dashboardText.attendanceRate}</th>
                 </tr>
               </thead>
               <tbody>
@@ -989,9 +979,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     <td>{formatNumber(row.plannedSeats, numberLocale)}</td>
                     <td>{formatNumber(row.delivered, numberLocale)}</td>
                     <td>{formatPercent(row.utilization, numberLocale)}</td>
-                    <td>{formatRating(row.averageCourseRating, numberLocale)}</td>
-                    <td>{formatRating(row.averageInstructorRating, numberLocale)}</td>
-                    <td>{formatPercent(row.attendanceRate, numberLocale)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1135,10 +1122,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             href="/courses"
             title={dashboardText.coursesFramework}
             value={formatNumber(totalCourses, numberLocale)}
-            detail={homeUiText.completedOngoingPlanned
-              .replace("{completed}", formatNumber(completedCourseIds.length, numberLocale))
-              .replace("{ongoing}", formatNumber(ongoingCourseIds.length, numberLocale))
-              .replace("{planned}", formatNumber(plannedCourseIds.length, numberLocale))}
+            detail={localeText.home.catalogSnapshot}
           />
           <KpiCard
             href="/trainings"
