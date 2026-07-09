@@ -9,7 +9,6 @@ import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchas
 import {
   createProjectScope,
   deleteProjectScope,
-  updateProjectScope,
 } from "@/app/project-structure/actions";
 import {
   canCreateOperationalData,
@@ -55,11 +54,6 @@ function formatPercent(value: number, locale: string) {
 
 function progressValue(value: Prisma.Decimal | null | undefined) {
   return value ? Number(value) : 0;
-}
-
-function formatInputDate(value: Date | null | undefined) {
-  if (!value) return "";
-  return value.toISOString().slice(0, 10);
 }
 
 function normalizeSearch(value?: string) {
@@ -483,110 +477,6 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </tbody>
           </table>
         </div>
-        {canEdit ? (
-          <div className="mt-6 space-y-4">
-            <p className="eyebrow">{localeText.projectScopes.editScope}</p>
-            {visibleScopes.map((scope) => (
-              <details key={scope.id} id={`edit-po-${scope.id}`} className="jawraa-subcard p-4">
-                <summary className="cursor-pointer text-sm font-bold text-[var(--ink-strong)]">
-                  {formatPurchaseOrderCode(scope.code, locale)} - {formatPurchaseOrderTitle(scope, locale)}
-                </summary>
-                <form action={updateProjectScope} className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <input type="hidden" name="id" value={scope.id} />
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.code}</span>
-                    <input name="code" className="field-input" required defaultValue={scope.code} />
-                  </label>
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.status}</span>
-                    <select
-                      name="status"
-                      className="field-input"
-                      defaultValue={scope.isActive ? "ACTIVE" : "INACTIVE"}
-                    >
-                      <option value="ACTIVE">{localeText.projectScopes.active}</option>
-                      <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
-                    </select>
-                  </label>
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.nameAr}</span>
-                    <input
-                      name="nameAr"
-                      className="field-input"
-                      required
-                      dir="rtl"
-                      defaultValue={formatPurchaseOrderTitle(scope, "ar")}
-                    />
-                  </label>
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.nameEn}</span>
-                    <input
-                      name="nameEn"
-                      className="field-input"
-                      required
-                      dir="ltr"
-                      defaultValue={formatPurchaseOrderTitle(scope, "en")}
-                    />
-                  </label>
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.region}</span>
-                    <input name="region" className="field-input" defaultValue={scope.region || ""} />
-                  </label>
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.file}</span>
-                    <input
-                      name="file"
-                      type="file"
-                      className="field-input"
-                      accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
-                    />
-                  </label>
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.startDate}</span>
-                    <input
-                      name="startDate"
-                      type="date"
-                      className="field-input"
-                      defaultValue={formatInputDate(scope.startDate)}
-                    />
-                  </label>
-                  <label className="field-shell">
-                    <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
-                    <input
-                      name="expectedEndDate"
-                      type="date"
-                      className="field-input"
-                      defaultValue={formatInputDate(scope.expectedEndDate)}
-                    />
-                  </label>
-                  <label className="field-shell lg:col-span-2">
-                    <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
-                    <textarea
-                      name="description"
-                      rows={3}
-                      className="field-input min-h-[6rem] resize-y"
-                      defaultValue={scope.description || ""}
-                    />
-                  </label>
-                  <label className="field-shell lg:col-span-2">
-                    <span className="field-label">{localeText.projectScopes.notes}</span>
-                    <textarea
-                      name="notes"
-                      rows={3}
-                      className="field-input min-h-[6rem] resize-y"
-                      defaultValue={scope.notes || ""}
-                    />
-                  </label>
-                  <div className="lg:col-span-2">
-                    <button type="submit" className="primary-button">
-                      {localeText.projectScopes.saveScope}
-                    </button>
-                  </div>
-                </form>
-              </details>
-            ))}
-          </div>
-        ) : null}
         {filteredScopes.length > PURCHASE_ORDERS_PAGE_SIZE ? (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">

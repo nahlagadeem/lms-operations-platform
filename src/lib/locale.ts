@@ -382,7 +382,7 @@ const englishText = {
     createTitle: "Add Training",
     createDescription:
       "Create a training linked to one course from the catalog, then continue with instructors, attendees, and attendance.",
-    course: "Course (Number + Name)",
+    course: "Course",
     selectCourse: "Select a course",
     purchaseOrder: "PO",
     purchaseOrderCourseEntry: "PO Course Entry",
@@ -914,7 +914,7 @@ const arabicText = {
     createTitle: "إضافة تدريب",
     createDescription:
       "أنشئ تدريبا مرتبطا بدورة من الدليل، ثم أضف المدربين والحضور وسجلات الحضور.",
-    course: "الدورة (الرقم + الاسم)",
+    course: "الدورة",
     selectCourse: "اختر دورة",
     purchaseOrder: "أمر الشراء",
     purchaseOrderCourseEntry: "بند أمر الشراء",

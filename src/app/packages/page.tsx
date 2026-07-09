@@ -78,7 +78,7 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
 
   return (
     <div className="space-y-6">
-      <section className="panel-surface">
+      <section className="panel-surface min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="eyebrow">{localeText.packages.eyebrow}</p>
@@ -89,10 +89,8 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
             {localeText.packages.goToCourses}
           </Link>
         </div>
-      </section>
 
-      <section className="panel-surface">
-        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <form className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
           <InstantSearchField
             label={localeText.packages.search}
             defaultValue={searchTerm}
@@ -109,9 +107,7 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
             {localeText.buttons.exportExcel}
           </Link>
         </form>
-      </section>
 
-      <section className="panel-surface min-w-0">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-[var(--ink-strong)]">

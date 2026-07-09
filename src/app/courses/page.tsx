@@ -4,7 +4,6 @@ import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getDirection, getLocale, t } from "@/lib/locale";
 import { formatPackageDisplayName } from "@/lib/package-display";
-import { getCurrentPlatformRole, isCustomerCapacityOnly } from "@/lib/permissions";
 import {
   courseDisplayName,
   loadCourseCatalogRows,
@@ -109,8 +108,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   const packageCode = normalizeSingleValue(params.package);
   const deliveryType = normalizeSingleValue(params.type) as DeliveryType | "";
   const currentPage = normalizePage(params.page);
-  const platformRole = await getCurrentPlatformRole();
-  const customerOnly = isCustomerCapacityOnly(platformRole);
 
   const whereClause: Prisma.CourseWhereInput = {
     activeStatus: ActiveStatus.ACTIVE,
@@ -179,7 +176,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
 
   return (
     <div className="space-y-6">
-      <section className="panel-surface">
+      <section className="panel-surface min-w-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="eyebrow">{localeText.courses.eyebrow}</p>
@@ -190,27 +187,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
             {localeText.courses.backToPackages}
           </Link>
         </div>
-
-        {!customerOnly ? (
-          <div className="mt-6 grid gap-3 md:grid-cols-2">
-            <Link href="/vendors" className="jawraa-subcard block p-4 transition hover:border-[var(--brand-yellow-strong)] hover:bg-[var(--brand-yellow-soft)]">
-              <p className="font-semibold text-[var(--ink-strong)]">
-                {localeText.courses.trainingProviders}
-              </p>
-              <p className="mt-1 text-sm text-[var(--ink-soft)]">
-                {localeText.courses.relatedManagementDescription}
-              </p>
-            </Link>
-            <Link href="/locations" className="jawraa-subcard block p-4 transition hover:border-[var(--brand-yellow-strong)] hover:bg-[var(--brand-yellow-soft)]">
-              <p className="font-semibold text-[var(--ink-strong)]">
-                {localeText.courses.locations}
-              </p>
-              <p className="mt-1 text-sm text-[var(--ink-soft)]">
-                {localeText.courses.relatedManagementDescription}
-              </p>
-            </Link>
-          </div>
-        ) : null}
 
         <form className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_0.8fr_0.8fr_auto_auto]">
           <InstantSearchField
@@ -266,10 +242,8 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
             {localeText.courses.export}
           </Link>
         </form>
-      </section>
 
-      <section className="panel-surface min-w-0">
-        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-[var(--ink-strong)]">
               {localeText.courses.listTitle}
