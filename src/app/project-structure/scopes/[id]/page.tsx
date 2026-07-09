@@ -38,6 +38,12 @@ function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
 }
 
+function countAssignedPackages(
+  selectedCourses: Array<{ course: { package: { id: string } } }>,
+) {
+  return new Set(selectedCourses.map((selection) => selection.course.package.id)).size;
+}
+
 function formatCurrency(value: Prisma.Decimal | null | undefined, locale: string) {
   if (!value) return "-";
 
@@ -199,6 +205,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   }
 
   const courseCount = scope.selectedCourses.length;
+  const packageCount = countAssignedPackages(scope.selectedCourses);
   const scopeName = formatPurchaseOrderTitle(scope, locale);
   const trackingByEntryId = new Map(
     tracking?.rows.map((row) => [row.purchaseOrderCourseEntryId, row] as const) ?? [],
@@ -253,7 +260,7 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title={localeText.projectScopes.packages} value={formatNumber(scope.packages.length, numberLocale)} />
+        <MetricCard title={localeText.projectScopes.packages} value={formatNumber(packageCount, numberLocale)} />
         <MetricCard title={localeText.projectScopes.courses} value={formatNumber(courseCount, numberLocale)} />
         {canSeeFinancials ? (
           <>

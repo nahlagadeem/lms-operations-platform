@@ -64,25 +64,27 @@ async function resolvePurchaseOrderCourseEntry(
   return entry;
 }
 
-async function generateTrainingCode(courseCode: string, startDate: Date | null) {
-  const dateToken = (startDate ?? new Date())
-    .toISOString()
-    .slice(0, 10)
-    .replaceAll("-", "");
-  const baseCode = `${courseCode}-${dateToken}`;
+function numericCodeToken(value: string, minLength: number) {
+  const match = value.match(/(\d+)(?!.*\d)/);
+  if (!match) return value.toUpperCase().replace(/[^A-Z0-9]+/g, "");
+
+  return String(Number(match[1])).padStart(minLength, "0");
+}
+
+async function generateTrainingCode(packageCode: string, courseCode: string) {
+  const baseCode = `PKG${numericCodeToken(packageCode, 2)}-CRS${numericCodeToken(courseCode, 3)}`;
+  const trainingCodePattern = new RegExp(`^${baseCode}-TRN(\\d+)$`);
   const existing = await db.courseRun.findMany({
-    where: { runCode: { startsWith: baseCode } },
+    where: { runCode: { startsWith: `${baseCode}-TRN` } },
     select: { runCode: true },
   });
-  const existingCodes = new Set(existing.map((training) => training.runCode));
+  const nextNumber =
+    existing.reduce((max, training) => {
+      const match = training.runCode.match(trainingCodePattern);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0) + 1;
 
-  if (!existingCodes.has(baseCode)) return baseCode;
-
-  let suffix = 2;
-  while (existingCodes.has(`${baseCode}-${String(suffix).padStart(2, "0")}`)) {
-    suffix += 1;
-  }
-  return `${baseCode}-${String(suffix).padStart(2, "0")}`;
+  return `${baseCode}-TRN${String(nextNumber).padStart(3, "0")}`;
 }
 
 export async function createTraining(input: CreateTrainingInput) {
@@ -92,11 +94,15 @@ export async function createTraining(input: CreateTrainingInput) {
   );
   const course = await db.course.findUnique({
     where: { id: purchaseOrderCourseEntry.courseId },
-    select: { courseCode: true, requiresCertificate: true },
+    select: {
+      courseCode: true,
+      requiresCertificate: true,
+      package: { select: { code: true } },
+    },
   });
   if (!course) throw new Error("Purchase Order Course Entry course was not found.");
 
-  const trainingCode = await generateTrainingCode(course.courseCode, input.startDate);
+  const trainingCode = await generateTrainingCode(course.package.code, course.courseCode);
   return db.courseRun.create({
     data: {
       courseId: purchaseOrderCourseEntry.courseId,

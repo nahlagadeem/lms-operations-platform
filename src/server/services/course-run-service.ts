@@ -73,34 +73,33 @@ type RecordAttendanceInput = {
   notes: string;
 };
 
-async function generateRunCode(courseCode: string, startDate: Date | null) {
-  const dateToken = startDate
-    ? startDate.toISOString().slice(0, 10).replaceAll("-", "")
-    : new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  const baseCode = `${courseCode}-${dateToken}`;
+function numericCodeToken(value: string, minLength: number) {
+  const match = value.match(/(\d+)(?!.*\d)/);
+  if (!match) return value.toUpperCase().replace(/[^A-Z0-9]+/g, "");
 
+  return String(Number(match[1])).padStart(minLength, "0");
+}
+
+async function generateRunCode(packageCode: string, courseCode: string) {
+  const baseCode = `PKG${numericCodeToken(packageCode, 2)}-CRS${numericCodeToken(courseCode, 3)}`;
+  const trainingCodePattern = new RegExp(`^${baseCode}-TRN(\\d+)$`);
   const existing = await db.courseRun.findMany({
     where: {
       runCode: {
-        startsWith: baseCode,
+        startsWith: `${baseCode}-TRN`,
       },
     },
     select: {
       runCode: true,
     },
   });
+  const nextNumber =
+    existing.reduce((max, item) => {
+      const match = item.runCode.match(trainingCodePattern);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0) + 1;
 
-  if (existing.length === 0) {
-    return baseCode;
-  }
-
-  let suffix = 2;
-  const existingCodes = new Set(existing.map((item) => item.runCode));
-  while (existingCodes.has(`${baseCode}-${String(suffix).padStart(2, "0")}`)) {
-    suffix += 1;
-  }
-
-  return `${baseCode}-${String(suffix).padStart(2, "0")}`;
+  return `${baseCode}-TRN${String(nextNumber).padStart(3, "0")}`;
 }
 
 function nominationConfirmationData(nominationStatus: NominationStatus) {
@@ -120,6 +119,7 @@ export async function createCourseRun(input: CreateCourseRunInput) {
     select: {
       courseCode: true,
       requiresCertificate: true,
+      package: { select: { code: true } },
     },
   });
 
@@ -127,7 +127,7 @@ export async function createCourseRun(input: CreateCourseRunInput) {
     throw new Error("Selected course was not found.");
   }
 
-  const runCode = await generateRunCode(course.courseCode, input.startDate);
+  const runCode = await generateRunCode(course.package.code, course.courseCode);
 
   return db.courseRun.create({
     data: {

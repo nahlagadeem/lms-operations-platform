@@ -32,6 +32,12 @@ function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
 }
 
+function countAssignedPackages(
+  selectedCourses: Array<{ course: { package: { id: string } } }>,
+) {
+  return new Set(selectedCourses.map((selection) => selection.course.package.id)).size;
+}
+
 function formatCurrency(value: Prisma.Decimal | null | undefined, locale: string) {
   if (!value) return "-";
 
@@ -159,7 +165,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
 
   const totals = scopes.reduce(
     (summary, scope) => {
-      summary.packages += scope.packages.length;
+      summary.packages += countAssignedPackages(scope.selectedCourses);
       summary.courses += scope.selectedCourses.length;
       summary.budget += Number(scope.budgetAmount ?? 0);
       summary.invoiced += Number(scope.invoicedAmount ?? 0);
