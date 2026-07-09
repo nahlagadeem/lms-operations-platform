@@ -350,7 +350,8 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                   <tr key={row.purchaseOrderCourseEntryId}>
                     <td>
                       <Link href={`/courses/${row.courseId}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
-                        {row.courseCode} | {row.courseName}
+                        <span className="block">{row.courseCode}</span>
+                        <span className="block text-sm text-[var(--ink-strong)]">{row.courseName}</span>
                       </Link>
                     </td>
                     <td>{formatPackageDisplayName({
