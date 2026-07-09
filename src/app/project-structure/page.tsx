@@ -222,9 +222,9 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 {localeText.projectScopes.addScope}
               </a>
             ) : null}
-          <Link href="/trainings" className="secondary-button">
-            {localeText.projectScopes.activeRuns}
-          </Link>
+            <Link href="/trainings" className="secondary-button">
+              {localeText.projectScopes.activeRuns}
+            </Link>
           </div>
         </div>
       </section>
@@ -240,108 +240,6 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
           />
         ) : null}
       </section>
-
-      {canCreate ? (
-        <section id="add-project-scope" className="panel-surface">
-        <div className="mb-5">
-          <p className="eyebrow">{localeText.projectScopes.addScope}</p>
-          <h2 className="section-title">{localeText.projectScopes.addScope}</h2>
-        </div>
-        <form action={createProjectScope} className="grid gap-4 lg:grid-cols-2">
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.code}</span>
-            <input name="code" className="field-input" required />
-          </label>
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.status}</span>
-            <select name="status" className="field-input" defaultValue="ACTIVE">
-              <option value="ACTIVE">{localeText.projectScopes.active}</option>
-              <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
-            </select>
-          </label>
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.nameAr}</span>
-            <input name="nameAr" className="field-input" required dir="rtl" />
-          </label>
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.nameEn}</span>
-            <input name="nameEn" className="field-input" required dir="ltr" />
-          </label>
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.region}</span>
-            <input name="region" className="field-input" />
-          </label>
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.file}</span>
-            <input
-              name="file"
-              type="file"
-              className="field-input"
-              accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
-            />
-          </label>
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.startDate}</span>
-            <input name="startDate" type="date" className="field-input" />
-          </label>
-          <label className="field-shell">
-            <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
-            <input name="expectedEndDate" type="date" className="field-input" />
-          </label>
-          <label className="field-shell lg:col-span-2">
-            <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
-            <textarea name="description" rows={3} className="field-input min-h-[6rem] resize-y" />
-          </label>
-          <label className="field-shell lg:col-span-2">
-            <span className="field-label">{localeText.projectScopes.notes}</span>
-            <textarea name="notes" rows={3} className="field-input min-h-[6rem] resize-y" />
-          </label>
-          <fieldset className="field-shell lg:col-span-2">
-            <legend className="field-label">{localeText.projectScopes.bulkCourses}</legend>
-            <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
-              <InstantSearchField
-                name="courseQ"
-                label={localeText.projectScopes.searchCourses}
-                defaultValue={courseSearch}
-                placeholder={localeText.projectScopes.searchCoursesPlaceholder}
-                pageParams={["page"]}
-              />
-              <Link href="/pos#add-project-scope" className="secondary-button self-end">
-                {localeText.projectScopes.clearSearch}
-              </Link>
-            </div>
-            <div className="mt-3 grid max-h-[22rem] gap-3 overflow-y-auto rounded-[8px] border border-[rgba(17,17,17,0.1)] bg-white p-3 md:grid-cols-2 xl:grid-cols-3">
-              {allCourses.map((course) => (
-                <label key={course.id} className="flex items-start gap-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] p-3 text-sm">
-                  <input type="checkbox" name="courseIds" value={course.id} className="mt-1" />
-                  <span>
-                    <span className="block font-bold text-[var(--ink-strong)]">
-                      {course.courseCode}
-                    </span>
-                    <span className="block leading-6 text-[var(--ink-soft)]">
-                      {locale === "ar" ? course.nameAr : course.nameEn || course.nameAr}
-                    </span>
-                    <span className="latin-chip mt-2">
-                      {formatPackageDisplayName(course.package, locale)}
-                    </span>
-                  </span>
-                </label>
-              ))}
-              {allCourses.length === 0 ? (
-                <p className="text-sm text-[var(--ink-soft)]">
-                  {localeText.projectScopes.noCoursesAvailable}
-                </p>
-              ) : null}
-            </div>
-          </fieldset>
-          <div className="lg:col-span-2">
-            <button type="submit" className="primary-button">
-              {localeText.projectScopes.create}
-            </button>
-          </div>
-        </form>
-        </section>
-      ) : null}
 
       <section className="panel-surface">
         <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
@@ -406,8 +304,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             <tr key={scope.id}>
               <td>
                 <Link href={`/pos/${scope.id}`} className="block w-full no-underline">
-                  <p className="latin-chip">{formatPurchaseOrderCode(scope.code, locale)}</p>
-                  <p className="mt-2 font-semibold text-[var(--ink-strong)]">
+                  <p className="font-semibold text-[var(--ink-strong)]">
                     {formatPurchaseOrderTitle(scope, locale)}
                   </p>
                 </Link>
@@ -477,6 +374,107 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
             </tbody>
           </table>
         </div>
+        {canCreate ? (
+          <section id="add-project-scope" className="mt-6 border-t border-[rgba(17,17,17,0.08)] pt-6">
+            <div className="mb-5">
+              <p className="eyebrow">{localeText.projectScopes.addScope}</p>
+              <h2 className="section-title">{localeText.projectScopes.addScope}</h2>
+            </div>
+            <form action={createProjectScope} className="grid gap-4 lg:grid-cols-2">
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.code}</span>
+                <input name="code" className="field-input" required />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.status}</span>
+                <select name="status" className="field-input" defaultValue="ACTIVE">
+                  <option value="ACTIVE">{localeText.projectScopes.active}</option>
+                  <option value="INACTIVE">{localeText.projectScopes.inactive}</option>
+                </select>
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.nameAr}</span>
+                <input name="nameAr" className="field-input" required dir="rtl" />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.nameEn}</span>
+                <input name="nameEn" className="field-input" required dir="ltr" />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.region}</span>
+                <input name="region" className="field-input" />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.file}</span>
+                <input
+                  name="file"
+                  type="file"
+                  className="field-input"
+                  accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
+                />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.startDate}</span>
+                <input name="startDate" type="date" className="field-input" />
+              </label>
+              <label className="field-shell">
+                <span className="field-label">{localeText.projectScopes.expectedEndDate}</span>
+                <input name="expectedEndDate" type="date" className="field-input" />
+              </label>
+              <label className="field-shell lg:col-span-2">
+                <span className="field-label">{localeText.projectScopes.descriptionLabel}</span>
+                <textarea name="description" rows={3} className="field-input min-h-[6rem] resize-y" />
+              </label>
+              <label className="field-shell lg:col-span-2">
+                <span className="field-label">{localeText.projectScopes.notes}</span>
+                <textarea name="notes" rows={3} className="field-input min-h-[6rem] resize-y" />
+              </label>
+              <fieldset className="field-shell lg:col-span-2">
+                <legend className="field-label">{localeText.projectScopes.bulkCourses}</legend>
+                <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+                  <InstantSearchField
+                    name="courseQ"
+                    label={localeText.projectScopes.searchCourses}
+                    defaultValue={courseSearch}
+                    placeholder={localeText.projectScopes.searchCoursesPlaceholder}
+                    pageParams={["page"]}
+                  />
+                  <Link href="/pos#add-project-scope" className="secondary-button self-end">
+                    {localeText.projectScopes.clearSearch}
+                  </Link>
+                </div>
+                <div className="mt-3 grid max-h-[22rem] gap-3 overflow-y-auto rounded-[8px] border border-[rgba(17,17,17,0.1)] bg-white p-3 md:grid-cols-2 xl:grid-cols-3">
+                  {allCourses.map((course) => (
+                    <label key={course.id} className="flex items-start gap-3 rounded-[8px] border border-[rgba(17,17,17,0.08)] p-3 text-sm">
+                      <input type="checkbox" name="courseIds" value={course.id} className="mt-1" />
+                      <span>
+                        <span className="block font-bold text-[var(--ink-strong)]">
+                          {course.courseCode}
+                        </span>
+                        <span className="block leading-6 text-[var(--ink-soft)]">
+                          {locale === "ar" ? course.nameAr : course.nameEn || course.nameAr}
+                        </span>
+                        <span className="latin-chip mt-2">
+                          {formatPackageDisplayName(course.package, locale)}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                  {allCourses.length === 0 ? (
+                    <p className="text-sm text-[var(--ink-soft)]">
+                      {localeText.projectScopes.noCoursesAvailable}
+                    </p>
+                  ) : null}
+                </div>
+              </fieldset>
+              <div className="lg:col-span-2">
+                <button type="submit" className="primary-button">
+                  {localeText.projectScopes.create}
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
         {filteredScopes.length > PURCHASE_ORDERS_PAGE_SIZE ? (
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">

@@ -942,13 +942,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   numberLocale,
                 )
               : "-"}
-            detail={bestPackage
-              ? `${bestPackage.displayName} / ${
-                  canSeeFinancials
-                    ? dashboardText.byMargin
-                    : dashboardText.bySeatUtilization
-                }`
-              : localeText.home.unavailable}
+            detail={bestPackage ? bestPackage.displayName : localeText.home.unavailable}
           />
           <KpiCard
             href="/packages"
@@ -958,16 +952,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 ? formatNumber(attentionPackage.shortfall, numberLocale)
                 : formatPercent(attentionPackage.utilization, numberLocale)
               : "-"}
-            detail={attentionPackage
-              ? `${attentionPackage.displayName} / ${
-                  attentionPackage.shortfall > 0
-                    ? dashboardText.shortfallSeats.replace(
-                        "{count}",
-                        formatNumber(attentionPackage.shortfall, numberLocale),
-                      )
-                    : dashboardText.lowestUtilization
-                }`
-              : localeText.home.unavailable}
+            detail={attentionPackage ? attentionPackage.displayName : localeText.home.unavailable}
             tone={attentionPackage ? "warning" : "normal"}
           />
           <KpiCard
@@ -1012,7 +997,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <KpiCard
             href={mostRecentPo ? `/pos/${mostRecentPo.id}` : "/pos"}
             title={dashboardText.mostRecentPurchaseOrder}
-            value={mostRecentPo?.code ?? "-"}
+            value={mostRecentPo ? formatPurchaseOrderTitle(mostRecentPo, locale) : "-"}
             detail={mostRecentPo ? formatDate(mostRecentPo.createdAt, numberLocale) : localeText.home.unavailable}
           />
         </div>

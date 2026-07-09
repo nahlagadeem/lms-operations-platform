@@ -362,32 +362,27 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                 {localeText.courses.previous}
               </Link>
 
-              {paginationPages(safePage, totalPages).map((pageNumber, index) => {
-                const previousPage = paginationPages(safePage, totalPages)[index - 1];
-                const showEllipsis =
-                  previousPage !== undefined && pageNumber !== "ellipsis" && typeof previousPage === "number"
-                    ? pageNumber - previousPage > 1
-                    : false;
-
-                return (
-                  <div key={`${pageNumber}-${index}`} className="flex items-center gap-2">
-                    {showEllipsis ? <span className="pagination-ellipsis">...</span> : null}
-                    {pageNumber === "ellipsis" ? null : (
-                      <Link
-                        href={buildUrl({
-                          q: searchTerm,
-                          package: packageCode,
-                          type: deliveryType,
-                          page: pageNumber,
-                        })}
-                        className={`pagination-link ${pageNumber === safePage ? "pagination-link-active" : ""}`}
-                      >
-                        {formatNumber(pageNumber, numberLocale)}
-                      </Link>
-                    )}
-                  </div>
-                );
-              })}
+              {paginationPages(safePage, totalPages).map((pageNumber, index) =>
+                pageNumber === "ellipsis" ? (
+                  <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                    ...
+                  </span>
+                ) : (
+                  <Link
+                    key={pageNumber}
+                    href={buildUrl({
+                      q: searchTerm,
+                      package: packageCode,
+                      type: deliveryType,
+                      page: pageNumber,
+                    })}
+                    aria-current={pageNumber === safePage ? "page" : undefined}
+                    className={`pagination-link ${pageNumber === safePage ? "pagination-link-active" : ""}`}
+                  >
+                    {formatNumber(pageNumber, numberLocale)}
+                  </Link>
+                ),
+              )}
 
               <Link
                 href={buildUrl({

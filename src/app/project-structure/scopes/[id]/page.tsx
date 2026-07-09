@@ -5,7 +5,7 @@ import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
 import { formatPackageDisplayName } from "@/lib/package-display";
-import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
+import { formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import {
   canCreateOperationalData,
   canEditOperationalData,
@@ -256,7 +256,6 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
               <span>{localeText.projectScopes.backToScopes}</span>
             </Link>
             <p className="eyebrow">{localeText.projectScopes.title}</p>
-            <p className="latin-chip mt-1">{formatPurchaseOrderCode(scope.code, locale)}</p>
             <h2 className="section-title">{scopeName}</h2>
             <p className="section-copy">
               {localeText.projectScopes.detailDescription}

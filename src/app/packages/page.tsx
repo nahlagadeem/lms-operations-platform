@@ -227,27 +227,22 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
                 {localeText.packages.previous}
               </Link>
 
-              {paginationPages(safePage, totalPages).map((pageNumber, index) => {
-                const previousPage = paginationPages(safePage, totalPages)[index - 1];
-                const showEllipsis =
-                  previousPage !== undefined && pageNumber !== "ellipsis" && typeof previousPage === "number"
-                    ? pageNumber - previousPage > 1
-                    : false;
-
-                return (
-                  <div key={`${pageNumber}-${index}`} className="flex items-center gap-2">
-                    {showEllipsis ? <span className="pagination-ellipsis">...</span> : null}
-                    {pageNumber === "ellipsis" ? null : (
-                      <Link
-                        href={pageHref(pageNumber, searchTerm)}
-                        className={`pagination-link ${pageNumber === safePage ? "pagination-link-active" : ""}`}
-                      >
-                        {formatNumber(pageNumber, numberLocale)}
-                      </Link>
-                    )}
-                  </div>
-                );
-              })}
+              {paginationPages(safePage, totalPages).map((pageNumber, index) =>
+                pageNumber === "ellipsis" ? (
+                  <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                    ...
+                  </span>
+                ) : (
+                  <Link
+                    key={pageNumber}
+                    href={pageHref(pageNumber, searchTerm)}
+                    aria-current={pageNumber === safePage ? "page" : undefined}
+                    className={`pagination-link ${pageNumber === safePage ? "pagination-link-active" : ""}`}
+                  >
+                    {formatNumber(pageNumber, numberLocale)}
+                  </Link>
+                ),
+              )}
 
               <Link
                 href={pageHref(Math.min(totalPages, safePage + 1), searchTerm)}

@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     );
     const fulfillmentPct = totalEstimatedSeats > 0 ? (totalActualSeats / totalEstimatedSeats) * 100 : 0;
     const values: Array<string | number> = [
-      `${formatPurchaseOrderCode(scope.code, locale)} ${formatPurchaseOrderTitle(scope, locale)}`.trim(),
+      formatPurchaseOrderTitle(scope, locale),
       courseCount,
       countAssignedPackages(scope.selectedCourses),
       totalEstimatedSeats,
