@@ -11,6 +11,8 @@ export type PoTrackingRow = {
   courseCode: string;
   courseName: string;
   packageCode: string;
+  packageNameAr: string | null;
+  packageNameEn: string | null;
   estimatedSeats: number;
   actualSeats: number;
   remainingSeats: number;
@@ -58,6 +60,8 @@ function buildTrackingRow(entry: {
   courseCode: string;
   courseName: string;
   packageCode: string;
+  packageNameAr: string | null;
+  packageNameEn: string | null;
   estimatedSeats: number | null;
   confirmedSeats: number[];
 }): PoTrackingRow {
@@ -76,13 +80,16 @@ function buildTrackingRow(entry: {
     courseCode: entry.courseCode,
     courseName: entry.courseName,
     packageCode: entry.packageCode,
+    packageNameAr: entry.packageNameAr,
+    packageNameEn: entry.packageNameEn,
     estimatedSeats,
     actualSeats,
     remainingSeats,
     fulfillmentPct,
     linkedTrainingsCount,
     overageFlag: actualSeats > estimatedSeats,
-    shortfallFlag: actualSeats < estimatedSeats,
+    shortfallFlag:
+      actualSeats < estimatedSeats && (linkedTrainingsCount > 0 || actualSeats > 0),
     zeroActualFlag: linkedTrainingsCount > 0 && actualSeats === 0,
   };
 }
@@ -100,7 +107,8 @@ function summarizeRows(rows: PoTrackingRow[]): PoTrackingSummary {
     fulfillmentPct: estimatedSeats > 0 ? (actualSeats / estimatedSeats) * 100 : 0,
     linkedTrainingsCount,
     overageFlag: actualSeats > estimatedSeats,
-    shortfallFlag: actualSeats < estimatedSeats,
+    shortfallFlag:
+      actualSeats < estimatedSeats && (linkedTrainingsCount > 0 || actualSeats > 0),
     zeroActualFlag: linkedTrainingsCount > 0 && actualSeats === 0,
   };
 }
@@ -126,7 +134,7 @@ export async function getPoCourseTracking(scopeId: string): Promise<PoCourseTrac
               courseCode: true,
               nameAr: true,
               nameEn: true,
-              package: { select: { code: true } },
+              package: { select: { code: true, nameAr: true, nameEn: true } },
             },
           },
           courseRuns: {
@@ -152,6 +160,8 @@ export async function getPoCourseTracking(scopeId: string): Promise<PoCourseTrac
       courseCode: entry.course.courseCode,
       courseName: normalizeName(entry.course.nameEn, entry.course.nameAr, entry.course.courseCode),
       packageCode: entry.course.package.code,
+      packageNameAr: entry.course.package.nameAr,
+      packageNameEn: entry.course.package.nameEn,
       estimatedSeats: entry.estimatedSeats,
       confirmedSeats: entry.courseRuns.map((run) => run.confirmedSeats),
     }),
@@ -194,7 +204,7 @@ export async function getAllPoSummaryRows(): Promise<PoTrackingRow[]> {
           courseCode: true,
           nameAr: true,
           nameEn: true,
-          package: { select: { code: true } },
+          package: { select: { code: true, nameAr: true, nameEn: true } },
         },
       },
       courseRuns: {
@@ -216,6 +226,8 @@ export async function getAllPoSummaryRows(): Promise<PoTrackingRow[]> {
       courseCode: entry.course.courseCode,
       courseName: normalizeName(entry.course.nameEn, entry.course.nameAr, entry.course.courseCode),
       packageCode: entry.course.package.code,
+      packageNameAr: entry.course.package.nameAr,
+      packageNameEn: entry.course.package.nameEn,
       estimatedSeats: entry.estimatedSeats,
       confirmedSeats: entry.courseRuns.map((run) => run.confirmedSeats),
     }),

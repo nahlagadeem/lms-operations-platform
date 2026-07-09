@@ -4,6 +4,7 @@ import { DocumentEntityType, DocumentType, Prisma } from "@prisma/client";
 import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { formatPackageDisplayName } from "@/lib/package-display";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import {
   canCreateOperationalData,
@@ -213,7 +214,13 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
   const trackingRows = tracking?.rows ?? [];
   const filteredTrackingRows = trackingRows.filter((row) => {
     if (!trackingSearchKey) return true;
-    return [row.courseCode, row.courseName, row.packageCode]
+    return [
+      row.courseCode,
+      row.courseName,
+      row.packageCode,
+      row.packageNameAr,
+      row.packageNameEn,
+    ]
       .join(" ")
       .toLowerCase()
       .includes(trackingSearchKey);
@@ -334,7 +341,8 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                   <th>{localeText.projectScopes.actualSeats}</th>
                   <th>{localeText.projectScopes.remainingSeats}</th>
                   <th>{localeText.projectScopes.fulfillmentPct}</th>
-                  <th>{localeText.projectScopes.overageFlag}</th>
+                  <th>{localeText.projectScopes.linkedTrainings}</th>
+                  <th>{localeText.projectScopes.overageShortfallFlag}</th>
                 </tr>
               </thead>
               <tbody>
@@ -342,11 +350,14 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                   <tr key={row.purchaseOrderCourseEntryId}>
                     <td>
                       <Link href={`/courses/${row.courseId}`} className="font-semibold text-[var(--brand-ink)] hover:underline">
-                        {row.courseName}
+                        {row.courseCode} | {row.courseName}
                       </Link>
-                      <p className="mt-1 text-xs text-[var(--ink-soft)]">{row.courseCode}</p>
                     </td>
-                    <td>{row.packageCode}</td>
+                    <td>{formatPackageDisplayName({
+                      code: row.packageCode,
+                      nameAr: row.packageNameAr,
+                      nameEn: row.packageNameEn,
+                    }, locale)}</td>
                     <td>{formatNumber(row.estimatedSeats, numberLocale)}</td>
                     <td>{formatNumber(row.actualSeats, numberLocale)}</td>
                     <td>{formatNumber(row.remainingSeats, numberLocale)}</td>
@@ -357,8 +368,13 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                       %
                     </td>
                     <td>
+                      {formatNumber(row.linkedTrainingsCount, numberLocale)}
+                    </td>
+                    <td>
                       {row.overageFlag ? (
                         <span className="status-pill">{localeText.projectScopes.overageFlag}</span>
+                      ) : row.shortfallFlag ? (
+                        <span className="status-pill">{localeText.projectScopes.shortfallFlag}</span>
                       ) : (
                         "-"
                       )}
@@ -466,14 +482,17 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                         {course.nameEn || course.nameAr}
                       </Link>
                       <p className="mt-2 text-xs text-[var(--ink-soft)]">
-                        {localeText.projectScopes.package} {course.package.code} | {course.category.nameEn || course.category.nameAr}
+                        {formatPackageDisplayName(course.package, locale)}
                       </p>
                     </div>
                     <span className="status-pill">{localeText.projectScopes.active}</span>
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <InfoBox label={localeText.projectScopes.package} value={course.package.code} />
+                    <InfoBox
+                      label={localeText.projectScopes.package}
+                      value={formatPackageDisplayName(course.package, locale)}
+                    />
                     <InfoBox label={localeText.projectScopes.duration} value={course.defaultDurationDays ? `${formatNumber(course.defaultDurationDays, numberLocale)} ${localeText.units.days}` : "-"} />
                     <InfoBox label={localeText.projectScopes.language} value={course.language || "-"} />
                     <InfoBox
@@ -661,7 +680,9 @@ export default async function ScopeDetailPage({ params, searchParams }: ScopeDet
                         <span className="block leading-6 text-[var(--ink-soft)]">
                           {locale === "ar" ? course.nameAr : course.nameEn || course.nameAr}
                         </span>
-                        <span className="latin-chip mt-2">{course.package.code}</span>
+                        <span className="latin-chip mt-2">
+                          {formatPackageDisplayName(course.package, locale)}
+                        </span>
                       </span>
                     </label>
                   ))}

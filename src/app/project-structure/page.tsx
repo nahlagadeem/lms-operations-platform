@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getLocale, t } from "@/lib/locale";
+import { formatPackageDisplayName } from "@/lib/package-display";
 import { formatPurchaseOrderCode, formatPurchaseOrderTitle } from "@/lib/purchase-order";
 import {
   createProjectScope,
@@ -309,7 +310,9 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                     <span className="block leading-6 text-[var(--ink-soft)]">
                       {locale === "ar" ? course.nameAr : course.nameEn || course.nameAr}
                     </span>
-                    <span className="latin-chip mt-2">{course.package.code}</span>
+                    <span className="latin-chip mt-2">
+                      {formatPackageDisplayName(course.package, locale)}
+                    </span>
                   </span>
                 </label>
               ))}
@@ -405,7 +408,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                 />
               </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 {scope.selectedCourses.slice(0, 10).map(({ course }) => (
                   <div key={course.id} className="jawraa-subcard p-4">
                     <p className="latin-chip">{course.courseCode}</p>
@@ -413,7 +416,7 @@ export default async function ProjectStructurePage({ searchParams }: ProjectStru
                       {course.nameEn || course.nameAr}
                     </p>
                     <p className="mt-2 text-xs text-[var(--ink-soft)]">
-                      {localeText.projectScopes.package} {course.package.code}
+                      {formatPackageDisplayName(course.package, locale)}
                     </p>
                   </div>
                 ))}
