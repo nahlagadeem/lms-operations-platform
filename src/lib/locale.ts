@@ -360,7 +360,7 @@ const englishText = {
     totalSessions: "Total sessions",
     deliveryMode: "Delivery mode",
     status: "Status",
-    trainingState: "Training State",
+    trainingState: "Training status",
     trainingStates: {
       ACTIVE: "Active",
       CANCELED: "Cancelled",

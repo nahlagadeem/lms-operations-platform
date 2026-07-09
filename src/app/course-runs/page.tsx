@@ -908,11 +908,13 @@ export default async function CourseRunsPage({
                     className="field-input"
                     defaultValue={DeliveryMode.IN_PERSON}
                   >
-                    {Object.entries(localeText.deliveryModes).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
-                    ))}
+                    {Object.entries(localeText.deliveryModes)
+                      .filter(([key]) => key !== "ABROAD")
+                      .map(([key, label]) => (
+                        <option key={key} value={key}>
+                          {label}
+                        </option>
+                      ))}
                   </select>
                 </label>
 

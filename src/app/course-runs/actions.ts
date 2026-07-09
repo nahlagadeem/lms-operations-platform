@@ -20,7 +20,10 @@ import {
 import * as trainingEvaluationService from "@/server/services/training-evaluation-service";
 import * as trainingSessionService from "@/server/services/training-session-service";
 import * as trainingService from "@/server/services/training-service";
-import type { TrainingState } from "@/lib/training-status";
+import {
+  deriveTrainingDisplayStatus,
+  type TrainingState,
+} from "@/lib/training-status";
 
 function normalizeText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -73,6 +76,18 @@ function parseTrainingCity(value: string) {
     : null;
 }
 
+function parseDeliveryMode(value: string) {
+  const allowedDeliveryModes: DeliveryMode[] = [
+    DeliveryMode.IN_PERSON,
+    DeliveryMode.ONLINE,
+    DeliveryMode.HYBRID,
+  ];
+
+  return allowedDeliveryModes.includes(value as DeliveryMode)
+    ? (value as DeliveryMode)
+    : null;
+}
+
 function parseTrainingState(value: string): TrainingState {
   return value === "CANCELED" ? "CANCELED" : "ACTIVE";
 }
@@ -91,7 +106,7 @@ export async function createTraining(formData: FormData) {
   const daysHeld = parseOptionalInt(normalizeText(formData.get("daysHeld")));
   const plannedSeats = parseOptionalInt(normalizeText(formData.get("plannedSeats")));
   const vendorCostValue = normalizeText(formData.get("vendorCost"));
-  const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
+  const deliveryMode = parseDeliveryMode(normalizeText(formData.get("deliveryMode")));
   const trainingState = parseTrainingState(normalizeText(formData.get("trainingState")));
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
@@ -143,8 +158,8 @@ export async function updateTraining(formData: FormData) {
   const plannedSeats = parseOptionalInt(normalizeText(formData.get("plannedSeats")));
   const confirmedSeats = parseOptionalInt(normalizeText(formData.get("confirmedSeats")));
   const locationId = normalizeText(formData.get("locationId"));
-  const deliveryMode = normalizeText(formData.get("deliveryMode")) as DeliveryMode;
-  const trainingState = parseTrainingState(normalizeText(formData.get("trainingState")));
+  const deliveryMode = parseDeliveryMode(normalizeText(formData.get("deliveryMode")));
+  const submittedTrainingState = parseTrainingState(normalizeText(formData.get("trainingState")));
   const startDate = parseOptionalDate(normalizeText(formData.get("startDate")));
   const endDate = parseOptionalDate(normalizeText(formData.get("endDate")));
   const notes = normalizeText(formData.get("notes"));
@@ -155,7 +170,14 @@ export async function updateTraining(formData: FormData) {
 
   const existingTraining = await db.courseRun.findUnique({
     where: { id: trainingId },
-    select: { vendorCost: true, projectScopeCourseId: true },
+    select: {
+      vendorCost: true,
+      projectScopeCourseId: true,
+      status: true,
+      plannedSeats: true,
+      confirmedSeats: true,
+      _count: { select: { trainingEvaluations: true } },
+    },
   });
 
   if (!existingTraining) {
@@ -170,6 +192,16 @@ export async function updateTraining(formData: FormData) {
     : existingTraining.vendorCost === null
       ? null
       : Number(existingTraining.vendorCost);
+  const existingDisplayStatus = deriveTrainingDisplayStatus({
+    status: existingTraining.status,
+    plannedSeats: existingTraining.plannedSeats,
+    confirmedSeats: existingTraining.confirmedSeats,
+    trainingEvaluationCount: existingTraining._count.trainingEvaluations,
+  });
+  const trainingState: TrainingState =
+    existingTraining.status === "COMPLETED" || existingDisplayStatus === "COMPLETED"
+      ? "ACTIVE"
+      : submittedTrainingState;
 
   await trainingService.updateTraining({
     trainingId,

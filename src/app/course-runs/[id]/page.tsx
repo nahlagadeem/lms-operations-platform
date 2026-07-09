@@ -445,7 +445,7 @@ function detailText(locale: "en" | "ar") {
     attendanceRequired: "Attendance required",
     certificateRequired: "Issue certificate",
     confirmedSeats: "Actual Seats",
-    trainingState: "Training State",
+    trainingState: "Training status",
     trainingStates: {
       ACTIVE: "Active",
       CANCELED: "Cancelled",
@@ -458,7 +458,7 @@ function detailText(locale: "en" | "ar") {
     no: "No",
     close: "Close",
     plannedSeats: "Estimated Seats",
-    courseStatus: "Training Status",
+    courseStatus: "Status",
     enrollmentDate: "Enrollment Date",
     notes: "Notes",
     filterAttendee: "Filter by attendee",
@@ -762,6 +762,8 @@ export default async function CourseRunDetailPage({
     localeText.courseRunStatuses[
       displayStatus as keyof typeof localeText.courseRunStatuses
     ];
+  const isTrainingStatusLocked =
+    run.status === "COMPLETED" || displayStatus === "COMPLETED";
   const selectedPurchaseOrderCourseEntryId =
     run.projectScopeCourseId ||
     purchaseOrderCourseEntries.find(
@@ -2359,29 +2361,18 @@ export default async function CourseRunDetailPage({
                   </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="field-shell">
-                    <span className="field-label">{details.courseStatus}</span>
-                    <div className="field-input bg-[var(--surface-soft)]">
-                      <StatusBadge
-                        status={displayStatus}
-                        label={displayStatusLabel}
-                      />
-                    </div>
-                  </label>
-
-                  <label className="field-shell">
-                    <span className="field-label">{details.trainingState}</span>
-                    <select
-                      name="trainingState"
-                      className="field-input"
-                      defaultValue={trainingStateFromStatus(run.status)}
-                    >
-                      <option value="ACTIVE">{details.trainingStates.ACTIVE}</option>
-                      <option value="CANCELED">{details.trainingStates.CANCELED}</option>
-                    </select>
-                  </label>
-                </div>
+                <label className="field-shell">
+                  <span className="field-label">{details.trainingState}</span>
+                  <select
+                    name="trainingState"
+                    className="field-input"
+                    defaultValue={trainingStateFromStatus(run.status)}
+                    disabled={isTrainingStatusLocked}
+                  >
+                    <option value="ACTIVE">{details.trainingStates.ACTIVE}</option>
+                    <option value="CANCELED">{details.trainingStates.CANCELED}</option>
+                  </select>
+                </label>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="field-shell">
@@ -2391,11 +2382,13 @@ export default async function CourseRunDetailPage({
                       className="field-input"
                       defaultValue={run.deliveryMode}
                     >
-                      {Object.entries(localeText.deliveryModes).map(([key, label]) => (
-                        <option key={key} value={key}>
-                          {label}
-                        </option>
-                      ))}
+                      {Object.entries(localeText.deliveryModes)
+                        .filter(([key]) => key !== "ABROAD")
+                        .map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
                     </select>
                   </label>
 
