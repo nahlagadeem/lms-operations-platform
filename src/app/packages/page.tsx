@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { InstantSearchField } from "@/components/instant-search-field";
 import { getLocale, t } from "@/lib/locale";
+import { canViewFinancials, getCurrentPlatformRole } from "@/lib/permissions";
 import { loadPackageCatalogRows } from "@/server/services/catalog-table-service";
 
 type PackagesPageProps = {
@@ -56,6 +57,8 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
   const requestedPage = normalizePage(params.page);
   const searchTerm = normalizeSearch(params.q);
   const searchKey = searchTerm.toLowerCase();
+  const platformRole = await getCurrentPlatformRole();
+  const canSeeFinancials = canViewFinancials(platformRole);
 
   const packages = await loadPackageCatalogRows(locale);
   const filteredPackages = packages.filter((item) => {
@@ -149,6 +152,9 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
                   <th>{localeText.packages.totalCourses}</th>
                   <th>{localeText.packages.estimatedSeats}</th>
                   <th>{localeText.packages.actualSeats}</th>
+                  <th>{localeText.packages.remainingSeats}</th>
+                  <th>{localeText.packages.seatUtilizationPct}</th>
+                  {canSeeFinancials ? <th>{localeText.packages.grossMarginPct}</th> : null}
                   <th>{localeText.packages.details}</th>
                 </tr>
               </thead>
@@ -180,6 +186,25 @@ export default async function PackagesPage({ searchParams }: PackagesPageProps) 
                         {formatNumber(item.actualSeats, numberLocale)}
                       </Link>
                     </td>
+                    <td className="latin-cell">
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        {formatNumber(item.remainingSeats, numberLocale)}
+                      </Link>
+                    </td>
+                    <td className="latin-cell">
+                      <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                        {formatNumber(item.utilizationPct, numberLocale)}%
+                      </Link>
+                    </td>
+                    {canSeeFinancials ? (
+                      <td className="latin-cell">
+                        <Link href={`/packages/${item.id}`} className="block w-full no-underline">
+                          {item.grossMarginPct === null
+                            ? "-"
+                            : `${formatNumber(item.grossMarginPct, numberLocale)}%`}
+                        </Link>
+                      </td>
+                    ) : null}
                     <td>
                       <Link href={`/packages/${item.id}`} className="secondary-button inline-flex">
                         {localeText.packages.details}
