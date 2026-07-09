@@ -354,7 +354,7 @@ export default async function PackageDetailPage({
             <thead>
               <tr>
                 <th>{details.code}</th>
-                <th>{localeText.courses.name}</th>
+                <th>{localeText.courses.course}</th>
                 <th>{details.category}</th>
                 <th>{details.type}</th>
                 <th>{details.duration}</th>

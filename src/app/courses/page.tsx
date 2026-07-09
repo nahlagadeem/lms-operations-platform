@@ -4,11 +4,7 @@ import { InstantSearchField } from "@/components/instant-search-field";
 import { db } from "@/lib/db";
 import { getDirection, getLocale, t } from "@/lib/locale";
 import { formatPackageDisplayName } from "@/lib/package-display";
-import {
-  canViewFinancials,
-  getCurrentPlatformRole,
-  isCustomerCapacityOnly,
-} from "@/lib/permissions";
+import { getCurrentPlatformRole, isCustomerCapacityOnly } from "@/lib/permissions";
 import {
   courseDisplayName,
   loadCourseCatalogRows,
@@ -114,7 +110,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   const deliveryType = normalizeSingleValue(params.type) as DeliveryType | "";
   const currentPage = normalizePage(params.page);
   const platformRole = await getCurrentPlatformRole();
-  const canSeeFinancials = canViewFinancials(platformRole);
   const customerOnly = isCustomerCapacityOnly(platformRole);
 
   const whereClause: Prisma.CourseWhereInput = {
@@ -304,27 +299,20 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>{localeText.courses.code}</th>
-                  <th>{localeText.courses.name}</th>
+                  <th>{localeText.courses.course}</th>
                   <th>{localeText.courses.package}</th>
                   <th>{localeText.courses.estimatedSeats}</th>
                   <th>{localeText.courses.actualSeats}</th>
                   <th>{localeText.courses.remainingSeats}</th>
                   <th>{localeText.courses.fulfillmentPct}</th>
                   <th>{localeText.courses.linkedTrainings}</th>
-                  <th>{localeText.courses.daysHeld}</th>
-                  {canSeeFinancials ? <th>{localeText.courses.pricePerSeat}</th> : null}
+                  <th>{localeText.courses.duration}</th>
                   <th>{localeText.courses.details}</th>
                 </tr>
               </thead>
               <tbody>
                 {pagedCourses.map((course) => (
                   <tr key={course.id}>
-                    <td className="latin-cell">
-                      <Link href={`/courses/${course.id}`} className="block w-full font-semibold text-[var(--brand-ink)] no-underline">
-                        {course.courseCode}
-                      </Link>
-                    </td>
                     <td>
                       <Link href={`/courses/${course.id}`} className="block w-full no-underline">
                         <div>
@@ -369,13 +357,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                         {formatDurationLabel(course.durationDays, course.durationHours, localeText, locale)}
                       </Link>
                     </td>
-                    {canSeeFinancials ? (
-                      <td>
-                        <Link href={`/courses/${course.id}`} className="block w-full no-underline">
-                          {course.pricePerSeatLabel}
-                        </Link>
-                      </td>
-                    ) : null}
                     <td>
                       <Link href={`/courses/${course.id}`} className="secondary-button inline-flex">
                         {localeText.courses.details}
