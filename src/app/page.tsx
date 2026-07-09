@@ -953,7 +953,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 : formatPercent(attentionPackage.utilization, numberLocale)
               : "-"}
             detail={attentionPackage ? attentionPackage.displayName : localeText.home.unavailable}
-            tone={attentionPackage ? "warning" : "normal"}
           />
           <KpiCard
             href="/packages"
@@ -992,7 +991,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             detail={dashboardText.flaggedPurchaseOrdersDetail
               .replace("{flagged}", formatNumber(flaggedPoCount, numberLocale))
               .replace("{total}", formatNumber(poSummaryRows.length, numberLocale))}
-            tone={flaggedPoCount > 0 ? "warning" : "normal"}
           />
           <KpiCard
             href={mostRecentPo ? `/pos/${mostRecentPo.id}` : "/pos"}
