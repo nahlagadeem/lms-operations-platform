@@ -503,7 +503,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const allocatedSeats = seatRows.reduce((sum, item) => sum + (item.plannedSeats ?? 0), 0);
   const filledSeats = seatRows.reduce((sum, item) => sum + item.confirmedSeats, 0);
   const seatUtilization = ratio(filledSeats, allocatedSeats);
-  const successRate = projectAttendanceSummary.attendanceRate;
   const evaluationSatisfaction =
     evaluationRows.length > 0
       ? evaluationRows.reduce((sum, item) => sum + decimalToNumber(item.overallScore) * 20, 0) /
@@ -1146,14 +1145,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             detail={homeUiText.actualEstimatedSeats
               .replace("{actual}", formatNumber(filledSeats, numberLocale))
               .replace("{estimated}", formatNumber(allocatedSeats, numberLocale))}
-          />
-          <KpiCard
-            href="/trainings"
-            title={homeUiText.attendanceRate}
-            value={formatPercent(successRate, numberLocale)}
-            detail={homeUiText.attendedPossibleSlots
-              .replace("{attended}", formatNumber(projectAttendanceSummary.attendedSessions, numberLocale))
-              .replace("{possible}", formatNumber(projectAttendanceSummary.possibleSessions, numberLocale))}
           />
           <KpiCard
             href="/trainings"
